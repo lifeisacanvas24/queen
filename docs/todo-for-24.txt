@@ -318,3 +318,13 @@ Quick “done vs. pending” table
 	•	Alert v2 (rules/indicators): PENDING (tomorrow)
 
 If you want, paste just the bottom ~80 lines of settings/settings.py here and I’ll confirm the two blocks are exactly right. Otherwise, proceed — nothing else is blocking today’s work.
+
+next next steps (after you paste these)
+	1.	Move a couple real indicators (e.g., momentum_macd.py, trend_adx_dmi.py) into queen/technicals/indicators/ unchanged. If they already expose EXPORTS or compute_* they’ll auto-register.
+	2.	I’ll ship a minimal rule evaluator (queen/alerts/evaluator.py) and a daemons/alert_v2.py that:
+	•	subscribes to clock ticks,
+	•	fetches last N bars (from parquet or API),
+	•	evaluates rules from YAML,
+	•	emits to alerts.jsonl (and your SSE endpoint).
+
+If you prefer, I can also add a tiny queen/technicals/patterns/detect.py that wires PATTERN_FUNCS to the registry, so you can trigger patterns from YAML too.

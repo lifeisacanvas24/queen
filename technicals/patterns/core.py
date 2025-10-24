@@ -1,119 +1,53 @@
-"""quant/patterns/core.py
---------------------------------------------------
-Core single-candle pattern detectors (Polars-native).
+#!/usr/bin/env python3
+# ============================================================
+# queen/technicals/patterns/core.py — v0.4 (clean API)
+# ============================================================
+from __future__ import annotations
 
-Includes:
-    • Bullish Engulfing
-    • Bearish Engulfing
-    • Doji
-    • Hammer / Inverted Hammer
-    • Marubozu
-
-Outputs:
-    - pattern_name
-    - pattern_bias
-    - confidence (0–100%)
-    - pattern_group = "core"
---------------------------------------------------
-"""
+from typing import Any, Dict
 
 import polars as pl
+from queen.settings import patterns as PAT
 
 
-def detect_core_patterns(df: pl.DataFrame) -> pl.DataFrame:
-    """Detects major single-candle Japanese patterns using Polars expressions."""
-    # ------------------------------
-    # 📊 Candle structure components
-    # ------------------------------
-    body = (pl.col("close") - pl.col("open")).abs()
-    upper_wick = pl.col("high") - pl.max_horizontal(pl.col("open"), pl.col("close"))
-    lower_wick = pl.min_horizontal(pl.col("open"), pl.col("close")) - pl.col("low")
-    full_range = pl.col("high") - pl.col("low")
-    body_ratio = (body / full_range).fill_null(0)
+def required_lookback(pattern_name: str, timeframe_key: str) -> int:
+    """Return the min lookback candles for a pattern & timeframe."""
+    name = pattern_name.lower()
+    catalog: Dict[str, dict] = {**PAT.JAPANESE, **PAT.CUMULATIVE}
+    spec = catalog.get(name, {})
+    ctx = spec.get("contexts", {})
+    if timeframe_key in ctx:
+        return int(ctx[timeframe_key].get("lookback", 0))
+    return max((int(v.get("lookback", 0)) for v in ctx.values()), default=0)
 
-    # ------------------------------
-    # 🟢 Bullish / 🔴 Bearish Engulfing
-    # ------------------------------
-    prev_open = pl.col("open").shift(1)
-    prev_close = pl.col("close").shift(1)
 
-    is_bullish_engulf = (
-        (pl.col("close") > pl.col("open")) &
-        (prev_close < prev_open) &
-        (pl.col("close") >= prev_open) &
-        (pl.col("open") <= prev_close)
-    )
+# --------------------------
+# Pattern implementations
+# --------------------------
+def detect_doji(df: pl.DataFrame, tol: float = 0.1, **kwargs) -> pl.Series:
+    """Detect Doji — close ≈ open within tolerance % of range."""
+    if "tolerance" in kwargs and isinstance(kwargs["tolerance"], (int, float)):
+        tol = float(kwargs["tolerance"])
+    if df.is_empty():
+        return pl.Series([], dtype=pl.Boolean)
 
-    is_bearish_engulf = (
-        (pl.col("close") < pl.col("open")) &
-        (prev_close > prev_open) &
-        (pl.col("open") >= prev_close) &
-        (pl.col("close") <= prev_open)
-    )
+    rng = (df["high"] - df["low"]).abs().fill_null(0.0)
+    body = (df["close"] - df["open"]).abs().fill_null(0.0)
+    return (body <= (rng * tol)).fill_null(False)
 
-    # ------------------------------
-    # ⚖️ Doji (small body, long wicks)
-    # ------------------------------
-    is_doji = body_ratio < 0.1
 
-    # ------------------------------
-    # 🔨 Hammer / Inverted Hammer
-    # ------------------------------
-    is_hammer = (lower_wick > 2 * body) & (upper_wick < body)
-    is_inverted_hammer = (upper_wick > 2 * body) & (lower_wick < body)
+def detect_hammer(df: pl.DataFrame, body_mult: float = 2.0, **kwargs) -> pl.Series:
+    """Very simple hammer heuristic (placeholder)."""
+    if df.is_empty():
+        return pl.Series([], dtype=pl.Boolean)
+    body = (df["close"] - df["open"]).abs()
+    upper = df["high"] - df[["open", "close"]].max(axis=1)
+    lower = df[["open", "close"]].min(axis=1) - df["low"]
+    return (lower > body * body_mult) & (upper < body)
 
-    # ------------------------------
-    # 🕯️ Marubozu (no wicks)
-    # ------------------------------
-    is_marubozu = (upper_wick < full_range * 0.05) & (lower_wick < full_range * 0.05)
 
-    # ------------------------------
-    # 🧠 Pattern labeling
-    # ------------------------------
-    pattern_name = (
-        pl.when(is_bullish_engulf).then(pl.lit("Bullish Engulfing"))
-        .when(is_bearish_engulf).then(pl.lit("Bearish Engulfing"))
-        .when(is_doji).then(pl.lit("Doji"))
-        .when(is_hammer).then(pl.lit("Hammer"))
-        .when(is_inverted_hammer).then(pl.lit("Inverted Hammer"))
-        .when(is_marubozu).then(pl.lit("Marubozu"))
-        .otherwise(pl.lit(None))
-        .alias("pattern_name")
-    )
-
-    pattern_bias = (
-        pl.when(is_bullish_engulf | is_hammer | is_inverted_hammer)
-        .then(pl.lit("Bullish"))
-        .when(is_bearish_engulf)
-        .then(pl.lit("Bearish"))
-        .when(is_doji | is_marubozu)
-        .then(pl.lit("Neutral"))
-        .otherwise(pl.lit(None))
-        .alias("pattern_bias")
-    )
-
-    # ------------------------------
-    # 🎯 Confidence heuristic (0–100)
-    # ------------------------------
-    confidence = (
-        pl.when(is_bullish_engulf | is_bearish_engulf)
-        .then(pl.lit(90))
-        .when(is_hammer | is_inverted_hammer)
-        .then(pl.lit(80))
-        .when(is_doji)
-        .then(pl.lit(60))
-        .when(is_marubozu)
-        .then(pl.lit(70))
-        .otherwise(pl.lit(0))
-        .alias("confidence")
-    )
-
-    # ------------------------------
-    # 🧩 Combine all
-    # ------------------------------
-    return df.with_columns([
-        pattern_name,
-        pattern_bias,
-        confidence,
-        pl.lit("core").alias("pattern_group"),
-    ])
+# Exported registry (canonical name → callable)
+EXPORTS: Dict[str, Any] = {
+    "doji": detect_doji,
+    "hammer": detect_hammer,
+}

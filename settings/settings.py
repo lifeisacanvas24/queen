@@ -81,7 +81,7 @@ def get_env_paths() -> Dict[str, Path]:
 PATHS = {
     "ROOT": ROOT,
     "STATIC": STATIC,
-    "CONFIGS": ROOT / "configs",
+    "CONFIGS": ROOT.parent / "configs",
     "RUNTIME": get_env_paths()["data_runtime"],
     "LOGS": get_env_paths()["logs"],
     "CACHE": get_env_paths()["cache"],
@@ -314,6 +314,35 @@ def log_file(name: str) -> Path:
 def resolve_log_path(log_key: str) -> Path:
     """Resolve any log or drift path safely."""
     return log_file(log_key)
+
+
+# ============================================================
+# 🔔 Alert sinks (single source of truth)
+# ============================================================
+ALERT_SINKS = {
+    "JSONL": PATHS["EXPORTS"] / "alerts" / "alerts.jsonl",
+    "YAML_RULES": PATHS["CONFIGS"] / "alert_rules.yaml",
+    "SQLITE": PATHS["EXPORTS"] / "alerts" / "alerts.db",
+    "SSE": "http://localhost:8000/alerts/stream",  # optional, used by server
+}
+
+
+def alert_path_jsonl():
+    p = ALERT_SINKS["JSONL"]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def alert_path_sqlite():
+    p = ALERT_SINKS["SQLITE"]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def alert_path_rules():
+    p = ALERT_SINKS["YAML_RULES"]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 # ------------------------------------------------------------
