@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/settings.py — v9.0 (Unified Runtime + DRY Logging)
+# queen/settings/settings.py — v9.1 (Unified Runtime + DRY Logging)
 # ============================================================
-"""Queen of Quant — Unified Configuration System (v9.0)
-------------------------------------------------------
-✅ Fully Pythonic (no external config)
-✅ Environment-aware (DEV / PROD)
-✅ DRY runtime + logging helpers
-✅ Backward-compatible with v8.x modules
+"""Queen of Quant — Unified Configuration System
+------------------------------------------------
+Design goals:
+✅ Fully Pythonic (no external config) with comments & computed defaults
+✅ Environment-aware (DEV / PROD) paths
+✅ Single source of truth for brokers/exchange/paths
+✅ Early validation for common footguns (timeframes, defaults, existence)
 """
 
 from __future__ import annotations
@@ -22,10 +23,10 @@ from zoneinfo import ZoneInfo
 # ------------------------------------------------------------
 APP = {
     "NAME": "Queen of Quant",
-    "VERSION": "9.0.0",
-    "BUILD": "2025.10.22",
+    "VERSION": "9.1.0",
+    "BUILD": "2025.10.24",
     "AUTHOR": "OpenQuant Labs",
-    "DESCRIPTION": "Unified Quant Engine — async, multi-threaded, and config-free.",
+    "DESCRIPTION": "Unified Quant Engine — async, multi-threaded, and settings-first.",
 }
 
 # ------------------------------------------------------------
@@ -75,7 +76,7 @@ def get_env_paths() -> Dict[str, Path]:
 
 
 # ------------------------------------------------------------
-# 📁 Unified Path Map
+# 📁 Unified Path Map (logical locations)
 # ------------------------------------------------------------
 PATHS = {
     "ROOT": ROOT,
@@ -91,7 +92,7 @@ PATHS = {
 }
 
 # ------------------------------------------------------------
-# 🏦 Brokers
+# 🏦 Brokers (schema & rate limits)
 # ------------------------------------------------------------
 BROKERS = {
     "UPSTOX": {
@@ -107,7 +108,7 @@ BROKERS = {
 }
 
 # ------------------------------------------------------------
-# 💹 Exchanges
+# 💹 Exchange & Market Hours
 # ------------------------------------------------------------
 EXCHANGE = {
     "ACTIVE": "NSE_BSE",
@@ -140,7 +141,7 @@ EXCHANGE = {
 MARKET_TZ = ZoneInfo(EXCHANGE["MARKET_TIMEZONE"])
 
 # ------------------------------------------------------------
-# ⚙️ Fetch / Scheduler
+# ⚙️ Fetch / Scheduler knobs
 # ------------------------------------------------------------
 FETCH = {
     "ASYNC_MODE": True,
@@ -158,7 +159,6 @@ SCHEDULER = {
     "DEFAULT_BUFFER": 3,
     "REFRESH_MAP": {"1m": 15, "3m": 30, "5m": 30, "10m": 60, "15m": 60, "30m": 60},
 }
-
 SCHEDULER.update(
     {
         "ENABLE_UNIVERSE_REFRESH": False,
@@ -166,6 +166,7 @@ SCHEDULER.update(
         "ENABLE_ERROR_BACKOFF": False,
     }
 )
+
 # ------------------------------------------------------------
 # 🧠 Logging + Diagnostics
 # ------------------------------------------------------------
@@ -187,14 +188,13 @@ LOGGING = {
         "SCHEMA_DRIFT_LOG": "schema_drift.json",
     },
 }
-
 DIAGNOSTICS = {
     "ENABLED": True,
     "FETCHER": {"URL_DEBUG": True, "TRACE_MARKET_STATE": True},
 }
 
 # ------------------------------------------------------------
-# 🔩 Defaults
+# 🔩 Defaults (broker, exchange, mode defaults)
 # ------------------------------------------------------------
 DEFAULTS = {
     "BROKER": "UPSTOX",
@@ -203,15 +203,39 @@ DEFAULTS = {
     "AUTO_RESTART_DAEMON": True,
     "EXPORT_FORMAT": "parquet",
 }
-# --- validation: DEFAULT_INTERVALS tokens ---
+# Default mode intervals the FETCHER will apply when router passes interval=None
 DEFAULTS.setdefault("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
 _intr = DEFAULTS["DEFAULT_INTERVALS"].get("intraday", "5m")
 _daily = DEFAULTS["DEFAULT_INTERVALS"].get("daily", "1d")
 for tok in (_intr, _daily):
     assert isinstance(tok, str) and len(tok) >= 2, f"Bad interval token: {tok}"
 
-# --- timeframe map sanity (optional but nice) ---
-# Friendly → canonical tokens the fetcher understands
+# ------------------------------------------------------------
+# 🗂️ Ensure runtime folders exist (once, on import)
+# ------------------------------------------------------------
+for key, p in PATHS.items():
+    try:
+        Path(p).expanduser().resolve().mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # paths pointing to files will be created later by IO atomic writes
+        pass
+
+# Make optional instrument lists fall back to MONTHLY if missing
+try:
+    _ex = EXCHANGE["EXCHANGES"][DEFAULTS.get("EXCHANGE", EXCHANGE["ACTIVE"])]
+    ins = _ex.get("INSTRUMENTS", {})
+    monthly = ins.get("MONTHLY")
+    for _k in ("WEEKLY", "PORTFOLIO", "APPROVED_SYMBOLS"):
+        _p = ins.get(_k)
+        if _p and not Path(_p).exists() and monthly:
+            ins[_k] = monthly
+except Exception:
+    # purely defensive
+    pass
+
+# ------------------------------------------------------------
+# 🕒 Timeframe map (friendly → canonical the fetcher understands)
+# ------------------------------------------------------------
 TIMEFRAME_MAP = {
     "1m": "minutes:1",
     "5m": "minutes:5",
@@ -223,13 +247,48 @@ TIMEFRAME_MAP = {
     "1w": "weeks:1",
     "1mo": "months:1",
 }
-# verify keys/values look sane
+_allowed_units = {"minutes", "hours", "days", "weeks", "months"}
 for k, v in TIMEFRAME_MAP.items():
-    assert ":" in v or k.endswith(
-        ("m", "h", "d", "w", "o")
-    ), f"Bad timeframe map: {k}->{v}"
+    if ":" in v:
+        u, n = v.split(":", 1)
+        assert (
+            u in _allowed_units and n.isdigit() and int(n) > 0
+        ), f"Bad timeframe map: {k}->{v}"
+    else:
+        # tolerate suffix-style values if ever added later
+        assert v.endswith(("m", "h", "d", "w", "o")), f"Bad timeframe map: {k}->{v}"
 
-# DEFAULTS.update({"DEFAULT_INTERVALS": {"intraday": "5m", "daily": "1d"}})
+
+# ------------------------------------------------------------
+# ✅ Settings self-check (early fail for misconfig)
+# ------------------------------------------------------------
+def _validate_defaults():
+    # Broker & exchange must exist
+    broker = DEFAULTS.get("BROKER")
+    assert broker and broker.upper() in BROKERS, f"Unknown DEFAULTS.BROKER: {broker}"
+
+    ex_key = DEFAULTS.get("EXCHANGE", EXCHANGE.get("ACTIVE"))
+    assert ex_key in EXCHANGE["EXCHANGES"], f"Unknown DEFAULTS.EXCHANGE: {ex_key}"
+
+    # DEFAULT_INTERVALS must be friendly tokens like 5m/1h/1d/1w/1mo
+    di = DEFAULTS.setdefault("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
+
+    def _ok(tok: str) -> bool:
+        s = str(tok).lower()
+        # accept 5m / 1h / 1d / 1w / 1mo
+        if s.endswith("mo"):
+            return s[:-2].isdigit() and int(s[:-2]) > 0
+        return s.endswith(("m", "h", "d", "w")) and s[:-1].isdigit() and int(s[:-1]) > 0
+
+    assert _ok(
+        di.get("intraday", "5m")
+    ), "DEFAULT_INTERVALS.intraday must be like '5m' or '1h'"
+    assert _ok(
+        di.get("daily", "1d")
+    ), "DEFAULT_INTERVALS.daily must be like '1d'/'1w'/'1mo'"
+
+
+_validate_defaults()
 
 
 # ------------------------------------------------------------
@@ -257,16 +316,8 @@ def resolve_log_path(log_key: str) -> Path:
     return log_file(log_key)
 
 
-# --- ensure configured directories exist on import ---
-
-
-for key, p in PATHS.items():
-    try:
-        Path(p).expanduser().resolve().mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass  # paths pointing to files will be created by io.atomic writes
 # ------------------------------------------------------------
-# ✅ Self-Test
+# 🧪 Self-Test
 # ------------------------------------------------------------
 if __name__ == "__main__":
     print(f"Environment: {get_env()}")
