@@ -1,0 +1,75 @@
+# ======================================================
+# Queen Quant Project — .gitignore
+# Python + macOS + iCloud + VSCode
+# ======================================================
+
+# ----------------------------
+# Python
+# ----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.log
+*.tmp
+*.sqlite3
+*.db
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+pip-wheel-metadata/
+build/
+dist/
+
+# ----------------------------
+# IDE / Editors
+# ----------------------------
+.vscode/
+.idea/
+.spyproject/
+.zed/
+*.sublime-project
+*.sublime-workspace
+
+# ----------------------------
+# macOS System Files
+# ----------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+._*
+.fseventsd
+Icon?
+*.icloud
+
+# ----------------------------
+# Cloud Sync / iCloud
+# ----------------------------
+*.icloud
+*/.sync/
+*.icloud~*
+*.icloud.lock
+
+# ----------------------------
+# Logs / Temp / Cache
+# ----------------------------
+logs/
+tmp/
+cache/
+__cache__/
+*.bak
+*.swp
+
+# ----------------------------
+# Jupyter / Notebooks (optional)
+# ----------------------------
+.ipynb_checkpoints/
+*.ipynb_convert/
+*.nbconvert/
