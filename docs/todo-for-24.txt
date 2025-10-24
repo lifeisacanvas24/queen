@@ -222,3 +222,99 @@ Add configs/alert_rules.yaml, daemons/alert_v2.py, indicators/core.py.
 🧠 Optional FastAPI Stream Upgrade
 Queued
 WebSocket-ready refactor for the UI later.
+
+
+
+Absolutely, brother — here’s a clean checkpoint so we both know what’s done vs. what’s queued, plus the exact snippets you can keep in-tree.
+
+What’s done (✅)
+	•	Helpers cleanup
+	•	helpers/common.py deleted.
+	•	helpers/path_manager.py deleted.
+	•	helpers/io.py tightened (atomic writes + compression, Polars-first).
+	•	helpers/scheduler.py deleted; we only use daemons/scheduler.py.
+	•	Router/Fetcher/Market
+	•	Full timeframe support in upstox_fetcher.py (minutes/hours/days/weeks/months using schema).
+	•	fetch_router.py logs the effective “historical service day”.
+	•	market.py has parameterized gate, service-day helper, and DRY TZ handling.
+	•	Alerts
+	•	Alert daemon emits to alerts.jsonl; FastAPI + Bulma UI displays live cards (SSE). We saw it working. 🎉
+	•	Repo
+	•	Public GitHub is live and visible.
+
+Likely done (but I can’t read the file here)
+
+I can’t fetch GitHub content from my side right now, so I can’t visually confirm settings/settings.py. Below is the final “known-good” spec for that file’s two validations + path bootstrapping. If you already added these (or equivalents), you’re golden; otherwise, please drop them in exactly.
+
+# settings/settings.py — add near the bottom after PATHS is defined
+from pathlib import Path
+
+# 1) Create dirs referenced by PATHS (safe on import)
+for key, p in PATHS.items():
+    try:
+        Path(p).expanduser().resolve().mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # entries that are files (not folders) will be created lazily by IO helpers
+        pass
+
+# 2) Tiny validation for DEFAULTS + timeframes
+def _validate_defaults():
+    d = DEFAULTS
+    assert "BROKER" in d and d["BROKER"], "DEFAULTS.BROKER must be set"
+    assert "EXCHANGE" in DEFAULTS and DEFAULTS["EXCHANGE"] in EXCHANGE["EXCHANGES"], (
+        f"Unknown DEFAULTS.EXCHANGE: {DEFAULTS.get('EXCHANGE')}"
+    )
+    di = d.get("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
+    # Accept tokens like 1m/5m/15m/1h/1d/1w/1mo — very light checks:
+    def _ok(tok: str) -> bool:
+        tok = str(tok).lower()
+        return tok.endswith(("m","h","d","w","mo")) and tok[:-1].replace("o","").isdigit()
+    assert _ok(di.get("intraday", "5m")), "DEFAULT_INTERVALS.intraday must be like '5m', '1h'"
+    assert _ok(di.get("daily", "1d")), "DEFAULT_INTERVALS.daily must be like '1d', '1w', '1mo'"
+
+_validate_defaults()
+
+Why keep the PATHS mkdir-on-import?
+It guarantees first-run folders exist before any daemon writes. Keep it — it’s cheap and avoids “No such file or directory” across environments.
+
+Sanity checks you can run now
+
+# 1) ensure no stale imports after deletions
+grep -R "from .*helpers\.common" -n .
+grep -R "from .*helpers\.path_manager" -n .
+grep -R "from .*helpers\.scheduler" -n .
+
+# 2) scheduler imports the router from the right place
+grep -R "from ..fetchers.fetch_router import run_router" -n queen/daemons/scheduler.py
+
+# 3) quick smoke of both fetch paths
+python -m queen.fetchers.upstox_fetcher --symbol NSDL --mode intraday --interval 5m
+python -m queen.fetchers.upstox_fetcher --symbol NSDL --mode daily --from 2025-10-01 --to 2025-10-22
+
+# 4) router single-shot
+python -m queen.fetchers.fetch_router --mode daily --symbols NSDL TCS --from 2025-10-01 --to 2025-10-22
+
+What’s queued for tomorrow (🔜)
+	1.	Alert v2 (rules + indicators)
+	•	queen/daemons/alert_v2.py (multi-rule engine, cooldown, state).
+	•	configs/alert_rules.yaml (starter set).
+	•	queen/indicators/ (SMA, RSI, VWAP base).
+	•	Emits to existing alerts.jsonl; UI keeps working.
+	2.	Tiny settings niceties
+	•	Optional: add a settings.validate() entry point that calls _validate_defaults() and any profile/universe checks (e.g., unknown symbols).
+	3.	Follow-ups
+	•	cache.py TTL micro-cache (later, only if perf asks for it).
+	•	Basic Makefile / taskfile to run common commands (router, alert, server).
+
+Quick “done vs. pending” table
+	•	Helpers cleanup: DONE
+	•	IO hardened: DONE
+	•	Scheduler placement: DONE
+	•	Settings path bootstrap: (add/confirm)
+	•	Settings token validation: (add/confirm)
+	•	Fetcher timeframe support: DONE
+	•	Router service-day log: DONE
+	•	Live Alerts loop (daemon → SSE → UI): DONE
+	•	Alert v2 (rules/indicators): PENDING (tomorrow)
+
+If you want, paste just the bottom ~80 lines of settings/settings.py here and I’ll confirm the two blocks are exactly right. Otherwise, proceed — nothing else is blocking today’s work.

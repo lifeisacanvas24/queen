@@ -1,4 +1,4 @@
-11:45 a.m. now brother pull the latest candles from upstox
+12:45 p.m. now brother pull the latest candles from upstox
 
 ## ⚙️ 1️⃣ Create a Local File → Commit → Push to GitHub
 
