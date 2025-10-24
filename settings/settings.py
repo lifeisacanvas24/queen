@@ -203,7 +203,33 @@ DEFAULTS = {
     "AUTO_RESTART_DAEMON": True,
     "EXPORT_FORMAT": "parquet",
 }
-DEFAULTS.update({"DEFAULT_INTERVALS": {"intraday": "5m", "daily": "1d"}})
+# --- validation: DEFAULT_INTERVALS tokens ---
+DEFAULTS.setdefault("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
+_intr = DEFAULTS["DEFAULT_INTERVALS"].get("intraday", "5m")
+_daily = DEFAULTS["DEFAULT_INTERVALS"].get("daily", "1d")
+for tok in (_intr, _daily):
+    assert isinstance(tok, str) and len(tok) >= 2, f"Bad interval token: {tok}"
+
+# --- timeframe map sanity (optional but nice) ---
+# Friendly → canonical tokens the fetcher understands
+TIMEFRAME_MAP = {
+    "1m": "minutes:1",
+    "5m": "minutes:5",
+    "15m": "minutes:15",
+    "1h": "hours:1",
+    "2h": "hours:2",
+    "4h": "hours:4",
+    "1d": "days:1",
+    "1w": "weeks:1",
+    "1mo": "months:1",
+}
+# verify keys/values look sane
+for k, v in TIMEFRAME_MAP.items():
+    assert ":" in v or k.endswith(
+        ("m", "h", "d", "w", "o")
+    ), f"Bad timeframe map: {k}->{v}"
+
+# DEFAULTS.update({"DEFAULT_INTERVALS": {"intraday": "5m", "daily": "1d"}})
 
 
 # ------------------------------------------------------------
