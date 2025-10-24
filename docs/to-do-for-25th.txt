@@ -1,0 +1,156 @@
+you got it, brother. here’s a crisp, plug-and-run plan for tomorrow — in the exact order I’d tackle it, with commands you can copy/paste.
+
+morning game plan (step-by-step)
+
+0) prep (1 min)
+
+git checkout -b feat/alerts-v1
+pip install pydantic yaml
+
+
+⸻
+
+1) persistent cooldown (alerts don’t spam across restarts)
+
+Goal: save/reload last-fired timestamps.
+
+Implement
+	•	Add a tiny state file: PATHS["CACHE"]/alerts_state.json.
+	•	In queen/daemons/alert_v2.py:
+	•	on start: load to _LAST_FIRE
+	•	on every fire: write back to file (atomic).
+
+Commands to verify
+
+python -m queen.daemons.alert_v2 --once --debug
+cat ./queen/data/runtime/cache/alerts_state.json | head
+python -m queen.daemons.alert_v2 --once --debug  # should cooldown-skip repeated fires
+
+
+⸻
+
+2) multi-symbol expansion in YAML
+
+Goal: allow:
+
+- name: NSDL+PGIL RSI watch
+  kind: indicator
+  symbols: [NSDL, PGIL, GODFRYPHLP]
+  indicator: rsi
+  op: crosses_above
+  value: 50
+  timeframe: 5m
+
+Implement
+	•	In queen/alerts/rules.py::load_rules, if symbols is a list, fan-out to multiple Rule objects (one per symbol).
+
+Verify
+
+python -m queen.daemons.alert_v2 --once --debug
+# expect the same rule evaluated for each symbol in symbols[]
+
+
+⸻
+
+3) min-bars policy via settings (already drafted, just wire)
+
+Goal: ensure indicators fetch enough bars (from indicator_policy.min_bars_for_indicator).
+
+Implement
+	•	In alert_v2._min_bars_for, call into indicator_policy.min_bars_for_indicator(name, params) first; if None, keep current heuristic.
+
+Verify
+
+# try RSI length=14 and length=50 in YAML and see min bars change
+python -m queen.daemons.alert_v2 --once --debug
+
+
+⸻
+
+4) sinks refactor: JSONL + (optional) SQLite/SSE
+
+Goal: a single dispatch function, zero duplication.
+
+Implement
+	•	New queen/alerts/sinks.py:
+	•	emit_jsonl(event): append to alert_path_jsonl()
+	•	(optional) emit_sqlite(event): write to alert_path_sqlite() (use a simple alerts table)
+	•	(optional) emit_sse(event): POST to ALERT_SINKS["SSE"] if set
+	•	emit_all(event): fan-out based on enabled sinks in settings.
+	•	Update alert_v2.py to use emit_all(evt).
+
+Verify
+
+python -m queen.daemons.alert_v2 --once
+tail -n 3 $(python - <<'PY'
+from queen.settings.settings import alert_path_jsonl
+print(alert_path_jsonl())
+PY
+)
+
+
+⸻
+
+5) rule combinators (v1)
+
+Goal: support logical blocks:
+
+- name: RSI + Price Momentum
+  kind: combo
+  all_of:
+    - { kind: indicator, indicator: rsi, op: gt, value: 50, timeframe: 5m }
+    - { kind: price, op: gt, value: 200, timeframe: 5m }
+
+Implement
+	•	In evaluator.py: add eval_combo(rules: list[Rule], mode: "all_of"|"any_of").
+	•	In eval_rule: if kind == "combo", transform nested dicts to Rule and evaluate them recursively; AND for all_of, OR for any_of.
+
+Verify
+
+python -m queen.daemons.alert_v2 --once --debug
+
+
+⸻
+
+6) tests (quick sanity)
+
+Implement
+	•	queen/alerts/tests/test_evaluator.py with 3 tiny tests:
+	•	price lt/gt/eq
+	•	crosses_above level
+	•	indicator rsi lt/gt on synthetic df
+
+Run
+
+pytest queen/alerts/tests -q
+
+
+⸻
+
+7) polish (quality of life)
+	•	Add --cooldown 300 to CLI default in prod.
+	•	Rotate JSONL weekly (optional quick cron or size check).
+	•	Add --symbols override flag to daemon (evaluate only a subset temporarily).
+
+Verify
+
+python -m queen.daemons.alert_v2 --once --cooldown 300 --debug
+
+
+⸻
+
+8) commit + branch push
+
+git add -A
+git commit -m "alerts: persistent cooldown, multi-symbol, min-bars policy, sinks scaffold, combo rules"
+git push -u origin feat/alerts-v1
+
+quick checklist (success criteria)
+	•	Restarting daemon does not re-fire same alerts immediately (cooldown persisted).
+	•	YAML with symbols: [...] evaluates per symbol.
+	•	RSI(50) causes a larger fetch than RSI(14).
+	•	Alerts consistently show in JSONL; (optional) appear in SQLite/SSE.
+	•	Combo rule works: only fires when both sub-conditions pass.
+	•	pytest green for evaluator tests.
+
+want me to pre-write any of these files (state loader/saver, sinks.py, combo evaluator) so you can paste and run?

@@ -11,3 +11,5 @@
 {"ts": "2025-10-24T13:25:44.973381Z", "symbol": "PGIL", "rule": "PGIL absurd price lt", "kind": "price", "timeframe": "1m"}
 {"ts": "2025-10-24T13:40:00.068809Z", "symbol": "PGIL", "rule": "PGIL absurd price lt", "detail": {"kind": "price", "timeframe": "1m", "op": "lt", "value": 999999, "pattern": null, "indicator": null, "params": {}, "close": 1408.8}}
 {"ts": "2025-10-24T13:40:16.415324Z", "symbol": "PGIL", "rule": "PGIL absurd price lt", "detail": {"kind": "price", "timeframe": "1m", "op": "lt", "value": 999999, "pattern": null, "indicator": null, "params": {}, "close": 1408.8}}
+{"ts": "2025-10-24T14:03:14.086914Z", "symbol": "PGIL", "rule": "PGIL absurd price lt", "detail": {"kind": "price", "timeframe": "1m", "op": "lt", "value": 999999, "pattern": null, "indicator": null, "params": {}, "close": 1408.8}}
+{"ts": "2025-10-24T14:03:46.932239Z", "symbol": "PGIL", "rule": "PGIL absurd price lt", "detail": {"kind": "price", "timeframe": "1m", "op": "lt", "value": 999999, "pattern": null, "indicator": null, "params": {}, "close": 1408.8}}

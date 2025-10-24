@@ -328,3 +328,168 @@ next next steps (after you paste these)
 	•	emits to alerts.jsonl (and your SSE endpoint).
 
 If you prefer, I can also add a tiny queen/technicals/patterns/detect.py that wires PATTERN_FUNCS to the registry, so you can trigger patterns from YAML too.
+
+
+love it — everything’s wired and behaving exactly as intended. The debug trace on the RSI rule proves the crosses logic + min-bars policy are working, and the daemon is reading both YAML/JSONL paths via ALERT_SINKS (super DRY ✅).
+
+Quick wins you can do next
+	1.	Add a real indicator rule
+In alert_rules.yaml, try:
+
+- name: NSDL RSI crosses 50
+  symbol: NSDL
+  kind: indicator
+  indicator: rsi
+  timeframe: "5m"
+  op: crosses_above
+  value: 50
+  params:
+    length: 14   # picks min_bars via indicator_policy
+
+Run with --debug to see last2 vs level.
+
+	2.	Quiet repeats with cooldown (already there)
+If you want a calmer stream: --cooldown 300.
+	3.	Persist cooldown across restarts (optional)
+We can serialize _LAST_FIRE to a small state file under PATHS["CACHE"]/alerts_state.json on shutdown and reload on boot. Say the word and I’ll drop that.
+	4.	SQLite/SSE sinks (optional)
+You already have ALERT_SINKS["SQLITE"] and ["SSE"] placeholders. I can:
+	•	write an alerts/sinks.py with write_jsonl, write_sqlite, post_sse, then
+	•	switch the daemon to fan-out to any enabled sinks.
+	5.	Rule ergonomics
+	•	Multi-symbol per rule: allow symbol: to accept a list and fan out internally.
+	•	Rule groups with all_of/any_of to combine conditions (e.g., RSI>50 and price above VWAP). I can ship a small boolean combinator in evaluator.py.
+	6.	Universe-driven rules
+Add symbol_selector: monthly_top_50 (or a tag), resolve to symbols via load_instruments_df. Want it? I’ll make a tiny selector hook.
+	7.	Tests
+Add queen/alerts/tests/test_evaluator.py with fixed series to validate lt/gt/eq/crosses_* and pattern stubs.
+
+If you want me to implement any of the optional ones now (stateful cooldown, sinks fan-out, multi-symbol rules, combinators), just say which and I’ll hand you end-to-end files.
+
+love it — everything’s wired and behaving exactly as intended. The debug trace on the RSI rule proves the crosses logic + min-bars policy are working, and the daemon is reading both YAML/JSONL paths via ALERT_SINKS (super DRY ✅).
+
+Quick wins you can do next
+	1.	Add a real indicator rule
+In alert_rules.yaml, try:
+
+- name: NSDL RSI crosses 50
+  symbol: NSDL
+  kind: indicator
+  indicator: rsi
+  timeframe: "5m"
+  op: crosses_above
+  value: 50
+  params:
+    length: 14   # picks min_bars via indicator_policy
+
+Run with --debug to see last2 vs level.
+
+	2.	Quiet repeats with cooldown (already there)
+If you want a calmer stream: --cooldown 300.
+	3.	Persist cooldown across restarts (optional)
+We can serialize _LAST_FIRE to a small state file under PATHS["CACHE"]/alerts_state.json on shutdown and reload on boot. Say the word and I’ll drop that.
+	4.	SQLite/SSE sinks (optional)
+You already have ALERT_SINKS["SQLITE"] and ["SSE"] placeholders. I can:
+	•	write an alerts/sinks.py with write_jsonl, write_sqlite, post_sse, then
+	•	switch the daemon to fan-out to any enabled sinks.
+	5.	Rule ergonomics
+	•	Multi-symbol per rule: allow symbol: to accept a list and fan out internally.
+	•	Rule groups with all_of/any_of to combine conditions (e.g., RSI>50 and price above VWAP). I can ship a small boolean combinator in evaluator.py.
+	6.	Universe-driven rules
+Add symbol_selector: monthly_top_50 (or a tag), resolve to symbols via load_instruments_df. Want it? I’ll make a tiny selector hook.
+	7.	Tests
+Add queen/alerts/tests/test_evaluator.py with fixed series to validate lt/gt/eq/crosses_* and pattern stubs.
+
+If you want me to implement any of the optional ones now (stateful cooldown, sinks fan-out, multi-symbol rules, combinators), just say which and I’ll hand you end-to-end files.
+
+
+Perfect brother 👑 — here’s a clean, structured summary of everything we’ve accomplished and what’s queued for tomorrow:
+
+⸻
+
+✅ Completed (Today)
+
+Core Infrastructure
+	•	DRY pathing via ALERT_SINKS (no hardcoded JSONL/YAML anywhere)
+	•	rules.py now fully settings-driven (alert_path_rules())
+	•	Clean imports + folder structure validated
+
+Indicators & Registry
+	•	Polars-native RSI implemented (rsi.py)
+	•	Auto-registration verified (list_indicators() → ['rsi', ...])
+	•	Registry unified (Entry model + autoscan for EXPORTS/compute_*)
+
+Alert Daemon
+	•	alert_v2.py v0.9 running stable:
+	•	Cooldown in-memory (no spam)
+	•	--debug flag → shows last2 vs level
+	•	Min-bars policy via indicator_policy
+	•	JSONL output through DRY pathing
+
+Rules & Evaluation
+	•	rules.py refactored (dataclass + from_dict + to_dict)
+	•	evaluator.py v0.7 → price, pattern, and indicator logic clean
+
+Validation
+	•	Verified RSI crosses debug output (last2, level, no trigger)
+	•	Verified PGIL price rule triggered ✅
+	•	Verified GODFRYPHLP & NSDL data pipelines
+
+⸻
+
+🧩 To-Do (Tomorrow)
+
+1️⃣ Alert Enhancements
+	•	Persistent cooldown state file
+→ Save _LAST_FIRE under PATHS["CACHE"]/alerts_state.json
+→ Reload on startup to preserve alert intervals after daemon restart.
+	•	Multi-symbol rule expansion
+→ Allow symbol: [PGIL, NSDL, TCS] in YAML → fan-out dynamically.
+	•	Rule combinators (all_of, any_of)
+→ Logical chaining for advanced strategies
+Example:
+
+kind: combo
+all_of:
+  - { kind: indicator, indicator: rsi, op: gt, value: 50 }
+  - { kind: price, op: gt, value: 200 }
+
+
+	•	SQLite + SSE sink fan-out
+→ Add alerts/sinks.py to dispatch alerts into JSONL + SQLite + optional stream endpoint.
+
+⸻
+
+2️⃣ Configuration & Cleanup
+	•	Confirm settings/indicator_policy.py merged into active config
+→ Ensure min_bars_for_indicator() resolves via indicator settings.
+	•	Validate settings/settings.py includes:
+	•	Folder mkdir bootstrapping
+	•	_validate_defaults() check
+	•	Updated ALERT_SINKS block (JSONL, YAML, SQLITE, SSE)
+
+⸻
+
+3️⃣ Testing & Housekeeping
+	•	Add queen/alerts/tests/test_evaluator.py
+→ Validate lt, gt, eq, crosses_above, crosses_below logic
+→ Include mock RSI/price patterns
+	•	Scheduler & Router smoke test
+
+python -m queen.daemons.scheduler --once --mode intraday --interval-minutes 5
+python -m queen.fetchers.fetch_router --mode daily --symbols NSDL TCS
+
+
+	•	Optionally, prune unused helper stubs in helpers/
+
+⸻
+
+🪶 Optional Stretch Goals
+	•	Alert JSONL rotation / compression (prevent large files)
+	•	Prometheus /metrics endpoint
+	•	WebSocket fast update loop for Bulma UI
+
+⸻
+
+Would you like me to draft tomorrow’s working sequence (step-by-step implementation order + commands)?
+That’ll make your morning session plug-and-run, brother 🚀

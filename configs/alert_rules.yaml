@@ -1,23 +1,9 @@
-rules:
-  - name: PGIL absurd price lt
-    symbol: PGIL
-    kind: price
-    timeframe: "1m"
-    op: lt
-    value: 999999
-
-  - name: Demo doji
-    symbol: GODFRYPHLP
-    kind: pattern
-    pattern: doji
-    timeframe: "5m"
-    # params: { tolerance: 0.1 }
-
-  - name: NSDL RSI crosses 30
-    symbol: NSDL
-    kind: indicator
-    indicator: rsi
-    params: { length: 14 }
-    timeframe: "5m"
-    op: crosses_above
-    value: 30
+- name: NSDL RSI crosses 50
+  symbol: NSDL
+  kind: indicator
+  indicator: rsi
+  timeframe: "5m"
+  op: crosses_above
+  value: 50
+  params:
+    length: 14 # picks min_bars via indicator_policy

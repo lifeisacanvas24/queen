@@ -91,9 +91,7 @@ def eval_indicator(df: pl.DataFrame, rule: Rule) -> Tuple[bool, Dict[str, Any]]:
     """Runs a Series-style indicator from the registry and evaluates op/value."""
     name = (rule.indicator or "").lower()
     try:
-        fn = get_indicator(
-            name
-        )  # returns callable(df, **params) -> pl.Series or DataFrame
+        fn = get_indicator(name)  # -> Series or DataFrame
     except KeyError:
         raise ValueError(f"Unknown indicator: {name}")
 
