@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/fetch_router.py — v9.3 (Unified Async Orchestrator)
+# queen/fetchers/fetch_router.py — v9.4 (Unified Async Orchestrator)
 # ============================================================
 """Queen Fetch Router — Unified Async Dispatcher
 -------------------------------------------------
@@ -12,6 +12,8 @@
 ✅ Settings-driven (batch size, concurrency, export format)
 ✅ Polars-native and production-safe
 ✅ Unified JSONL + Rich diagnostics
+✅ Long-term fix: daily runs pass interval=None so the fetcher
+   applies settings.DEFAULTS['DEFAULT_INTERVALS']['daily'].
 """
 
 from __future__ import annotations
@@ -25,9 +27,9 @@ from typing import Dict, List, Optional, Sequence
 
 import polars as pl
 from queen.fetchers.upstox_fetcher import fetch_unified
-from queen.helpers.fetch_utils import warn_if_same_day_eod  # ⬅️ shared warning
+from queen.helpers.fetch_utils import warn_if_same_day_eod
 from queen.helpers.instruments import load_instruments_df
-from queen.helpers.intervals import parse_minutes  # ⬅️ DRY import
+from queen.helpers.intervals import parse_minutes
 from queen.helpers.logger import log
 from queen.helpers.market import (
     current_historical_service_day,
@@ -110,7 +112,7 @@ async def _fetch_symbol(
     mode: str,
     from_date: str,
     to_date: str,
-    interval: str,
+    interval: str | int | None,
     sem: asyncio.Semaphore,
 ) -> pl.DataFrame:
     async with sem:
@@ -128,7 +130,11 @@ async def _fetch_symbol(
 
 
 async def _fetch_batch(
-    symbols: List[str], mode: str, from_date: str, to_date: str, interval: str
+    symbols: List[str],
+    mode: str,
+    from_date: str,
+    to_date: str,
+    interval: str | int | None,
 ) -> Dict[str, pl.DataFrame]:
     sem = asyncio.Semaphore(MAX_CONCURRENCY)
     tasks = (
@@ -146,9 +152,15 @@ async def run_router(
     mode: str = "daily",
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    interval: str = str(DEFAULT_INTERVAL_MIN),
+    interval: str | int | None = None,
 ) -> None:
-    """Run a full fetch cycle over `symbols`."""
+    """Run a full fetch cycle over `symbols`.
+
+    Long-term design:
+      • For daily/historical → pass interval=None so the fetcher applies
+        DEFAULTS['DEFAULT_INTERVALS']['daily'] (usually '1d').
+      • For intraday → interval may be None (fetcher uses '5m') or an explicit token.
+    """
     symbols = list(dict.fromkeys(symbols))  # de-dup but keep order
     if not symbols:
         log.error("[Router] No symbols provided.")
@@ -168,7 +180,14 @@ async def run_router(
 
         from_date = from_date or datetime.now().strftime("%Y-%m-%d")
         to_date = to_date or from_date
-        # 💡 new logging line here
+
+        # Let the fetcher decide the default interval for daily/historical
+        effective_interval: str | int | None = interval
+        if mode.lower() == "daily":
+            effective_interval = (
+                None  # fetcher will use DEFAULTS['DEFAULT_INTERVALS']['daily']
+            )
+
         if mode.lower() == "daily":
             target = current_historical_service_day()
             log.info(
@@ -181,7 +200,9 @@ async def run_router(
         for i, chunk in enumerate(chunks, 1):
             log.info(f"[Router] 🧩 Batch {i}/{len(chunks)} | {len(chunk)} symbols")
             start = time.perf_counter()
-            results = await _fetch_batch(chunk, mode, from_date, to_date, interval)
+            results = await _fetch_batch(
+                chunk, mode, from_date, to_date, effective_interval
+            )
             all_results.update(results)
             elapsed = time.perf_counter() - start
             log.info(f"[Router] ⏱️ Batch {i} done in {elapsed:.2f}s")
@@ -199,7 +220,7 @@ async def run_cycle(
     mode: str = "daily",
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    interval: str = str(DEFAULT_INTERVAL_MIN),
+    interval: str | int | None = None,
 ) -> None:
     await run_router(
         symbols, mode=mode, from_date=from_date, to_date=to_date, interval=interval
@@ -227,7 +248,9 @@ async def run_scheduled(
                 mode=mode,
                 from_date=today,
                 to_date=today,
-                interval=str(interval_minutes),
+                interval=(
+                    f"{interval_minutes}m" if mode.lower() == "intraday" else None
+                ),
             )
         else:
             log.info(
@@ -247,8 +270,9 @@ def run_cli():
     parser.add_argument("--to", dest="to_date", help="End date (YYYY-MM-DD)")
     parser.add_argument(
         "--interval",
-        default=str(DEFAULT_INTERVAL_MIN),
-        help="Bar interval in minutes (e.g. 1,5,15)",
+        default=None,
+        help="Interval token (e.g. 1, 5m, 15m, 1h). "
+        "If omitted: daily uses 1d, intraday uses 5m (from settings.DEFAULT_INTERVALS).",
     )
     parser.add_argument(
         "--auto", action="store_true", help="Enable continuous scheduler"
@@ -275,7 +299,7 @@ def run_cli():
                 log.info(f"[Router] Using top {len(symbols)} symbols from universe.")
             else:
                 symbols = args.symbols
-            # Warn once here (in addition to fetcher’s per-symbol context if you prefer)
+
             if args.mode == "daily":
                 warn_if_same_day_eod(args.from_date, args.to_date)
 
