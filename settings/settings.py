@@ -231,6 +231,14 @@ def resolve_log_path(log_key: str) -> Path:
     return log_file(log_key)
 
 
+# --- ensure configured directories exist on import ---
+
+
+for key, p in PATHS.items():
+    try:
+        Path(p).expanduser().resolve().mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass  # paths pointing to files will be created by io.atomic writes
 # ------------------------------------------------------------
 # ✅ Self-Test
 # ------------------------------------------------------------
