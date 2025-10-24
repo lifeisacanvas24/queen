@@ -1,0 +1,130 @@
+{
+  "base_url": "https://api.upstox.com/v3/",
+  "historical_candle_api": {
+    "url_pattern": "historical-candle/{instrument_key}/{unit}/{interval}/{to_date}/{from_date}",
+    "supported_timelines": {
+      "minutes": [
+        {
+          "intervals": "1-15",
+          "availability": "From Jan 2022",
+          "max_range": "1 month",
+          "max_range_in_numbers": 31
+        },
+        {
+          "intervals": "16-300",
+          "availability": "From Jan 2022",
+          "max_range": "1 quarter",
+          "max_range_in_numbers": 93
+        }
+      ],
+      "hours": [
+        {
+          "intervals": "1-5",
+          "availability": "From Jan 2022",
+          "max_range": "1 quarter",
+          "max_range_in_numbers": 93
+        }
+      ],
+      "days": [
+        {
+          "intervals": "1",
+          "availability": "From Jan 2000",
+          "max_range": "1 decade",
+          "max_range_in_numbers": 3650
+        }
+      ],
+      "weeks": [
+        {
+          "intervals": "1",
+          "availability": "From Jan 2000",
+          "max_range": "no limit",
+          "max_range_in_numbers": null
+        }
+      ],
+      "months": [
+        {
+          "intervals": "1",
+          "availability": "From Jan 2000",
+          "max_range": "no limit",
+          "max_range_in_numbers": null
+        }
+      ]
+    },
+    "sample_url": "https://api.upstox.com/v3/historical-candle/NSE_EQ%7CINE848E01016/minutes/1/2025-01-12/2025-01-01",
+    "response_sample": {
+      "status": "success",
+      "data": {
+        "candles": [
+          ["2025-01-01T00:00:00+05:30", 53.1, 53.95, 51.6, 52.05, 235519861, 0],
+          [
+            "2025-02-01T00:00:00+05:30",
+            50.35,
+            56.85,
+            49.35,
+            52.8,
+            1004998611,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  "intraday_candle_api": {
+    "url_pattern": "historical-candle/intraday/{instrument_key}/{unit}/{interval}",
+    "supported_timelines": {
+      "minutes": {
+        "intervals": "1-300"
+      },
+      "hours": {
+        "intervals": "1-5"
+      },
+      "days": {
+        "intervals": "1"
+      }
+    },
+    "sample_url": "https://api.upstox.com/v3/historical-candle/intraday/NSE_EQ%7CINE848E01016/minutes/5",
+    "response_sample": {
+      "status": "success",
+      "data": {
+        "candles": [
+          [
+            "2025-01-12T15:15:00+05:30",
+            2305.3,
+            2307.05,
+            2301,
+            2304.65,
+            559982,
+            0
+          ],
+          [
+            "2025-01-12T14:45:00+05:30",
+            2309.1,
+            2310.75,
+            2305.25,
+            2305.3,
+            740124,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  "field_mapping": {
+    "candles": [
+      "Timestamp (ISO8601)",
+      "Open",
+      "High",
+      "Low",
+      "Close",
+      "Volume",
+      "Open Interest"
+    ]
+  },
+  "error_codes": {
+    "UDAPI1021": "Instrument key is of invalid format",
+    "UDAPI100011": "Invalid Instrument key",
+    "UDAPI1146": "Invalid unit",
+    "UDAPI1147": "Invalid interval",
+    "UDAPI1148": "Invalid date range"
+  }
+}

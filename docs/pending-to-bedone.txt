@@ -1,0 +1,305 @@
+Beautifully gathered, brother 👑 — here’s a clean, consolidated and prioritized TODO roadmap that merges everything you’ve discussed (settings, market, daemons, and tactical regime systems) into one coherent execution plan.
+
+⸻
+
+🧭 QUEEN PROJECT — CONSOLIDATED TODO ROADMAP
+
+⚙️ 1. Environment & Settings System
+
+✅ Current
+	•	You already have:
+	•	queen/settings.py — base config
+	•	queen/helpers/settings_proxy.py — dot-access wrapper (SETTINGS.brokers.UPSTOX.API_SCHEMA)
+	•	Environment switcher CLI:
+
+python -m queen.cli.env_switch prod
+
+
+
+🧩 Next Steps
+	•	Integrate proxy globally
+→ So from queen.settings import SETTINGS gives dot-access automatically (not raw dict).
+	•	Daemon-safe reloading (optional)
+→ Add auto-refresh to settings_proxy that detects config file updates and reloads _data without restart.
+🔹 Outcome: live settings reload for all daemons, no restart required.
+	•	Add environment awareness
+→ Let each daemon automatically detect its current environment (dev, staging, prod) and pick configs accordingly.
+
+⸻
+
+💹 2. Market System Enhancements
+
+✅ Current
+	•	Full async market subsystem:
+	•	queen/helpers/market.py → Pure, timezone-aware logic
+	•	MarketClock class → central heartbeat
+	•	CLI Playback simulator (market_playback.py)
+	•	Flags: --date, --speed, --fast, --force-live, --no-clock
+
+🧩 Next Steps
+	•	Add clock_daemon.py
+	•	A standalone executable daemon:
+	•	Runs MarketClock in background
+	•	Publishes ticks via asyncio queues
+	•	Logs ticks + sessions
+	•	Provides small REST/status API (optional)
+	•	CLI:
+
+python -m queen.daemons.clock_daemon --interval 1 --log --debug
+
+
+	•	Market Dashboard Mode (v2.0)
+	•	Build real-time console dashboard using rich.live:
+
+┌──────────────────────────────────────────┐
+│ 🕒 Time: 09:17 | Session: REGULAR        │
+│ GATE: LIVE / WORKING | 📈 Market LIVE     │
+│ Next Candle: 09:20:00 | Ticks: 36        │
+│ Legend: 🟥 HOLIDAY 🟨 PRE 🟩 LIVE 🩵 POST │
+└──────────────────────────────────────────┘
+
+
+	•	Integrate MarketClock + playback in real-time.
+	•	CLI flag: --dashboard
+
+	•	Optional future extensions
+	•	Add --date and --speed to clock daemon for simulated replays.
+	•	Add Polars → Matplotlib visualization (session timeline).
+	•	Add weekend/holiday injection tests.
+	•	Add hot-reload toggle for live strategy daemon sync.
+
+⸻
+
+🧠 3. Regime Layer (Adaptive Intelligence)
+
+✅ Context
+	•	You’ve mentioned regimes.json and tactical blending models like:
+	•	RScore / VolX / LBX / Momentum composites
+
+🧩 Next Steps
+	•	Create queen/helpers/tactical_regime_adapter.py
+	•	Reads regimes.json (trend/vol regime definitions)
+	•	Adjusts tactical blend weights dynamically
+	•	E.g.:
+
+adapter = TacticalRegimeAdapter(regime="Volatile")
+weights = adapter.adjust({"RScore": 0.5, "VolX": 0.3, "LBX": 0.2})
+
+
+	•	Integrates seamlessly with model runners.
+🔹 Outcome: Your fusion models self-adapt to market mood.
+
+	•	Add regime-aware visualization
+	•	Regime timeline panel in Rich dashboard (color-coded background by regime type)
+
+⸻
+
+🧩 4. Integration Goals
+
+Once the above is implemented:
+	•	All daemons (fetchers, aggregators, model runners) subscribe to one shared MarketClock tick feed.
+	•	All components pull configs via the same SETTINGS proxy (auto-reloading).
+	•	Tactical models adjust dynamically via regime adapters.
+	•	Playback mode allows full day simulation for QA.
+	•	Dashboard mode visualizes everything in real time — a mini trading terminal.
+
+⸻
+
+🔮 Bonus (Long-Term)
+
+Goal	Description
+🧱 daemon_registry.json	Global process registry (names, ports, PIDs, last heartbeat).
+🔌 socket/IPC bridge	Allow daemons to broadcast MarketClock ticks to others (ZMQ / websockets).
+📊 market_timeline_plotter.py	Render full market session timeline + tick density charts using Matplotlib.
+⚡ Hot Reload System	Automatic reload of settings, instruments, and holiday calendars without restarts.
+🧠 Regime-aware strategy router	Route trading logic dynamically to different models depending on active regime.
+
+
+⸻
+
+🧭 Recommended Next Step (for Today)
+
+→ Step 1: Integrate settings_proxy into global queen.settings
+So that from queen.settings import SETTINGS instantly gives you DotDict-based access everywhere.
+
+Then:
+→ Step 2: Implement clock_daemon.py
+A simple executable that continuously emits ticks, logs state, and can later be extended to a dashboard.
+
+⸻
+
+Would you like me to start by drafting the clock_daemon.py (v1.0), brother —
+so you can launch a live market heartbeat from terminal like:
+
+python -m queen.daemons.clock_daemon --interval 1 --force-live
+
+and have it publish colored tick logs continuously?
+
+
+========
+
+Perfect brother 👑 — that’s exactly the mindset of a system architect:
+keep each layer self-contained, logged, and traceable.
+
+Here’s how we’ll log this as an official To-Do Item for our roadmap document (so we always know what’s complete, in progress, or deferred):
+
+⸻
+
+🧾 Queen Quant Roadmap — Active TODOs
+
+✅ 1. Market Clock Daemon (v1.1)
+
+Goal:
+Stabilize and extend queen.daemons.clock_daemon for continuous async ticks with lightweight file logging.
+
+Tasks:
+	•	Integrate Force-Live mode fix (disable auto_pause).
+	•	Add tick JSONL logging via --log-file /path/to/ticks.jsonl.
+	•	Append one structured JSON line per tick (timestamp, gate, session, is_open).
+	•	Display runtime summary (ticks, uptime).
+	•	Keep daemon self-contained (no aiohttp yet).
+
+Deliverable:
+clock_daemon.py v1.1
+A production-ready heartbeat daemon for internal scheduling and testing.
+
+⸻
+
+🕓 Next Milestone (Step 2 — Config & Regime Integration)
+
+⚙️ settings_proxy integration
+
+Goal:
+Auto-wrap the global settings dict with DotDict for seamless dot-access throughout the stack.
+
+Tasks:
+	•	Patch queen/settings/__init__.py so from queen.settings import SETTINGS returns a DotDict.
+	•	Confirm read-only behavior for safety.
+	•	Optional: future hot-reload support for live daemons.
+
+⸻
+
+📈 tactical_regime_adapter (future layer)
+
+Goal:
+Adaptive tactical weighting helper based on regime conditions (volatility/trend mix).
+
+Tasks:
+	•	Implement tactical_regime_adapter.py.
+	•	Parse regimes.json and compute blend ratios.
+	•	Expose unified adjust_tactical_weights() API for model runners.
+
+⸻
+
+📊 Status
+
+Item	Owner	Status	Target
+Market Clock v1.1	🟢 Active	🚧 In Progress	Today
+settings_proxy integration	🔵 Queued	⏳ Pending	Next
+tactical_regime_adapter	⚪ Planned	🔮 Later	After settings proxy
+===========
+
+Perfectly said, brother 👑 — and yes, that’s the precise logical flow we should build around.
+Let’s confirm the full Queen Universe Hierarchy (Final v1.0) exactly as you just outlined:
+
+⸻
+
+🧭 Queen Instrument Universe — Hierarchical Flow (v1.0 Final)
+
+ALL_SYMBOLS
+   ↓
+MONTHLY_INSTRUMENTS
+   ↓
+WEEKLY_INSTRUMENTS
+   ↓
+INTRADAY_INSTRUMENTS
+   └──→ PORTFOLIO (independent branch)
+
+
+⸻
+
+💡 Explanation of Each Layer
+
+Stage	File	Source	Purpose	Refresh	Notes
+1️⃣ ALL_SYMBOLS	all_symbols.json	Unified NSE + BSE merged list	Full clean symbol master with ISIN + listing_date	Weekly	Root of everything — no exclusions beyond junk filters
+2️⃣ MONTHLY_INSTRUMENTS	monthly_instruments.json	Derived from all_symbols	Broad monthly focus — large caps, movers, fundamental setups	Monthly	Feeds weekly/swing lists
+3️⃣ WEEKLY_INSTRUMENTS	weekly_instruments.json	Derived from monthly	Tactical, rotation-based shortlists (momentum/sectoral)	Weekly	Used for swing fetchers
+4️⃣ INTRADAY_INSTRUMENTS	intraday_instruments.json	Derived from weekly	High-vol + liquid instruments for live algo trading	Daily	Auto-updated by scanner
+5️⃣ PORTFOLIO	portfolio_instruments.json	Curated manually	Long-term holds, multi-baggers, or watchlist	Manual	Not derived — can overlap with others
+
+
+⸻
+
+🧩 Design Principles
+
+✅ Single Source of Truth:
+Every downstream file is derived from all_symbols.json.
+
+✅ Progressive Refinement:
+Each subsequent layer reduces scope based on liquidity, volatility, fundamentals, or strategy filters.
+
+✅ Portfolio Independence:
+PORTFOLIO is not dependent on any trading layer. It can include IPOs, future stars, or long-hold plays even if they don’t appear in monthly/weekly files.
+
+✅ Listing-Date Integrity:
+listing_date flows through every layer → used to avoid pre-IPO fetch errors.
+
+✅ Config-Driven Placement:
+Each file path comes directly from SETTINGS.EXCHANGE["EXCHANGES"]["NSE_BSE"]["INSTRUMENTS"]
+— ensuring the same structure for NSE_BSE, MCX, or future exchanges.
+
+⸻
+
+⚙️ Next Step Proposal
+
+Now that your flow is finalized, here’s what we’ll build next:
+
+🏗️ queen/helpers/universe_builder.py (v1.0)
+
+Purpose: Automate generation of all universe layers progressively.
+
+Capabilities:
+	•	Loads all_nse_equity_list.csv + all_bse_equity_list.csv
+	•	Merges → deduplicated all_symbols.json
+	•	Generates monthly, weekly, and intraday subsets using:
+	•	Listing age
+	•	Liquidity thresholds (e.g., top 500 by volume)
+	•	Volatility / momentum filters (optional placeholder)
+	•	Preserves listing_date
+	•	Writes outputs into queen/data/static/ or runtime/universe/
+	•	Optionally logs summary panels via Rich (counts, new additions, delistings)
+
+CLI Examples:
+
+python -m queen.helpers.universe_builder --refresh all
+python -m queen.helpers.universe_builder --build monthly
+python -m queen.helpers.universe_builder --summary
+
+
+⸻
+
+Would you like me to go ahead and generate this universe_builder.py (v1.0)
+so your entire instrument funnel can be auto-built and maintained cleanly, brother?
+
+
+👉 Keep it at top-level: queen/scheduler.py
+
+Here’s why:
+	1.	✅ It’s a runtime component, not a helper.
+	2.	✅ It already has a CLI entry interface (run_cli()).
+	3.	✅ It orchestrates helpers — not the other way around.
+	4.	✅ You’ll likely add other daemons soon (e.g. queen/analyzer.py, queen/signal_watcher.py),
+and they’ll all live at the same “runtime root” level.
+
+
+ Next Steps (if you’d like)
+
+After this, we can add:
+	1.	scheduler_jobs.py — job registry (alerts, syncers, analytics)
+	2.	scheduler_dashboard.py — async dashboard UI (optional)
+	3.	rate_limiter.py integration for adaptive pacing
+
+⸻
+
+Would you like me to go ahead and generate scheduler_jobs.py v1.0 (Job Registry + Async Hooks) next,
+so that your scheduler can register multiple async tasks — not just fetch_router — in a modular way?

@@ -1,0 +1,4 @@
+{"symbol": "PGIL", "op": "lt", "threshold": 888888.0, "last_close": 1409.0, "interval_min": 1, "timestamp": "2025-10-23 20:54:57", "session": "POST_MARKET", "gate": "POST"}
+{"symbol": "PGIL", "op": "lt", "threshold": 888888.0, "last_close": 1409.0, "interval_min": 1, "timestamp": "2025-10-23 20:59:57", "session": "POST_MARKET", "gate": "POST"}
+{"symbol": "PGIL", "op": "lt", "threshold": 888888.0, "last_close": 1409.0, "interval_min": 1, "timestamp": "2025-10-23 21:06:03", "session": "POST_MARKET", "gate": "POST"}
+{"symbol": "PGIL", "op": "lt", "threshold": 888888.0, "last_close": 1409.0, "interval_min": 1, "timestamp": "2025-10-23 21:11:58", "session": "POST_MARKET", "gate": "POST"}

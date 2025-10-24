@@ -1,0 +1,216 @@
+Got you, brother. Here’s a clean, prioritized to-do you can execute top-to-bottom.
+
+✅ Immediate (today)
+	•	Run intraday for same-day checks
+	•	python -m queen.fetchers.upstox_fetcher --symbol NSDL --mode intraday --interval 5
+	•	Re-run daily only up to yesterday
+	•	python -m queen.fetchers.upstox_fetcher --symbol NSDL --mode daily --from 2025-10-01 --to 2025-10-22
+
+🛠️ Drop-in Code Patches
+	•	Warn if user asks for today’s EOD
+	•	File: queen/fetchers/upstox_fetcher.py
+	•	Add helper and CLI guard:
+
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
+IST = ZoneInfo("Asia/Kolkata")
+
+def _warn_if_same_day_eod_request(from_date: str, to_date: str):
+    try:
+        today_ist = datetime.now(tz=IST).date()
+        f, t = date.fromisoformat(from_date), date.fromisoformat(to_date)
+        if t >= today_ist:
+            log.warning("[CLI] You requested today's daily candle but EOD may not be published yet. Use --mode intraday or re-run after close.")
+    except Exception:
+        pass
+
+# inside run_cli() before fetch_unified(...)
+if args.mode == "daily" and args.from_date and args.to_date:
+    _warn_if_same_day_eod_request(args.from_date, args.to_date)
+
+
+	•	Optional: log empty daily reason
+	•	In fetch_daily_range():
+
+if not candles:
+    log.info(f"[Daily] No candles for {symbol} {from_date}→{to_date}. If this includes today, EOD may not be published yet.")
+
+
+
+🔇 Config Noise Cleanup
+	•	Point missing lists to existing monthly file
+	•	File: queen/settings/settings.py
+
+"INSTRUMENTS": {
+    "INTRADAY":  STATIC / "intraday_instruments.json",
+    "WEEKLY":    STATIC / "monthly_instruments.json",
+    "MONTHLY":   STATIC / "monthly_instruments.json",
+    "PORTFOLIO": STATIC / "monthly_instruments.json",
+    "APPROVED_SYMBOLS": STATIC / "monthly_instruments.json",  # or all_symbols.json if schema matches
+}
+
+
+	•	Clear instrument caches once
+	•
+
+python - <<'PY'
+from queen.helpers.instruments import clear_instrument_cache
+clear_instrument_cache()
+PY
+
+
+
+🧭 Scheduler / Router Fixes
+	•	Fix import path in scheduler
+	•	File: queen/daemons/scheduler.py
+
+# from ..fetch_router import run_router
+from ..fetchers.fetch_router import run_router
+
+
+	•	Ensure both run_cycle & run_router exist
+	•	File: queen/fetchers/fetch_router.py
+
+async def run_cycle(symbols, mode="daily", from_date=None, to_date=None, interval="1"):
+    tasks = [fetch_unified(s, mode=mode, from_date=from_date, to_date=to_date, interval=interval)]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+async def run_router(symbols, mode="daily", from_date=None, to_date=None, interval="1"):
+    await run_cycle(symbols, mode=mode, from_date=from_date, to_date=to_date, interval=interval)
+
+
+	•	(Optional) Legacy shim for old imports
+	•	New file: queen/fetch_router.py
+
+from .fetchers.fetch_router import run_router, run_cycle, main
+__all__ = ["run_router", "run_cycle", "main"]
+
+
+
+🔥 Demo the Alert UI (GODFRYPHLP)
+	•	Guaranteed one-shot trigger via daemon
+	•
+
+python -m queen.daemons.alert \
+  --symbols GODFRYPHLP \
+  --op lt --price 999999 \
+  --interval 1 --tick-interval 1 \
+  --once --out ./alerts.jsonl
+
+
+	•	Expect: first tick → alert card in Bulma UI.
+
+	•	Manual inject (fallback)
+	•	API:
+
+curl -X POST http://localhost:8000/alerts/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"ts":"'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'","symbol":"GODFRYPHLP","rule":"manual-demo","op":"demo","price":0,"note":"Demo alert"}'
+
+
+	•	Or append to JSONL the UI tails:
+
+echo '{"ts":"'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'","symbol":"GODFRYPHLP","rule":"manual-demo","op":"demo","price":0,"note":"Demo alert"}' >> ./alerts.jsonl
+
+
+
+🚦 Smoke Tests
+	•	Scheduler single-shot
+	•	python -m queen.daemons.scheduler --once --mode intraday --interval-minutes 5
+	•	Router daily batch
+	•	python -m queen.fetchers.fetch_router --mode daily --symbols NSDL TCS --from 2025-10-01 --to 2025-10-22
+	•	Router live intraday
+	•	python -m queen.fetchers.fetch_router --mode intraday --auto --interval-minutes 5
+
+📌 Acceptance Criteria
+	•	Intraday returns data for today; daily does not warn unless to >= today.
+	•	No warnings about missing WEEKLY/PORTFOLIO lists.
+	•	scheduler.py imports run_router cleanly; both run_cycle & run_router callable.
+	•	Bulma UI shows at least one live alert card for GODFRYPHLP.
+	•	Logs show clear reasons when daily returns 0 rows for same-day.
+
+🔭 Nice-to-Have (pick one next)
+	•	Daemon state file + disk GC (prevent duplicate alerts; rotate alerts.jsonl/old parquet)
+	•	Prometheus /metrics (fetch latency, success rates, alert counts)
+	•	WebSocket signal stream from FastAPI for instant UI updates
+
+If you want, I can draft the daemon state+GC next (compact, high impact).
+
+Haha 🔥 absolutely nothing to be sorry for, brother — that screenshot means everything’s working perfectly 👑
+
+✅ Daemon → emitted JSONL line
+✅ Server → streamed it live via SSE
+✅ Bulma UI → rendered the card instantly
+
+You’ve just closed the full async loop:
+Upstox API → fetcher → alert daemon → alerts.jsonl → FastAPI stream → Bulma UI.
+That’s a production-grade real-time monitoring circuit. 🚀
+
+Deliverable I’ll prep next (as requested): Indicator + Multi-Rule Alert Daemon
+
+What you’ll get, drop-in:
+	1.	queen/daemons/alert_v2.py (multi-rule engine + cooldown + state)
+	2.	queen/rules/schema.py (pydantic for YAML/JSON)
+	3.	queen/indicators/core.py (SMA, RSI, VWAP; extensible)
+	4.	queen/io/cache_reader.py (last-N parquet/intraday fetch)
+	5.	CLI:
+	python -m queen.daemons.alert_v2 \
+  --interval 1 \
+  --tick-interval 1 \
+  --rules-file ./alert_rules.yaml \
+  --cooldown 300 \
+  --out ./alerts.jsonl
+  	6.	Emits to existing JSONL + optional WebSocket hook if enabled later.
+
+Acceptance tests for v2
+	•	Inline rules and YAML both load & evaluate.
+	•	Price rule (GODFRYPHLP gt 1000) fires when condition met.
+	•	Indicator rule (RSI<30 & cross_up(VWAP, close)) fires with cached bars.
+	•	Cooldown prevents duplicate spam for the same rule/symbol.
+	•	UI receives one card per trigger with rule name + tags.
+
+If you want, I’ll default the rules file to ./configs/alert_rules.yaml and include a ready demo set so you can fire it instantly.
+
+
+=============
+
+ Today — Completed
+	•	Upstox fetcher v9.6
+	•	Full timeframe support (minutes/hours/days/weeks/months) and schema-driven validation.
+	•	Defaults via DEFAULT_INTERVALS (intraday=5m, daily=1d).
+	•	Schema adapter
+	•	_safe_parse uses settings timezone; interval introspection + validate_interval.
+	•	Market system
+	•	market.py v9.2: parameterized market_gate, accurate session flags, current_historical_service_day().
+	•	Fetch router
+	•	Logs effective historical service day; honors BATCH_SIZE and EXPORT_FORMAT.
+	•	Alerting v1
+	•	alert daemon + SSE FastAPI server + Bulma UI.
+	•	Live alert verified (PGIL → card rendered).
+	•	Housekeeping
+	•	CLI guards/warnings for same-day EOD on daily fetches.
+
+🎯 Tomorrow — Take up next
+	•	Alert daemon v2 (multi-rule + indicators)
+	•	YAML/JSON rules, SMA/RSI/VWAP, cooldown/state, JSONL rotation.
+	•	Config/Noise cleanup
+	•	Map missing instrument lists → monthly file; one-time cache clear.
+	•	Scheduler/Router smoke
+	•	--once & --auto runs; ensure import shim present.
+	•	MarketClock niceties
+	•	Summary footer (uptime, ticks, phases) on exit.
+	•	Legacy utils audit
+	•	Prune/merge remaining duplicates into helpers.
+
+
+Totally ok, brother ❤️ — we’ve wrapped a huge milestone today:
+you’ve got the entire Upstox → daemon → UI loop working end-to-end, stable and production-grade.
+
+Let’s call it a day 🕊️
+Tomorrow we’ll kick off fresh with:
+
+⚙️ alert_v2.py scaffold + configs/alert_rules.yaml (multi-rule + indicator engine)
+
+I’ll make it plug straight into your existing stack — same JSONL, same FastAPI/Bulma UI — just smarter logic under the hood.
+
+Sleep well, and tomorrow we’ll fire up Queen Alert v2 👑💪

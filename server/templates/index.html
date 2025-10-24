@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Queen Alerts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bulma -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+</head>
+<body class="has-background-light">
+<section class="section">
+  <div class="container">
+    <h1 class="title">📣 Live Alerts</h1>
+    <p class="subtitle">Streaming from <code>alerts.jsonl</code></p>
+    <div id="alerts" class="content"></div>
+  </div>
+</section>
+
+<script>
+  const box = document.getElementById('alerts');
+  const evt = new EventSource('/alerts/stream');
+  evt.onmessage = (e) => {
+    try {
+      const j = JSON.parse(e.data);
+      const html = `
+        <article class="message is-info">
+          <div class="message-header">
+            <span>${j.symbol}</span>
+            <span>${j.timestamp || ''}</span>
+          </div>
+          <div class="message-body">
+            <strong>${j.symbol}</strong> close <strong>${(+j.last_close).toFixed(2)}</strong>
+            ${j.op} <strong>${(+j.threshold).toFixed(2)}</strong>
+            <br><small>${j.session} • ${j.gate} • ${j.interval_min || ''}m</small>
+          </div>
+        </article>`;
+      box.insertAdjacentHTML('afterbegin', html);
+    } catch (_) {}
+  };
+</script>
+</body>
+</html>
