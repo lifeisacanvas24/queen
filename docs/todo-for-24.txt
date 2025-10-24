@@ -214,3 +214,11 @@ Tomorrow we’ll kick off fresh with:
 I’ll make it plug straight into your existing stack — same JSONL, same FastAPI/Bulma UI — just smarter logic under the hood.
 
 Sleep well, and tomorrow we’ll fire up Queen Alert v2 👑💪
+
+
+🔵 Alert v2 (Multi-rule + Indicators)
+To start next
+Add configs/alert_rules.yaml, daemons/alert_v2.py, indicators/core.py.
+🧠 Optional FastAPI Stream Upgrade
+Queued
+WebSocket-ready refactor for the UI later.
