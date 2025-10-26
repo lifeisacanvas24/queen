@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/logger.py — Unified Logging System (v9.0)
+# queen/helpers/logger.py — Unified Logging System (v9.1)
 # ============================================================
 """Queen Unified Logger (Rich + JSONL, settings-driven)
 
@@ -21,29 +21,26 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 try:
-    # import settings from proper path (folder-based layout)
     from queen.settings import settings as SETTINGS
-except ImportError:
+except Exception:
     SETTINGS = None
 
-# ============================================================
+# ------------------------------------------------------------
 # 🧭 Setup Directories (settings-aware)
-# ============================================================
+# ------------------------------------------------------------
 if SETTINGS:
     base_log_dir = SETTINGS.PATHS["LOGS"]
     base_log_dir.mkdir(parents=True, exist_ok=True)
     log_file = SETTINGS.log_file("CORE")
 else:
-    # fallback if settings not available
     base_log_dir = Path("queen/data/runtime/logs")
     base_log_dir.mkdir(parents=True, exist_ok=True)
     log_file = base_log_dir / f"queen_runtime_{datetime.now():%Y%m%d}.jsonl"
 
-# ============================================================
+# ------------------------------------------------------------
 # 🎨 Rich + JSONL Handlers
-# ============================================================
+# ------------------------------------------------------------
 console = Console()
-
 _rich_handler = RichHandler(
     console=console,
     markup=True,
@@ -75,20 +72,21 @@ _file_handler.setFormatter(JSONLFormatter())
 _rich_formatter = logging.Formatter("%(message)s", datefmt="[%H:%M:%S]")
 _rich_handler.setFormatter(_rich_formatter)
 
-# ============================================================
-# ⚙️ Logger Initialization
-# ============================================================
+# ------------------------------------------------------------
+# ⚙️ Logger Initialization (idempotent)
+# ------------------------------------------------------------
 log = logging.getLogger("Queen")
-log.setLevel(logging.INFO)
-log.addHandler(_rich_handler)
-log.addHandler(_file_handler)
-log.propagate = False
+if not getattr(log, "_queen_init_done", False):
+    log.setLevel(logging.INFO)
+    log.addHandler(_rich_handler)
+    log.addHandler(_file_handler)
+    log.propagate = False
+    log._queen_init_done = True  # type: ignore[attr-defined]
+    console.print(f"[bold green]✅ Logger initialized[/bold green] → {log_file}")
 
-console.print(f"[bold green]✅ Logger initialized[/bold green] → {log_file}")
-
-# ============================================================
+# ------------------------------------------------------------
 # 🧪 Self-Test
-# ============================================================
+# ------------------------------------------------------------
 if __name__ == "__main__":
     log.info("Logger ready — Rich + JSONL active.")
     log.warning("Simulated warning for diagnostics.")

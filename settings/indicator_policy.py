@@ -1,68 +1,82 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/indicator_policy.py — v0.1
-# Central policy for indicator params + min-bars (settings-driven)
+# queen/settings/indicator_policy.py — v0.3 (Settings-driven + TF-owned parsing)
 # ============================================================
 from __future__ import annotations
 
 from typing import Any, Dict
 
-from queen.settings import indicators as IND  # your file
+from queen.settings import indicators as IND
+from queen.settings import settings as S  # access DEFAULTS
+from queen.settings import timeframes as TF  # single owner for tokens
 
 
 def _norm(name: str) -> str:
     return (name or "").strip().lower()
 
 
-def _ctx_key_from_timeframe(tf: str) -> str:
-    tf = (tf or "").lower()
-    if tf.endswith("m"):
-        return f"intraday_{tf}"
-    if tf.endswith("h"):
-        return f"hourly_{tf}"
-    if tf == "1d":
+def _ctx_key_from_timeframe(token: str) -> str:
+    """Map any TF token to a context key, using TF as the single owner.
+
+    minutes → 'intraday_{n}m'
+    hours   → 'hourly_{n}h'
+    days    → 'daily'
+    weeks   → 'weekly'
+    months  → 'monthly'
+    """
+    s = TF.normalize_tf(token)
+    unit, n = TF.parse_tf(s)  # raises on bad input (good)
+    if unit == "minutes":
+        return f"intraday_{n}m"
+    if unit == "hours":
+        return f"hourly_{n}h"
+    if unit == "days":
         return "daily"
-    if tf == "1w":
+    if unit == "weeks":
         return "weekly"
-    if tf == "1mo":
+    if unit == "months":
         return "monthly"
-    return f"intraday_{tf}"  # safe default
+    # extremely defensive fallback
+    return f"intraday_{s}"
 
 
 def _find_conf_block(name: str) -> Dict[str, Any]:
-    # Your INDICATORS uses uppercase keys ("RSI", "ATR", ...).
-    # Make lookup case-insensitive.
+    # INDICATORS uses UPPERCASE keys — make lookup case-insensitive.
     upper_map = {k.upper(): v for k, v in IND.INDICATORS.items()}
-    return upper_map.get(name.upper(), {})
+    return upper_map.get((name or "").upper(), {})
 
 
 def params_for(indicator: str, timeframe: str) -> Dict[str, Any]:
-    """Returns params for (indicator, timeframe), resolving:
-    contexts[timeframe_key] -> default -> {}
+    """Return params for (indicator, timeframe).
+
+    Resolution order:
+      contexts[ctx_key] (merged over default) → default → {}
     """
     conf = _find_conf_block(indicator)
     if not conf:
         return {}
     ctx_key = _ctx_key_from_timeframe(timeframe)
-    contexts = conf.get("contexts", {})
+    contexts = conf.get("contexts", {}) or {}
     if ctx_key in contexts:
-        # merge default with context override
         base = dict(conf.get("default") or {})
         base.update(contexts[ctx_key] or {})
         return base
-    # fallback to default only
     return dict(conf.get("default") or {})
 
 
 def min_bars_for_indicator(indicator: str, timeframe: str) -> int:
     """Settings-first min bars policy.
-    If an indicator has a 'period' or a common length, we scale it.
-    Otherwise fall back to reasonable defaults.
+    - Uses DEFAULTS.ALERTS.{INDICATOR_MIN_MULT, INDICATOR_MIN_FLOOR}
+    - Derives a canonical 'length' from known param names.
+    - Light per-indicator tuning (volume-style need slightly fewer bars).
     """
+    alerts = S.DEFAULTS.get("ALERTS", {})
+    INDICATOR_MIN_MULT = int(alerts.get("INDICATOR_MIN_MULT", 3))
+    INDICATOR_MIN_FLOOR = int(alerts.get("INDICATOR_MIN_FLOOR", 30))
+
     pname = _norm(indicator)
     p = params_for(indicator, timeframe)
 
-    # Extract a canonical length/period if present
     length = (
         p.get("period")
         or p.get("window")
@@ -70,19 +84,20 @@ def min_bars_for_indicator(indicator: str, timeframe: str) -> int:
         or p.get("rolling_window")
         or 14
     )
-
     try:
         length = int(length)
     except Exception:
         length = 14
 
-    # Per-indicator tuning if needed
-    if pname in {"rsi", "atr", "adx", "macd"}:
-        return max(30, length * 3)
-
     if pname in {"vwap", "obv", "volume"}:
-        # VWAP/OBV/Volume often need a little less
-        return max(25, length * 2)
+        return max(INDICATOR_MIN_FLOOR - 5, length * max(1, INDICATOR_MIN_MULT - 1))
 
-    # Generic fallback
-    return max(30, length * 3)
+    return max(INDICATOR_MIN_FLOOR, length * INDICATOR_MIN_MULT)
+
+
+# ------------------------------------------------------------
+# ✅ Self-Test
+# ------------------------------------------------------------
+if __name__ == "__main__":
+    print(params_for("RSI", "1d"))
+    print(min_bars_for_indicator("RSI", "1d"))

@@ -1,57 +1,33 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/settings_proxy.py — Read-only Dot-Access Layer
+# queen/helpers/settings_proxy.py — Read-only Dot-Access Layer (v1.1)
 # ============================================================
-"""Settings Proxy (v1.0)
----------------------
-Provides a recursive dot-access interface to the global Queen of Quant
-configuration registry (`queen.settings.SETTINGS`).
-
-🧠 Why
-    - Syntactic sugar: access nested configs via dot-notation
-    - Immutable by design (read-only)
-    - Ideal for interactive daemons, notebooks, and CLI tools
-
-Example:
--------
-    >>> from queen.helpers.settings_proxy import SETTINGS
-    >>> SETTINGS.exchange.EXCHANGES.NSE_BSE.MARKET_HOURS.OPEN
-    '09:15'
-    >>> SETTINGS.brokers.UPSTOX.RATE_LIMITS.PER_SECOND
-    50
-
+"""Settings Proxy
+-----------------
+Read-only, dot-access wrapper over the actual settings registry,
+assembled from multiple modules (no single global dict).
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
-# Import the canonical registry
-from queen.settings import SETTINGS as _SETTINGS
+# Canonical sources
+from queen.settings import settings as S
 
 
 # ------------------------------------------------------------
 # 🧱 DotDict — recursive dot-access wrapper
 # ------------------------------------------------------------
 class DotDict:
-    """A recursive read-only mapping that allows attribute-style access.
-
-    Example:
-        data = DotDict({"A": {"B": {"C": 42}}})
-        print(data.A.B.C)  # 42
-
-    """
-
     __slots__ = ("_data",)
 
     def __init__(self, data: Any):
         if isinstance(data, dict):
-            # Recursively wrap nested dicts
             self._data = {k: DotDict(v) for k, v in data.items()}
         else:
             self._data = data
 
-    # Attribute-style access
     def __getattr__(self, name: str) -> Any:
         if isinstance(self._data, dict) and name in self._data:
             return self._data[name]
@@ -59,7 +35,6 @@ class DotDict:
             f"'{type(self).__name__}' object has no attribute '{name}'"
         )
 
-    # Dict-style access
     def __getitem__(self, key: str) -> Any:
         if isinstance(self._data, dict):
             return self._data[key]
@@ -79,7 +54,6 @@ class DotDict:
         raise TypeError("DotDict has no items() for non-dict data")
 
     def as_dict(self) -> Dict[str, Any]:
-        """Convert back to a normal dict (recursively)."""
         if isinstance(self._data, dict):
             return {
                 k: (v.as_dict() if isinstance(v, DotDict) else v)
@@ -87,7 +61,7 @@ class DotDict:
             }
         return self._data
 
-    # Immutable
+    # immutable
     def __setattr__(self, key, value):
         if key == "_data":
             super().__setattr__(key, value)
@@ -102,10 +76,30 @@ class DotDict:
 
 
 # ------------------------------------------------------------
-# ⚙️ Create the Read-Only Global Proxy
+# 🗄️ Assemble a forward-only registry (no back-compat)
 # ------------------------------------------------------------
-SETTINGS = DotDict(_SETTINGS)
+REGISTRY: Dict[str, Any] = {
+    "app": S.APP,
+    "paths": S.PATHS,
+    "defaults": S.DEFAULTS,
+    "exchange": S.EXCHANGE,
+    "logging": S.LOGGING,
+    "diagnostics": S.DIAGNOSTICS,
+    "brokers": S.BROKERS,
+    "alerts": S.DEFAULTS.get("ALERTS", {}),
+    "colors": S.DEFAULTS.get("CONSOLE_COLORS", {}),
+    "sinks": {
+        "alert_paths": {
+            "jsonl": S.alert_path_jsonl(),
+            "sqlite": S.alert_path_sqlite(),
+            "rules": S.alert_path_rules(),
+            "state": S.alert_path_state(),
+        },
+    },
+}
 
+# Public, read-only proxy
+SETTINGS = DotDict(REGISTRY)
 
 # ------------------------------------------------------------
 # ✅ Self-Test
@@ -115,4 +109,3 @@ if __name__ == "__main__":
     print("APP Name:", SETTINGS.app.NAME)
     print("Default Broker:", SETTINGS.defaults.BROKER)
     print("NSE Open Time:", SETTINGS.exchange.EXCHANGES.NSE_BSE.MARKET_HOURS.OPEN)
-    print("Regime States:", list(SETTINGS.regimes.keys()))

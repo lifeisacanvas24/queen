@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/market.py — v9.2 (Settings-Driven + Polars + DRY)
+# queen/helpers/market.py — v9.3 (Settings-Driven + Polars + DRY)
 # ============================================================
 """Market calendar & timing utilities for NSE/BSE.
 
@@ -53,12 +53,10 @@ def _read_holidays_polars(path: Path) -> pl.DataFrame:
         if path.suffix.lower() == ".csv":
             df = pl.read_csv(path)
         else:
-            # JSON array or NDJSON — both handled by Polars read_json on modern versions
-            # If an older version, fall back to read_ndjson if needed.
             try:
-                df = pl.read_json(path)
+                df = pl.read_json(path)  # JSON array
             except Exception:
-                df = pl.read_ndjson(path)
+                df = pl.read_ndjson(path)  # NDJSON fallback
         return df
     except Exception as e:
         log.error(f"[Market] Holiday read failed for {path.name} → {e}")
@@ -69,9 +67,7 @@ def _normalize_holiday_df(df: pl.DataFrame) -> pl.DataFrame:
     if df.is_empty():
         return df
     df = df.rename({c: c.lower() for c in df.columns})
-    # Accept common keys like 'date', 'holiday', 'name' etc. Only 'date' is needed.
     if "date" not in df.columns:
-        # Try to infer
         for cand in ("dt", "day", "on_date"):
             if cand in df.columns:
                 df = df.rename({cand: "date"})
@@ -79,7 +75,6 @@ def _normalize_holiday_df(df: pl.DataFrame) -> pl.DataFrame:
     if "date" not in df.columns:
         log.warning("[Market] Holiday file missing 'date' column.")
         return pl.DataFrame()
-    # Keep canonical YYYY-MM-DD as string
     try:
         df = df.with_columns(pl.col("date").cast(pl.Utf8))
     except Exception:
@@ -185,15 +180,22 @@ def current_session(now: Optional[dt.datetime] = None) -> str:
 
 
 def is_market_open(now: Optional[dt.datetime] = None) -> bool:
+    """True only during REGULAR session on a working day."""
     now = ensure_tz_aware(now or dt.datetime.now(MARKET_TZ))
     if now.strftime("%A") not in TRADING_DAYS or is_holiday(now.date()):
         return False
-    for start, end in _SESSIONS.values():
-        s = dt.datetime.combine(now.date(), start, MARKET_TZ)
-        e = dt.datetime.combine(now.date(), end, MARKET_TZ)
-        if s <= now <= e:
-            return True
-    return False
+    start, end = _SESSIONS["REGULAR"]
+    s = dt.datetime.combine(now.date(), start, MARKET_TZ)
+    e = dt.datetime.combine(now.date(), end, MARKET_TZ)
+    return s <= now <= e
+
+
+def _intraday_available(now: dt.datetime) -> bool:
+    """Intraday data commonly available during REGULAR and POST_MARKET on working days."""
+    if now.strftime("%A") not in TRADING_DAYS or is_holiday(now.date()):
+        return False
+    sess = current_session(now)
+    return sess in {"REGULAR", "POST_MARKET"}
 
 
 def get_gate(now: Optional[dt.datetime] = None) -> str:
@@ -219,10 +221,10 @@ def get_market_state() -> dict:
     working = is_working_day(now.date())
     return {
         "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "is_open": is_market_open(now),  # intraday available (REGULAR or POST)
+        "is_open": is_market_open(now),  # True only during REGULAR
         "is_holiday": is_holiday(now.date()),
-        "is_working_day": working,  # NEW
-        "intraday_available": working and sess in {"REGULAR", "POST_MARKET"},  # NEW
+        "is_working_day": working,
+        "intraday_available": _intraday_available(now),
         "session": sess,
         "gate": get_gate(now),
         "next_open": next_working_day(now.date()).isoformat(),
@@ -230,28 +232,16 @@ def get_market_state() -> dict:
 
 
 def current_historical_service_day(now: dt.datetime | None = None) -> date:
-    """Return the exchange date for which the historical endpoint is effectively available now.
-
-    Rules:
-      - REGULAR (09:15–15:30): last working day (yesterday)
-      - POST (15:30–23:59):   today (EOD may still be publishing; caller should warn)
-      - PRE  (00:00–09:14):   last working day (yesterday)
-      - WEEKEND/HOLIDAY:      last working day
-    """
+    """Exchange date that the historical endpoint effectively exposes now."""
     now = ensure_tz_aware(now or dt.datetime.now(MARKET_TZ))
     sess = current_session(now)
     d = now.date()
-
-    if not is_working_day(d):  # weekend/holiday
+    if not is_working_day(d):
         return last_working_day(d)
-
     if sess == "REGULAR":
         return last_working_day(d - timedelta(days=1))
-
     if sess == "POST_MARKET":
-        return d  # today’s EOD (fetcher already warns)
-
-    # PRE_MARKET or CLOSED on a working day → yesterday
+        return d
     return last_working_day(d - timedelta(days=1))
 
 
@@ -267,12 +257,9 @@ async def sleep_until_next_candle(
     period = interval_minutes * 60
     mod = seconds_today % period
     delay = 1 if mod == 0 or mod >= (period - 2) else (period - mod)
-
     if jitter_ratio:
-        # Small randomization to avoid stampeding herds
         jitter = random.uniform(-jitter_ratio, jitter_ratio) * (interval_minutes * 60)
         delay = max(0.0, delay + jitter)
-
     if emit_log:
         nxt = (now + dt.timedelta(seconds=delay)).strftime("%H:%M:%S")
         log.info(f"[MarketClock] Sleeping {delay:.2f}s → next candle {nxt} IST")
@@ -280,7 +267,7 @@ async def sleep_until_next_candle(
 
 
 async def market_open_waiter(poll_seconds: int = 30, verbose: bool = True):
-    """Block until market open. Polls at given cadence."""
+    """Block until market open (REGULAR)."""
     while not is_market_open():
         if verbose:
             st = get_market_state()
@@ -291,7 +278,7 @@ async def market_open_waiter(poll_seconds: int = 30, verbose: bool = True):
 
 
 # ------------------------------------------------------------
-# ⏱️ Ticking clock that fans out ticks to subscribers
+# ⏱️ Ticking clock
 # ------------------------------------------------------------
 class MarketClock:
     def __init__(
@@ -321,16 +308,13 @@ class MarketClock:
         self._running = True
         if self.verbose:
             log.info(f"[{self.name}] started @ {self.interval}m")
-
         while self._running:
             state = get_market_state()
-
-            if self.auto_pause and not state["is_open"]:
+            if self.auto_pause and not state["intraday_available"]:
                 if self.verbose:
-                    log.info(f"[{self.name}] market closed — pausing till open")
-                await market_open_waiter(poll_seconds=30, verbose=self.verbose)
+                    log.info(f"[{self.name}] intraday unavailable — waiting")
+                await asyncio.sleep(30)
                 continue
-
             tick = {
                 "timestamp": dt.datetime.now(MARKET_TZ),
                 "session": state["session"],
@@ -342,7 +326,6 @@ class MarketClock:
                     q.put_nowait(tick)
                 except asyncio.QueueFull:
                     log.warning(f"[{self.name}] queue full for {nm}, skipping tick")
-
             if self.verbose:
                 log.info(
                     f"[{self.name}] tick | {tick['timestamp'].strftime('%H:%M:%S')} | sess={tick['session']} | subs={len(self._subs)}"
@@ -358,12 +341,9 @@ class MarketClock:
 # ------------------------------------------------------------
 # 🔒 Async gate context
 # ------------------------------------------------------------
-# --- replace current gate with this parameterized version ---
-
-
 class _MarketGate:
     def __init__(self, mode: str = "intraday"):
-        # mode: "intraday" (REGULAR or POST), "regular" (REGULAR only), "any_working"
+        # mode: "intraday" (REGULAR/POST), "regular" (REGULAR only), "any_working"
         self.mode = mode
 
     async def __aenter__(self):
@@ -371,23 +351,20 @@ class _MarketGate:
             st = get_market_state()
             is_working = st["is_working_day"]
             sess = st["session"]
-
             if (
-                self.mode == "intraday"
-                and is_working
-                and sess in {"REGULAR", "POST_MARKET"}
+                (
+                    self.mode == "intraday"
+                    and is_working
+                    and sess in {"REGULAR", "POST_MARKET"}
+                )
+                or (self.mode == "regular" and is_working and sess == "REGULAR")
+                or (self.mode == "any_working" and is_working)
             ):
                 break
-            if self.mode == "regular" and is_working and sess == "REGULAR":
-                break
-            if self.mode == "any_working" and is_working:
-                break
-
             log.info(
                 f"[Gate] Waiting (mode={self.mode}) — {st['timestamp']} | gate={st['gate']} | session={sess}"
             )
             await asyncio.sleep(60)
-
         log.info("[Gate] Market OPEN — resuming.")
         return self
 
@@ -400,7 +377,7 @@ def market_gate(mode: str = "intraday") -> _MarketGate:
 
 
 def historical_available() -> bool:
-    """Historical endpoint is always available (serves till the last working day)."""
+    """Historical endpoint serves up to the last working day (always logically 'available')."""
     return True
 
 

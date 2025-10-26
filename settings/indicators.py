@@ -1,24 +1,15 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/indicators.py — Indicator Parameter Configuration (v8.0)
+# queen/settings/indicators.py — Indicator Parameter Config (v8.1)
+# Case-insensitive access + validation (forward-only)
 # ============================================================
-"""Quant Indicator Parameter Configuration
-------------------------------------------
-🎛️ Purpose:
-    Defines canonical parameters, smoothing, and lookback settings
-    for all Quant-Core indicators across timeframes.
-
-💡 Usage:
-    from queen.settings import indicators
-    rsi_conf = indicators.INDICATORS["RSI"]["default"]
-"""
-
 from __future__ import annotations
 
 from typing import Any, Dict
 
 # ------------------------------------------------------------
 # 📊 Indicator Parameter Map
+# NOTE: keys are uppercase by convention; lookups are case-insensitive.
 # ------------------------------------------------------------
 INDICATORS: Dict[str, Dict[str, Any]] = {
     # ========================================================
@@ -167,7 +158,7 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
             "daily": {"smoothing": "EMA", "window": 40},
             "weekly": {"smoothing": "EMA", "window": 50},
         },
-        "_note": "OBV slope and higher-high/lower-low sequences drive MCS and CPS scoring.",
+        "_note": "OBV slope and HH/LL sequences drive MCS and CPS scoring.",
     },
     # ========================================================
     # ADX (Trend Strength)
@@ -231,7 +222,7 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
     # ========================================================
     # Ichimoku
     # ========================================================
-    "Ichimoku": {
+    "ICHIMOKU": {
         "default": {"tenkan": 9, "kijun": 26, "senkou_span_b": 52, "displacement": 26},
         "contexts": {
             "intraday_15m": {"tenkan": 9, "kijun": 26, "senkou_span_b": 52},
@@ -239,12 +230,12 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
             "daily": {"tenkan": 9, "kijun": 26, "senkou_span_b": 52},
             "weekly": {"tenkan": 9, "kijun": 26, "senkou_span_b": 52},
         },
-        "_note": "Tenkan/Kijun + Span A/B confluence validates trend direction, reduces false signals.",
+        "_note": "Tenkan/Kijun + Span A/B confluence validates trend direction.",
     },
     # ========================================================
     # Heikin Ashi
     # ========================================================
-    "HeikinAshi": {
+    "HEIKINASHI": {
         "default": {"smoothing": "EMA", "window": 3},
         "contexts": {
             "intraday_15m": {"smoothing": "EMA", "window": 3},
@@ -257,7 +248,7 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
     # ========================================================
     # Volume
     # ========================================================
-    "Volume": {
+    "VOLUME": {
         "default": {"vdu_factor": 0.5, "spike_factor": 1.5, "average_window": 10},
         "contexts": {
             "intraday_5m": {
@@ -278,18 +269,70 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# ------------------------------------------------------------
+# 🧠 Helpers
+# ------------------------------------------------------------
+_VALID_CONTEXTS = {
+    "intraday_5m",
+    "intraday_15m",
+    "hourly_1h",
+    "daily",
+    "weekly",
+    "monthly",
+}
 
-# ------------------------------------------------------------
-# 🧠 Helper Functions
-# ------------------------------------------------------------
+
+def _norm(s: str) -> str:
+    return (s or "").strip()
+
+
+def _key_upper(name: str) -> str:
+    return _norm(name).upper()
+
+
 def get_indicator(name: str) -> Dict[str, Any]:
-    """Retrieve configuration block for a given indicator."""
-    return INDICATORS.get(name, {})
+    """Retrieve configuration block (case-insensitive)."""
+    return INDICATORS.get(_key_upper(name)) or INDICATORS.get(name) or {}
 
 
 def list_indicators() -> list[str]:
-    """List all available indicator names."""
     return list(INDICATORS.keys())
+
+
+def validate() -> dict:
+    """Validate structure, positive numeric params, and context keys."""
+    errs: list[str] = []
+    for ind_name, cfg in INDICATORS.items():
+        if ind_name != ind_name.upper():
+            errs.append(f"{ind_name}: indicator keys should be UPPERCASE")
+        ctxs = cfg.get("contexts", {})
+        if ctxs and not isinstance(ctxs, dict):
+            errs.append(f"{ind_name}: contexts must be dict")
+        for ckey, params in (ctxs or {}).items():
+            if ckey not in _VALID_CONTEXTS:
+                errs.append(f"{ind_name}: unknown context '{ckey}'")
+            for pkey in (
+                "period",
+                "window",
+                "fast_period",
+                "slow_period",
+                "signal_period",
+                "rolling_window",
+            ):
+                if pkey in (params or {}):
+                    val = params[pkey]
+                    if not isinstance(val, int) or val <= 0:
+                        errs.append(
+                            f"{ind_name}.{ckey}: {pkey} must be +int, got {val}"
+                        )
+        for sub_name, sub in cfg.items():
+            if sub_name in {"default", "contexts", "_note"}:
+                continue
+            if isinstance(sub, dict) and "contexts" in sub:
+                for ckey, params in (sub["contexts"] or {}).items():
+                    if ckey not in _VALID_CONTEXTS:
+                        errs.append(f"{ind_name}.{sub_name}: unknown context '{ckey}'")
+    return {"ok": not errs, "errors": errs}
 
 
 # ------------------------------------------------------------
@@ -301,3 +344,4 @@ if __name__ == "__main__":
     print("🧩 Queen Indicator Configurations")
     pprint(list_indicators())
     pprint(get_indicator("RSI"))
+    print("validate →", validate())

@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/settings.py — v9.1 (Unified Runtime + DRY Logging)
+# queen/settings/settings.py — v9.3.0 (Unified Runtime + DRY Logging)
+# Clean: no timeframe parsing here; use queen.settings.timeframes
 # ============================================================
-"""Queen of Quant — Unified Configuration System
-------------------------------------------------
-Design goals:
-✅ Fully Pythonic (no external config) with comments & computed defaults
-✅ Environment-aware (DEV / PROD) paths
-✅ Single source of truth for brokers/exchange/paths
-✅ Early validation for common footguns (timeframes, defaults, existence)
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 from zoneinfo import ZoneInfo
+
+from . import timeframes as TF
 
 # ------------------------------------------------------------
 # 🧩 Core Metadata
 # ------------------------------------------------------------
 APP = {
     "NAME": "Queen of Quant",
-    "VERSION": "9.1.0",
-    "BUILD": "2025.10.24",
+    "VERSION": "9.3.0",
+    "BUILD": "2025.10.25",
     "AUTHOR": "OpenQuant Labs",
     "DESCRIPTION": "Unified Quant Engine — async, multi-threaded, and settings-first.",
 }
@@ -66,12 +60,10 @@ def set_env(mode: str) -> None:
 
 
 def get_env() -> str:
-    """Return current environment."""
     return ENV
 
 
 def get_env_paths() -> Dict[str, Path]:
-    """Return active environment paths."""
     return RUNTIME_PATHS[ENV]
 
 
@@ -152,7 +144,6 @@ FETCH = {
     "MAX_EMPTY_STREAK": 5,
     "BATCH_SIZE": 50,
 }
-
 SCHEDULER = {
     "DEFAULT_INTERVAL": "5m",
     "ALIGN_TO_CANDLE": True,
@@ -202,25 +193,45 @@ DEFAULTS = {
     "SYMBOLS_LIMIT": 10,
     "AUTO_RESTART_DAEMON": True,
     "EXPORT_FORMAT": "parquet",
+    # Intraday & Daily tokens are validated by timeframes.validate_tokens()
+    "DEFAULT_INTERVALS": {"intraday": "5m", "daily": "1d"},
 }
-# Default mode intervals the FETCHER will apply when router passes interval=None
-DEFAULTS.setdefault("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
-_intr = DEFAULTS["DEFAULT_INTERVALS"].get("intraday", "5m")
-_daily = DEFAULTS["DEFAULT_INTERVALS"].get("daily", "1d")
-for tok in (_intr, _daily):
-    assert isinstance(tok, str) and len(tok) >= 2, f"Bad interval token: {tok}"
 
 # ------------------------------------------------------------
-# 🗂️ Ensure runtime folders exist (once, on import)
+# 🔔 Alert/Console defaults (heuristics + colors)
+# ------------------------------------------------------------
+DEFAULTS.update(
+    {
+        "ALERTS": {
+            "COOLDOWN_SECONDS": 60,
+            "DAILY_FALLBACK_BARS": 150,
+            "INDICATOR_MIN_MULT": 3,
+            "INDICATOR_MIN_FLOOR": 30,
+            "PATTERN_CUSHION": 5,
+            "PRICE_MIN_BARS": 5,
+            # Optional explicit overrides per indicator:
+            # "INDICATOR_MIN_BARS": {"rsi": 50, "macd": 90}
+        },
+        "CONSOLE_COLORS": {
+            "green": "\x1b[32m",
+            "red": "\x1b[31m",
+            "yellow": "\x1b[33m",
+            "cyan": "\x1b[36m",
+            "reset": "\x1b[0m",
+        },
+    }
+)
+
+# ------------------------------------------------------------
+# 🗂️ Ensure runtime folders exist
 # ------------------------------------------------------------
 for key, p in PATHS.items():
     try:
         Path(p).expanduser().resolve().mkdir(parents=True, exist_ok=True)
     except Exception:
-        # paths pointing to files will be created later by IO atomic writes
         pass
 
-# Make optional instrument lists fall back to MONTHLY if missing
+# Optional instrument fallbacks to MONTHLY
 try:
     _ex = EXCHANGE["EXCHANGES"][DEFAULTS.get("EXCHANGE", EXCHANGE["ACTIVE"])]
     ins = _ex.get("INSTRUMENTS", {})
@@ -230,37 +241,11 @@ try:
         if _p and not Path(_p).exists() and monthly:
             ins[_k] = monthly
 except Exception:
-    # purely defensive
     pass
 
-# ------------------------------------------------------------
-# 🕒 Timeframe map (friendly → canonical the fetcher understands)
-# ------------------------------------------------------------
-TIMEFRAME_MAP = {
-    "1m": "minutes:1",
-    "5m": "minutes:5",
-    "15m": "minutes:15",
-    "1h": "hours:1",
-    "2h": "hours:2",
-    "4h": "hours:4",
-    "1d": "days:1",
-    "1w": "weeks:1",
-    "1mo": "months:1",
-}
-_allowed_units = {"minutes", "hours", "days", "weeks", "months"}
-for k, v in TIMEFRAME_MAP.items():
-    if ":" in v:
-        u, n = v.split(":", 1)
-        assert (
-            u in _allowed_units and n.isdigit() and int(n) > 0
-        ), f"Bad timeframe map: {k}->{v}"
-    else:
-        # tolerate suffix-style values if ever added later
-        assert v.endswith(("m", "h", "d", "w", "o")), f"Bad timeframe map: {k}->{v}"
-
 
 # ------------------------------------------------------------
-# ✅ Settings self-check (early fail for misconfig)
+# ✅ Settings self-check (call into timeframes)
 # ------------------------------------------------------------
 def _validate_defaults():
     # Broker & exchange must exist
@@ -270,79 +255,95 @@ def _validate_defaults():
     ex_key = DEFAULTS.get("EXCHANGE", EXCHANGE.get("ACTIVE"))
     assert ex_key in EXCHANGE["EXCHANGES"], f"Unknown DEFAULTS.EXCHANGE: {ex_key}"
 
-    # DEFAULT_INTERVALS must be friendly tokens like 5m/1h/1d/1w/1mo
+    # Validate DEFAULT_INTERVALS using timeframes.py as the single owner
     di = DEFAULTS.setdefault("DEFAULT_INTERVALS", {"intraday": "5m", "daily": "1d"})
-
-    def _ok(tok: str) -> bool:
-        s = str(tok).lower()
-        # accept 5m / 1h / 1d / 1w / 1mo
-        if s.endswith("mo"):
-            return s[:-2].isdigit() and int(s[:-2]) > 0
-        return s.endswith(("m", "h", "d", "w")) and s[:-1].isdigit() and int(s[:-1]) > 0
-
-    assert _ok(
-        di.get("intraday", "5m")
-    ), "DEFAULT_INTERVALS.intraday must be like '5m' or '1h'"
-    assert _ok(
-        di.get("daily", "1d")
-    ), "DEFAULT_INTERVALS.daily must be like '1d'/'1w'/'1mo'"
+    try:
+        TF.validate_token(di.get("intraday", "5m"))
+        TF.validate_token(di.get("daily", "1d"))
+    except Exception as e:
+        raise AssertionError(f"Invalid DEFAULT_INTERVALS: {e}") from e
 
 
 _validate_defaults()
 
-
 # ------------------------------------------------------------
-# 🧩 Helper Functions
-# ------------------------------------------------------------
-def broker_config(name: str | None = None) -> Dict[str, Any]:
-    return BROKERS.get((name or DEFAULTS["BROKER"]).upper(), {})
-
-
-def market_hours(exchange: str | None = None) -> Dict[str, Any]:
-    ex = exchange or DEFAULTS.get("EXCHANGE", EXCHANGE["ACTIVE"])
-    return EXCHANGE["EXCHANGES"].get(ex, {}).get("MARKET_HOURS", {})
-
-
-def log_file(name: str) -> Path:
-    """Resolve log file path by name via settings."""
-    log_dir = PATHS["LOGS"]
-    file_name = LOGGING["FILES"].get(name.upper(), f"{name}.log")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir / file_name
-
-
-def resolve_log_path(log_key: str) -> Path:
-    """Resolve any log or drift path safely."""
-    return log_file(log_key)
-
-
-# ============================================================
 # 🔔 Alert sinks (single source of truth)
-# ============================================================
+# ------------------------------------------------------------
 ALERT_SINKS = {
     "JSONL": PATHS["EXPORTS"] / "alerts" / "alerts.jsonl",
     "YAML_RULES": PATHS["CONFIGS"] / "alert_rules.yaml",
     "SQLITE": PATHS["EXPORTS"] / "alerts" / "alerts.db",
-    "SSE": "http://localhost:8000/alerts/stream",  # optional, used by server
+    "SSE": "http://localhost:8000/alerts/stream",
+    "STATE": PATHS["EXPORTS"] / "alerts" / "alerts_state.jsonl",
 }
 
 
-def alert_path_jsonl():
+def alert_path_jsonl() -> Path:
     p = ALERT_SINKS["JSONL"]
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
 
-def alert_path_sqlite():
+def alert_path_sqlite() -> Path:
     p = ALERT_SINKS["SQLITE"]
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
 
-def alert_path_rules():
+def alert_path_rules() -> Path:
     p = ALERT_SINKS["YAML_RULES"]
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def alert_path_state() -> Path:
+    p = ALERT_SINKS["STATE"]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+# ------------------------------------------------------------
+# 🧰 Small startup helper for daemons (optional)
+# ------------------------------------------------------------
+def print_effective_alert_knobs(print_fn=print) -> None:
+    a = DEFAULTS.get("ALERTS", {})
+    c = DEFAULTS.get("CONSOLE_COLORS", {})
+    print_fn(
+        f"[Settings] Alerts: cooldown={a.get('COOLDOWN_SECONDS')}s "
+        f"| daily_fallback_bars={a.get('DAILY_FALLBACK_BARS')} "
+        f"| indicator_min=(mult={a.get('INDICATOR_MIN_MULT')}, floor={a.get('INDICATOR_MIN_FLOOR')}) "
+        f"| pattern_cushion={a.get('PATTERN_CUSHION')} | price_min_bars={a.get('PRICE_MIN_BARS')}"
+    )
+    # color keys listed just for visibility
+    print_fn(f"[Settings] Console colors: {', '.join(sorted(c.keys()))}")
+
+
+# ------------------------------------------------------------
+# 🧩 Helper Functions (still valid in forward-only setup)
+# ------------------------------------------------------------
+def broker_config(name: str | None = None) -> Dict[str, Any]:
+    """Return broker configuration by name (default from DEFAULTS)."""
+    bname = (name or DEFAULTS.get("BROKER", "UPSTOX")).upper()
+    return BROKERS.get(bname, {})
+
+
+def market_hours(exchange: str | None = None) -> Dict[str, Any]:
+    """Return MARKET_HOURS block for the active exchange."""
+    ex = exchange or DEFAULTS.get("EXCHANGE", EXCHANGE["ACTIVE"])
+    return EXCHANGE["EXCHANGES"].get(ex, {}).get("MARKET_HOURS", {})
+
+
+def log_file(name: str) -> Path:
+    """Resolve the log file path for a given logical name (case-insensitive)."""
+    log_dir = PATHS["LOGS"]
+    fname = LOGGING["FILES"].get(name.upper(), f"{name}.log")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / fname
+
+
+def resolve_log_path(log_key: str) -> Path:
+    """Alias wrapper for legacy usage (single-source)."""
+    return log_file(log_key)
 
 
 # ------------------------------------------------------------
@@ -352,4 +353,4 @@ if __name__ == "__main__":
     print(f"Environment: {get_env()}")
     print(f"Logs Directory: {PATHS['LOGS']}")
     print(f"Broker: {DEFAULTS['BROKER']}")
-    print(f"Schema Drift Log: {resolve_log_path('SCHEMA_DRIFT_LOG')}")
+    print_effective_alert_knobs()

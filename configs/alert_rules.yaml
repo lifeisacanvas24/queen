@@ -1,9 +1,18 @@
-- name: NSDL RSI crosses 50
+# Oversold tag + recovery
+- name: NSDL RSI < 30
   symbol: NSDL
   kind: indicator
   indicator: rsi
-  timeframe: "5m"
+  timeframe: 1d
+  op: lt
+  value: 30
+  params: { length: 14 }
+
+- name: NSDL RSI crosses 30 up
+  symbol: NSDL
+  kind: indicator
+  indicator: rsi
+  timeframe: 1d
   op: crosses_above
-  value: 50
-  params:
-    length: 14 # picks min_bars via indicator_policy
+  value: 30
+  params: { length: 14 }

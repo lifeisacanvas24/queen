@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/formulas.py — Canonical Indicator & Meta-Layer Definitions (v8.0)
+# queen/settings/formulas.py — Canonical Indicator & Meta-Layer Definitions (v9.1)
+# Forward-only, Polars-first notes, light validation
 # ============================================================
-"""Quant Formula Reference Library
------------------------------------
-🧮 Purpose:
-    Canonical symbolic formulas and pseudo-math for all
-    Quant-Core indicators, meta-layers, and composite metrics.
-
-💡 Usage:
-    from queen.settings import formulas
-    rsi = formulas.INDICATORS["RSI"]["formula"]
-"""
-
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -61,7 +51,7 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
         "formula": "MACD = EMA(Close, Fast) - EMA(Close, Slow); Signal = EMA(MACD, SignalPeriod); Histogram = MACD - Signal",
         "signal": "Histogram slope used for early momentum curvature detection (SPS/MCS).",
     },
-    "Ichimoku": {
+    "ICHIMOKU": {
         "formula": {
             "Tenkan": "(Highest(High,9) + Lowest(Low,9)) / 2",
             "Kijun": "(Highest(High,26) + Lowest(Low,26)) / 2",
@@ -70,14 +60,14 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
         },
         "signal": "Price above both spans = bullish cloud; Tenkan/Kijun cross inside cloud = early breakout (SPS boost).",
     },
-    "HeikinAshi": {
+    "HEIKINASHI": {
         "formula": {
             "HA_Close": "(O + H + L + C) / 4",
             "HA_Open": "(Prev_HA_Open + Prev_HA_Close) / 2",
         },
         "signal": "Smoother trend representation; used for CPS trend continuation scoring.",
     },
-    "Volume": {
+    "VOLUME": {
         "VDU": "Volume_t ≤ 0.5 × AvgVolume(10)",
         "Spike": "Volume_t ≥ 1.5 × AvgVolume(10)",
         "signal": "VDU → low-activity coil; Spike → breakout validation.",
@@ -88,12 +78,12 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
 # 🕯️ Pattern Recognition Formulas
 # ------------------------------------------------------------
 PATTERNS: Dict[str, str] = {
-    "engulfing_bullish": "Close_t > Open_t and Open_t < Close_{t-1} and Body_t > Body_{t-1}",
-    "hammer": "(LowerWick ≥ 2 × Body) and (UpperWick ≤ 0.3 × Body)",
-    "shooting_star": "(UpperWick ≥ 2 × Body) and (LowerWick ≤ 0.3 × Body)",
-    "doji": "|Close - Open| ≤ 0.1 × (High - Low)",
-    "double_bottom": "Two swing lows within ±2% of each other; neckline breakout confirms pattern",
-    "vcp": "Sequentially contracting swing ranges + rising OBV",
+    "ENGULFING_BULLISH": "Close_t > Open_t and Open_t < Close_{t-1} and Body_t > Body_{t-1}",
+    "HAMMER": "(LowerWick ≥ 2 × Body) and (UpperWick ≤ 0.3 × Body)",
+    "SHOOTING_STAR": "(UpperWick ≥ 2 × Body) and (LowerWick ≤ 0.3 × Body)",
+    "DOJI": "|Close - Open| ≤ 0.1 × (High - Low)",
+    "DOUBLE_BOTTOM": "Two swing lows within ±2% of each other; neckline breakout confirms pattern",
+    "VCP": "Sequentially contracting swing ranges + rising OBV",
 }
 
 # ------------------------------------------------------------
@@ -134,10 +124,10 @@ COMPOSITE_SCORE: Dict[str, Any] = {
 }
 
 # ------------------------------------------------------------
-# 🧾 Notes & Meta Commentary
+# 🧾 Notes (Polars-first)
 # ------------------------------------------------------------
 NOTES: Dict[str, str] = {
-    "1": "All formulas are symbolic; computation uses numpy/pandas rolling operations.",
+    "1": "All formulas are symbolic; computation should use Polars/Numpy in the engine (no pandas).",
     "2": "Meta-layer formulas aggregate weighted indicators and pattern confirmations dynamically.",
     "3": "CPS/RPS act as stabilizers to prevent false breakouts.",
     "4": "VDU/Volume spike states modulate SPS weighting adaptively.",
@@ -145,21 +135,51 @@ NOTES: Dict[str, str] = {
 
 
 # ------------------------------------------------------------
-# 🧩 Helper Functions
+# 🧩 Helpers
 # ------------------------------------------------------------
+def indicator_names() -> list[str]:
+    return list(INDICATORS.keys())
+
+
+def pattern_names() -> list[str]:
+    return list(PATTERNS.keys())
+
+
+def meta_layer_names() -> list[str]:
+    return list(META_LAYERS.keys())
+
+
 def get_indicator(name: str) -> Dict[str, Any]:
-    """Retrieve formula block for a specific indicator."""
-    return INDICATORS.get(name, {})
+    return INDICATORS.get((name or "").upper(), {})
 
 
 def get_pattern(name: str) -> str:
-    """Retrieve a single pattern rule."""
-    return PATTERNS.get(name, "")
+    return PATTERNS.get((name or "").upper(), "")
 
 
 def get_meta_layer(name: str) -> Dict[str, Any]:
-    """Retrieve meta-layer formula and signal."""
-    return META_LAYERS.get(name, {})
+    return META_LAYERS.get((name or "").upper(), {})
+
+
+def validate() -> dict:
+    """Light sanity checks: uppercase keys + basic shapes."""
+    errs: list[str] = []
+
+    def _check_upper(block: dict, label: str):
+        for k in block:
+            if k != k.upper():
+                errs.append(f"{label}: key '{k}' should be UPPERCASE")
+
+    _check_upper(INDICATORS, "INDICATORS")
+    _check_upper(PATTERNS, "PATTERNS")
+    _check_upper(META_LAYERS, "META_LAYERS")
+
+    # ensure indicators have a formula/signal field
+    for k, v in INDICATORS.items():
+        if not isinstance(v, dict) or ("formula" not in v and "VDU" not in v):
+            errs.append(f"INDICATOR {k}: missing 'formula'/shape")
+
+    return {"ok": len(errs) == 0, "errors": errs}
 
 
 # ------------------------------------------------------------
@@ -168,7 +188,8 @@ def get_meta_layer(name: str) -> Dict[str, Any]:
 if __name__ == "__main__":
     from pprint import pprint
 
-    print("🧩 Queen Formulas Library")
+    print("🧮 Queen Formulas Library")
     pprint(get_indicator("RSI"))
     pprint(get_meta_layer("SPS"))
     pprint(COMPOSITE_SCORE)
+    pprint(validate())

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from queen.settings import timeframes as TF
+
 # ------------------------------------------------------------
 # 🧩 Version Metadata
 # ------------------------------------------------------------
@@ -81,6 +83,42 @@ def summary() -> Dict[str, Any]:
         "risk_filters": RISK_FILTERS,
         "fundamentals": FUNDAMENTALS,
     }
+
+
+def selection_window_days(timeframe_token: str) -> int:
+    """Days of data typically needed to run selection at `timeframe_token`."""
+    TF.validate_token(timeframe_token)
+    # honor explicit period_days; also cover min_candles at this tf
+    days_by_period = int(SELECTION.get("period_days", 30))
+    days_by_bars = TF.window_days_for_tf(
+        timeframe_token, int(SELECTION.get("min_candles", 20))
+    )
+    return max(days_by_period, days_by_bars)
+
+
+def min_bars_for_selection(timeframe_token: str) -> int:
+    """Minimum bars required to satisfy SELECTION['min_candles'] at `timeframe_token`."""
+    TF.validate_token(timeframe_token)
+    return int(SELECTION.get("min_candles", 20))
+
+
+def validate() -> dict:
+    """Light checks for config correctness."""
+    errs = []
+
+    # factors ~ 1.0 (±0.25 tolerance)
+    s = sum(float(v) for v in FACTORS.values())
+    if not (0.75 <= s <= 1.25):
+        errs.append(f"FACTORS sum={round(s,4)} should be ≈1.0 (±0.25 tol)")
+
+    # types / non-negatives
+    if SELECTION.get("period_days", 0) <= 0:
+        errs.append("SELECTION.period_days must be > 0")
+    if SELECTION.get("min_candles", 0) <= 0:
+        errs.append("SELECTION.min_candles must be > 0")
+
+    ok = not errs
+    return {"ok": ok, "errors": errs, "count": len(FACTORS)}
 
 
 # ------------------------------------------------------------

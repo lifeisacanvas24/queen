@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # ============================================================
-# quant/utils/rate_limiter.py — v1.5 (Async Token Bucket + Hybrid Diagnostics)
+# quant/utils/rate_limiter.py — v2.0 (Async Token Bucket + Settings Diagnostics)
 # ============================================================
-"""Quant-Core — Async Token Bucket Rate Limiter (Hybrid + Structured Diagnostics).
+"""Quant-Core — Async Token Bucket Rate Limiter.
 
-Highlights:
-    ✅ Async-safe continuous token refill
-    ✅ Config-proxy integrated (fetches default QPS if needed)
-    ✅ Structured diagnostic logging (optional)
-    ✅ Desynchronized jitter to prevent bursts
+✅ Async-safe continuous token refill
+✅ Settings-integrated defaults (FETCH.MAX_REQ_PER_SEC)
+✅ Structured diagnostics via Queen logger
+✅ Desynchronized jitter to prevent bursts
 """
 
 from __future__ import annotations
@@ -18,22 +17,13 @@ import random
 import time
 from typing import Optional
 
-from quant.utils.config_proxy import cfg_bool, cfg_get
-from quant.utils.logs import safe_log_init
+from queen.helpers.logger import log
+from queen.settings import settings as SETTINGS
 
-# Initialize a shared logger
-logger = safe_log_init("RateLimiter")
-
-# ============================================================
-# ⚙️ Config Defaults (Hybrid-Safe)
-# ============================================================
-DEFAULT_QPS = cfg_get("fetch.max_req_per_sec", 50)
-DIAG_ENABLED = cfg_bool("diagnostics.enabled", True)
+DEFAULT_QPS = float(SETTINGS.FETCH.get("MAX_REQ_PER_SEC", 50))
+DIAG_ENABLED = bool(SETTINGS.DIAGNOSTICS.get("ENABLED", True))
 
 
-# ============================================================
-# 🧩 Core Class
-# ============================================================
 class AsyncTokenBucket:
     """Asynchronous continuous-time token bucket with optional diagnostics."""
 
@@ -48,7 +38,7 @@ class AsyncTokenBucket:
         self.last_refill = time.monotonic()
         self.lock = asyncio.Lock()
         self.name = name
-        self.diag = DIAG_ENABLED if diag is None else diag
+        self.diag = DIAG_ENABLED if diag is None else bool(diag)
         self._last_log = 0.0
 
     async def acquire(self) -> None:
@@ -62,7 +52,6 @@ class AsyncTokenBucket:
                 self.tokens = min(self.rate, self.tokens + refill)
                 self.last_refill = now
 
-            # Wait until enough tokens
             while self.tokens < 1:
                 sleep_for = max(0.001, (1 - self.tokens) / self.rate)
                 await asyncio.sleep(sleep_for)
@@ -75,20 +64,19 @@ class AsyncTokenBucket:
 
             self.tokens -= 1.0
 
-            # Optional structured diagnostics
             if self.diag and now - self._last_log > 1.0:
                 self._last_log = now
-                logger.info(
+                log.info(
                     f"[RateLimiter:{self.name}] tokens={self.tokens:.2f}/{self.rate}"
                 )
 
-        # Add slight random jitter to desync bursts
+        # slight jitter to desync bursts
         await asyncio.sleep(random.uniform(0.002, 0.01))
 
 
-# ============================================================
+# ------------------------------------------------------------
 # 🧪 CLI Self-Test
-# ============================================================
+# ------------------------------------------------------------
 if __name__ == "__main__":
 
     async def _test():
@@ -96,7 +84,5 @@ if __name__ == "__main__":
         for i in range(25):
             await rl.acquire()
             print(f"✅ Request {i+1}")
-
-    import asyncio
 
     asyncio.run(_test())

@@ -1,20 +1,17 @@
-# queen/settings/regimes.py
-
-"""Market Regime Configuration (v1.0)
-----------------------------------
-Defines volatility, trend, and liquidity regimes used
-across Tactical Fusion Engine (TFE), strategy blending,
-and adaptive weighting systems.
-"""
-
+#!/usr/bin/env python3
+# ============================================================
+# queen/settings/regimes.py — Market Regime Configuration (v9.0)
+# Forward-only, uppercase keys, helpers, Polars export
+# ============================================================
 from __future__ import annotations
 
 from typing import Dict
 
-# ------------------------------------------------------------
-# 🧠 Regime Parameters
-# ------------------------------------------------------------
+import polars as pl  # Polars-only per project convention ✅
 
+# ------------------------------------------------------------
+# 🧠 Regime Parameters (UPPERCASE KEYS)
+# ------------------------------------------------------------
 REGIMES: Dict[str, dict] = {
     "BULLISH": {
         "trend_bias": 1,
@@ -40,11 +37,7 @@ REGIMES: Dict[str, dict] = {
         "liquidity_state": "stable",
         "color": "#3b82f6",
         "description": "Range-bound phase — mixed momentum, mean-reversion favored.",
-        "thresholds": {
-            "rsi_min": 45,
-            "adx_min": 15,
-            "vix_state": "flat",
-        },
+        "thresholds": {"rsi_min": 45, "adx_min": 15, "vix_state": "flat"},
         "actions": {
             "risk_multiplier": 1.0,
             "position_sizing": "moderate",
@@ -57,11 +50,7 @@ REGIMES: Dict[str, dict] = {
         "liquidity_state": "contracting",
         "color": "#ef4444",
         "description": "Downtrend or correction phase — volatility spikes, liquidity fades.",
-        "thresholds": {
-            "rsi_max": 45,
-            "adx_min": 20,
-            "vix_state": "rising",
-        },
+        "thresholds": {"rsi_max": 45, "adx_min": 20, "vix_state": "rising"},
         "actions": {
             "risk_multiplier": 0.6,
             "position_sizing": "defensive",
@@ -70,15 +59,12 @@ REGIMES: Dict[str, dict] = {
     },
 }
 
-# ------------------------------------------------------------
-# ⚙️ Regime Derivation Logic (Stateless Helper)
-# ------------------------------------------------------------
 
-
+# ------------------------------------------------------------
+# ⚙️ Regime Derivation (stateless)
+# ------------------------------------------------------------
 def derive_regime(metrics: dict) -> str:
-    """Derive current regime based on dynamic metrics.
-    Expected keys: 'rsi', 'adx', 'vix_change', 'obv_slope'
-    """
+    """Derive current regime from metrics (rsi, adx, vix_change, obv_slope)."""
     rsi = metrics.get("rsi", 50)
     adx = metrics.get("adx", 15)
     vix = metrics.get("vix_change", 0)
@@ -92,15 +78,66 @@ def derive_regime(metrics: dict) -> str:
 
 
 def get_regime_config(regime: str) -> dict:
-    """Get the full regime configuration safely."""
-    return REGIMES.get(regime.upper(), REGIMES["NEUTRAL"])
+    return REGIMES.get((regime or "").upper(), REGIMES["NEUTRAL"])
+
+
+def list_regimes() -> list[str]:
+    return list(REGIMES.keys())
+
+
+# ------------------------------------------------------------
+# 🧪 Validation & Export
+# ------------------------------------------------------------
+def validate() -> dict:
+    errs: list[str] = []
+    for name, cfg in REGIMES.items():
+        if name.upper() != name:
+            errs.append(f"{name}: regime keys must be UPPERCASE")
+        for req in (
+            "trend_bias",
+            "volatility_state",
+            "liquidity_state",
+            "color",
+            "description",
+            "thresholds",
+            "actions",
+        ):
+            if req not in cfg:
+                errs.append(f"{name}: missing '{req}'")
+        acts = cfg.get("actions", {})
+        if "risk_multiplier" in acts and not isinstance(
+            acts["risk_multiplier"], (int, float)
+        ):
+            errs.append(f"{name}: actions.risk_multiplier must be number")
+        if "indicator_sensitivity" in acts and not isinstance(
+            acts["indicator_sensitivity"], (int, float)
+        ):
+            errs.append(f"{name}: actions.indicator_sensitivity must be number")
+    return {"ok": len(errs) == 0, "errors": errs, "count": len(REGIMES)}
+
+
+def to_polars_df() -> pl.DataFrame:
+    """Flat view for dashboards / notebooks."""
+    rows = []
+    for nm, c in REGIMES.items():
+        rows.append(
+            {
+                "Regime": nm,
+                "Trend Bias": c.get("trend_bias"),
+                "Volatility": c.get("volatility_state"),
+                "Liquidity": c.get("liquidity_state"),
+                "Risk Multiplier": c.get("actions", {}).get("risk_multiplier"),
+                "Indicator Sens": c.get("actions", {}).get("indicator_sensitivity"),
+                "Color": c.get("color"),
+            }
+        )
+    return pl.DataFrame(rows)
 
 
 # ------------------------------------------------------------
 # ✅ Self-Test
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    sample = {"rsi": 60, "adx": 25, "vix_change": -2, "obv_slope": 1}
-    regime = derive_regime(sample)
-    print(f"📊 Derived regime: {regime}")
-    print(get_regime_config(regime))
+    print("🧭 Regimes:", list_regimes())
+    print("validate →", validate())
+    print(to_polars_df())
