@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/daemons/alert_daemon.py — v1.1 (Price Alerts + JSONL/HTTP sinks)
+# queen/daemons/alert_daemon.py — v1.2 (Price Alerts + JSONL/HTTP sinks)
 # ============================================================
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import httpx
 import polars as pl
 from queen.fetchers.upstox_fetcher import fetch_intraday
+from queen.helpers import io  # ← use IO helper
 from queen.helpers.logger import log
 from queen.helpers.market import MarketClock, get_market_state, market_gate
 from queen.settings import settings as SETTINGS
@@ -49,50 +49,29 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument(
         "--symbols", nargs="+", required=True, help="Symbols to watch (e.g. TCS INFY)"
     )
-    p.add_argument(
-        "--op",
-        choices=["ge", "gt", "le", "lt", "eq", "ne"],
-        default="ge",
-        help="Comparison op for close vs price (default: ge)",
-    )
-    p.add_argument("--price", type=float, required=True, help="Threshold price")
+    p.add_argument("--op", choices=["ge", "gt", "le", "lt", "eq", "ne"], default="ge")
+    p.add_argument("--price", type=float, required=True)
     p.add_argument(
         "--interval", type=int, default=5, help="Intraday minutes (default: 5)"
     )
     p.add_argument(
-        "--tick-interval",
-        type=int,
-        default=5,
-        help="Clock tick minutes (default: 5); align with fetch cadence",
+        "--tick-interval", type=int, default=5, help="Clock tick minutes (default: 5)"
     )
     p.add_argument(
-        "--cooldown",
-        type=int,
-        default=15,
-        help="Minutes to suppress duplicate alerts per symbol (default: 15)",
+        "--cooldown", type=int, default=15, help="Suppress duplicate alerts per symbol"
     )
     p.add_argument(
         "--log-only", action="store_true", help="Do not print to stdout, log only"
     )
-
-    # New sinks (optional)
     p.add_argument(
         "--emit-jsonl",
         action="store_true",
         help="Append alerts to EXPORTS/alerts/alerts.jsonl",
     )
     p.add_argument(
-        "--http-post",
-        type=str,
-        default=None,
-        help="POST alert JSON to this URL (your future FastAPI endpoint)",
+        "--http-post", type=str, default=None, help="POST alert JSON to this URL"
     )
-    p.add_argument(
-        "--http-timeout",
-        type=float,
-        default=3.0,
-        help="HTTP POST timeout seconds (default: 3.0)",
-    )
+    p.add_argument("--http-timeout", type=float, default=3.0)
     return p.parse_args(argv)
 
 
@@ -128,24 +107,21 @@ class Notifier:
         if not self._jsonl_path:
             return
         try:
-            with self._jsonl_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            io.append_jsonl(self._jsonl_path, payload)  # ← DRY append
         except Exception as e:
             log.warning(f"[Alert] JSONL sink error → {e}")
 
     async def notify(self, payload: dict, human: str):
-        # log + optional stdout
         log.info(f"[Alert] {human}")
         if not self.log_only:
             print(human, flush=True)
-        # sinks
         self._jsonl_write(payload)
         await self._http_send(payload)
 
 
 # ---------- Fetch latest close ----------
 async def _latest_close(symbol: str, interval_min: int) -> float | None:
-    df: pl.DataFrame = await fetch_intraday(symbol, interval_min)
+    df: pl.DataFrame = await fetch_intraday(symbol, interval_min)  # int minutes OK
     if df.is_empty():
         return None
     return float(df[-1, "close"])
@@ -172,46 +148,55 @@ async def _run(
         async def evaluator():
             while True:
                 _ = await queue.get()
-                # parallel fetches
-                tasks = {r.symbol: _latest_close(r.symbol, r.interval) for r in rules}
-                results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+                try:
+                    tasks = {
+                        r.symbol: _latest_close(r.symbol, r.interval) for r in rules
+                    }
+                    results = await asyncio.gather(
+                        *tasks.values(), return_exceptions=True
+                    )
 
-                sym_to_close: Dict[str, float | None] = {}
-                for sym, res in zip(tasks.keys(), results):
-                    sym_to_close[sym] = None if isinstance(res, Exception) else res
+                    sym_to_close: Dict[str, float | None] = {}
+                    for sym, res in zip(tasks.keys(), results):
+                        sym_to_close[sym] = None if isinstance(res, Exception) else res
 
-                now = get_market_state()
-                now_iso = now["timestamp"]
-                for r in rules:
-                    last = sym_to_close.get(r.symbol)
-                    if last is None or not r.check(last):
-                        continue
-                    info = fired.get(r.symbol)
-                    if info:
-                        info["remaining"] = max(
-                            0, info.get("remaining", 0) - tick_minutes
-                        )
-                        if info["remaining"] > 0:
+                    now = get_market_state()
+                    now_iso = now["timestamp"]
+                    for r in rules:
+                        last = sym_to_close.get(r.symbol)
+                        if last is None or not r.check(last):
                             continue
-                    fired[r.symbol] = {
-                        "remaining": cooldown_min,
-                        "last_close": last,
-                        "ts": now_iso,
-                    }
-                    payload = {
-                        "symbol": r.symbol,
-                        "op": r.op,
-                        "threshold": r.price,
-                        "last_close": last,
-                        "interval_min": r.interval,
-                        "timestamp": now_iso,
-                        "session": now["session"],
-                        "gate": now["gate"],
-                    }
-                    human = f"🔔 {r.symbol} close {last:.2f} {r.op} {r.price:.2f} @ {now_iso} ({r.interval}m)"
-                    await notifier.notify(payload, human)
+                        info = fired.get(r.symbol)
+                        if info:
+                            info["remaining"] = max(
+                                0, info.get("remaining", 0) - tick_minutes
+                            )
+                            if info["remaining"] > 0:
+                                continue
+                        fired[r.symbol] = {
+                            "remaining": cooldown_min,
+                            "last_close": last,
+                            "ts": now_iso,
+                        }
+                        payload = {
+                            "symbol": r.symbol,
+                            "op": r.op,
+                            "threshold": r.price,
+                            "last_close": last,
+                            "interval_min": r.interval,
+                            "timestamp": now_iso,
+                            "session": now["session"],
+                            "gate": now["gate"],
+                        }
+                        human = f"🔔 {r.symbol} close {last:.2f} {r.op} {r.price:.2f} @ {now_iso} ({r.interval}m)"
+                        await notifier.notify(payload, human)
+                finally:
+                    queue.task_done()
 
-        await asyncio.gather(clock.start(), evaluator())
+        try:
+            await asyncio.gather(clock.start(), evaluator())
+        except asyncio.CancelledError:
+            raise
 
 
 def run_cli(argv: Optional[List[str]] = None):

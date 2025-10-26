@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/daemons/scheduler.py — v2.3 (Async-Aware Market Daemon)
+# queen/daemons/scheduler.py — v2.4 (Async-Aware Market Daemon)
 # ============================================================
 """Queen Scheduler Daemon
 
@@ -24,7 +24,6 @@ from queen.helpers.market import (
     MarketClock,
     get_market_state,
     market_gate,
-    sleep_until_next_candle,
 )
 
 DEFAULT_INTERVAL_MINUTES = 5
@@ -37,6 +36,7 @@ async def scheduler_loop(
     interval_minutes: int = DEFAULT_INTERVAL_MINUTES,
     max_symbols: int = DEFAULT_MAX_SYMBOLS,
 ) -> None:
+    mode = (mode or "intraday").lower()
     log.info(
         f"[Scheduler] start | mode={mode} | interval={interval_minutes}m | max={max_symbols}"
     )
@@ -55,28 +55,41 @@ async def scheduler_loop(
         asyncio.create_task(clock.start())
 
         while True:
-            _ = await queue.get()
-            state = get_market_state()
-            if not state["is_open"]:
-                log.info(f"[Scheduler] market closed (gate={state['gate']}) — waiting")
-                await asyncio.sleep(60)
-                continue
+            tick = await queue.get()
+            try:
+                state = get_market_state()
+                if not state["is_open"]:
+                    log.info(
+                        f"[Scheduler] market closed (gate={state['gate']}) — waiting"
+                    )
+                    continue
 
-            today = datetime.now().strftime("%Y-%m-%d")
-            from_date = to_date = today
+                today = datetime.now().strftime("%Y-%m-%d")
+                from_date = to_date = today
 
-            if mode == "daily":
+                if mode == "daily":
+                    log.info(
+                        "[Scheduler] daily mode during session — EOD may not be available yet"
+                    )
+
+                # IMPORTANT: pass intraday interval to router so fetcher uses it
+                interval_token = f"{interval_minutes}m" if mode == "intraday" else None
+
                 log.info(
-                    "[Scheduler] daily mode during session — EOD may not be available yet"
+                    f"[Scheduler] run fetch_router | tick={tick} | n={len(symbols)} | mode={mode} | date={today} | interval={interval_token or 'default'}"
                 )
-
-            log.info(
-                f"[Scheduler] run fetch_router | n={len(symbols)} | mode={mode} | date={today}"
-            )
-            await run_router(symbols, mode=mode, from_date=from_date, to_date=to_date)
-
-            await sleep_until_next_candle(interval_minutes)
-            queue.task_done()
+                try:
+                    await run_router(
+                        symbols,
+                        mode=mode,
+                        from_date=from_date,
+                        to_date=to_date,
+                        interval=interval_token,
+                    )
+                except Exception as e:
+                    log.error(f"[Scheduler] fetch_router failed → {e}")
+            finally:
+                queue.task_done()
 
 
 async def run_once(
@@ -84,14 +97,18 @@ async def run_once(
     interval_minutes: int = DEFAULT_INTERVAL_MINUTES,
     max_symbols: int = DEFAULT_MAX_SYMBOLS,
 ):
+    mode = (mode or "intraday").lower()
     async with market_gate():
         df = load_instruments_df("INTRADAY" if mode == "intraday" else "MONTHLY")
         symbols = df["symbol"].head(max_symbols).to_list() if not df.is_empty() else []
         today = datetime.now().strftime("%Y-%m-%d")
+        interval_token = f"{interval_minutes}m" if mode == "intraday" else None
         log.info(
-            f"[Scheduler] single cycle | n={len(symbols)} | mode={mode} | date={today}"
+            f"[Scheduler] single cycle | n={len(symbols)} | mode={mode} | date={today} | interval={interval_token or 'default'}"
         )
-        await run_router(symbols, mode=mode, from_date=today, to_date=today)
+        await run_router(
+            symbols, mode=mode, from_date=today, to_date=today, interval=interval_token
+        )
 
 
 def _build_parser() -> argparse.ArgumentParser:

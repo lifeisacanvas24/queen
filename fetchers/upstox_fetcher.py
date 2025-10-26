@@ -185,7 +185,7 @@ async def fetch_daily_range(
     meta = get_instrument_meta(symbol)
     df_final = finalize_candle_df(df, symbol, meta["isin"])
     log.info(
-        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → {len[df_final)} rows."
+        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → {len(df_final)} rows."
     )
     return df_final
 

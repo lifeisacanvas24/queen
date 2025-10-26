@@ -35,7 +35,6 @@ from queen.helpers.logger import log
 from queen.helpers.market import (
     current_historical_service_day,
     get_market_state,
-    market_gate,
     sleep_until_next_candle,
 )
 from queen.settings import settings as SETTINGS
@@ -167,6 +166,7 @@ async def run_router(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     interval: str | int | None = None,
+    use_gate: bool = True,  # NEW: default keeps existing behavior
 ) -> None:
     """Run a full fetch cycle over `symbols`.
 
@@ -186,7 +186,7 @@ async def run_router(
             from_date or "", to_date or datetime.now().strftime("%Y-%m-%d")
         )
 
-    async with market_gate():
+    async def _cycle_body():
         state = get_market_state()
         log.info(
             f"[Router] 🚀 Start: {len(symbols)} symbols | mode={mode} | session={state['session']} | gate={state['gate']}"
@@ -222,6 +222,13 @@ async def run_router(
         out_path = _generate_output_path(mode)
         await _save_results(all_results, out_path)
         log.info(f"[Router] ✅ Completed {len(symbols)} symbols total.")
+
+        if use_gate:
+            async with market_gate():
+                await _cycle_body()
+        else:
+            log.info("[Router] ⛳ Gate bypass enabled — running immediately")
+            await _cycle_body()
 
 
 # ============================================================
@@ -289,6 +296,11 @@ def run_cli():
     parser.add_argument(
         "--auto", action="store_true", help="Enable continuous scheduler"
     )
+    parser.add_argument(
+        "--force-live",
+        action="store_true",
+        help="Bypass market gate (run even on weekends/holidays)",
+    )
     parser.add_argument("--interval-minutes", type=int, default=DEFAULT_INTERVAL_MIN)
     parser.add_argument(
         "--max",
@@ -316,7 +328,12 @@ def run_cli():
                 warn_if_same_day_eod(args.from_date, args.to_date)
 
             await run_router(
-                symbols, args.mode, args.from_date, args.to_date, args.interval
+                symbols,
+                args.mode,
+                args.from_date,
+                args.to_date,
+                args.interval,
+                use_gate=not args.force_live,  # NEW
             )
 
     asyncio.run(main())

@@ -1,0 +1,77 @@
+Great lineup. Here’s the order I recommend—and why—plus a tight checklist for each so we keep it DRY and aligned with the new helpers.
+
+1) scheduler.py (foundation)
+
+Why first: Everything else hangs off when/what to run. This should be the single source that decides schedules and hands work to the router/fetchers.
+
+Checklist (quick sanity):
+	•	Use queen.helpers.intervals for any interval parsing.
+	•	Use queen.helpers.market.market_gate() and sleep_until_next_candle() (already DRY).
+	•	Expose a clean async API (run_once(...), run_forever(...)) that other daemons can call.
+	•	Config: read from SETTINGS.SCHEDULER + SETTINGS.DEFAULTS; avoid hard-coded times.
+	•	Logging: one start/stop line per cycle, batch counts, and next wakeup.
+
+2) clock_daemon.py (time driver)
+
+Why second: It’s the metronome for intraday cycles and the safest daemon to validate the scheduler glue.
+
+Checklist:
+	•	Delegate all “how long to sleep” to sleep_until_next_candle(); don’t re-implement timing.
+	•	Prefer asyncio loop; attach graceful shutdown (SIGINT/SIGTERM) with asyncio.Event.
+	•	On tick → call scheduler.run_once(mode="intraday").
+	•	Snap tiny negative sleeps (already handled in helper); log wake/sleep durations.
+
+3) alert_daemon.py (v1) → then alert_v2.py
+
+Why next: Alerts consume the same market clock & state; verifying v1 first ensures the pipeline works before the richer v2 logic.
+
+Checklist:
+	•	Input: subscribe to outputs (files from fetch_router), or read a queue if present.
+	•	IO: use queen.helpers.io (read_any / read_parquet / read_json) only—no raw file ops.
+	•	Rate-limit and debounce alerts (per symbol) with a small in-memory or quant.utils.cache.CacheManager key (e.g., ALERT:SYMBOL:RULE).
+	•	v2 can introduce: rule combinators, quiet-hours, severity routing—keep it modular.
+
+4) __main__.py (entrypoint CLI)
+
+Why now: Once scheduler & clock are ready, wire the CLI switches (which daemon, which mode) and ensure it composes cleanly.
+
+Checklist:
+	•	Subcommands: clock, alerts, alerts-v2, scheduler.
+	•	Flags map directly to SETTINGS (no duplicated config). Print effective config at start.
+	•	Ensure asyncio.run(...) only at the top level (no nested runs).
+
+5) __init__.py (lightweight)
+
+Why last: Keep it minimal; usually just version + exported symbols for discoverability.
+
+Checklist:
+	•	__all__ = ["run_clock", "run_scheduler", "run_alerts"] (whatever public entrypoints make sense).
+	•	No side effects, no logging here.
+
+⸻
+
+Small, high-impact conventions to apply as we go
+	•	Logging names: [Clock], [Scheduler], [Alerts] prefixes (consistent with [Router], [MarketClock]).
+	•	Backpressure: When a cycle overruns its interval, log drift and start next tick immediately; don’t pile sleeps.
+	•	Retries: Use the fetcher’s built-in retry; daemons should not wrap network retries again (avoid double backoff).
+	•	Exports/IO: Always via queen.helpers.io (atomic writes); don’t reintroduce raw .write_*.
+	•	Settings: Any new knob → SETTINGS.* (never local constants).
+	•	Graceful shutdown: Cancel tasks, flush pending alerts, log final “Stopped cleanly”.
+
+⸻
+
+Quick test plan (each step ~1–2 commands)
+	1.	Scheduler dry-run: python -m queen.daemons.scheduler --once --mode daily --symbols TCS INFY
+	2.	Clock tick demo: python -m queen.daemons.clock_daemon --interval 1 (watch [MarketClock] and [Router] lines)
+	3.	Alerts v1: Point it at a small export file and ensure one-shot notifications + debounce works.
+	4.	Alerts v2: Enable a compound rule; verify quiet-hours or severity routing paths.
+	5.	Main wiring: python -m queen.daemons --help shows subcommands; run each.
+
+If you’re good with that order, we’ll start with scheduler.py.
+
+Notes
+	•	These entry points just import your modules and call their run_cli() functions, so all existing flags keep working.
+	•	On Windows, the generated executables will be in your environment’s Scripts\ directory; on macOS/Linux they’ll be in bin/.
+	•	If you keep both alert_daemon.py and alert_v2.py around (nice!), the two commands queen-alert and queen-alert2 make it super clear which engine you’re using.
+
+Want me to also drop a tiny “Getting Started” block into your README with those commands?

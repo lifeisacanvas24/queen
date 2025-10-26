@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -22,6 +21,7 @@ import polars as pl
 from queen.alerts.evaluator import eval_rule
 from queen.alerts.rules import Rule, load_rules
 from queen.fetchers.upstox_fetcher import fetch_unified
+from queen.helpers import io
 from queen.helpers.instruments import get_listing_date, validate_historical_range
 from queen.helpers.logger import log
 from queen.helpers.market import MARKET_TZ, get_market_state, is_working_day
@@ -496,8 +496,7 @@ async def run_daemon(
                             **(meta or {}),
                         },
                     }
-                    with out.open("a", encoding="utf-8") as fh:
-                        fh.write(json.dumps(evt) + "\n")
+                    io.append_jsonl(out, evt)
                     _LAST_FIRE[key] = now
 
                     # Colorized success line for crosses

@@ -46,24 +46,6 @@ HOLIDAY_FILE = Path(_EX_INFO["HOLIDAYS"]).expanduser().resolve()
 _HOLIDAYS_CACHE: Dict[int, Set[str]] | None = None
 
 
-def _read_holidays_polars(path: Path) -> pl.DataFrame:
-    if not path.exists():
-        log.warning(f"[Market] Holiday file not found: {path}")
-        return pl.DataFrame()
-    try:
-        if path.suffix.lower() == ".csv":
-            df = pl.read_csv(path)
-        else:
-            try:
-                df = pl.read_json(path)  # JSON array
-            except Exception:
-                df = pl.read_ndjson(path)  # NDJSON fallback
-        return df
-    except Exception as e:
-        log.error(f"[Market] Holiday read failed for {path.name} → {e}")
-        return pl.DataFrame()
-
-
 def _normalize_holiday_df(df: pl.DataFrame) -> pl.DataFrame:
     if df.is_empty():
         return df
@@ -90,10 +72,27 @@ def _read_holidays_polars(path: Path) -> pl.DataFrame:
     try:
         if path.suffix.lower() == ".csv":
             return io.read_csv(path)
-        return io.read_json(path)
+        return io.read_json(path)  # reads JSON array or NDJSON via io
     except Exception as e:
         log.error(f"[Market] Holiday read failed for {path.name} → {e}")
         return pl.DataFrame()
+
+
+def _load_holidays() -> Dict[int, Set[str]]:
+    """Load holidays from HOLIDAY_FILE into {year: {YYYY-MM-DD,...}}."""
+    df = _read_holidays_polars(HOLIDAY_FILE)
+    df = _normalize_holiday_df(df)
+    out: Dict[int, Set[str]] = {}
+    if df.is_empty():
+        return out
+    for s in df.get_column("date").to_list():
+        try:
+            y = int(str(s)[:4])
+            out.setdefault(y, set()).add(str(s))
+        except Exception:
+            continue
+    log.info(f"[Market] Holidays loaded: years={sorted(out.keys())}")
+    return out
 
 
 def _holidays() -> Dict[int, Set[str]]:
@@ -101,6 +100,12 @@ def _holidays() -> Dict[int, Set[str]]:
     if _HOLIDAYS_CACHE is None:
         _HOLIDAYS_CACHE = _load_holidays()
     return _HOLIDAYS_CACHE
+
+
+def reload_holidays() -> None:
+    """Manually clear holiday cache (next call will reload from disk)."""
+    global _HOLIDAYS_CACHE
+    _HOLIDAYS_CACHE = None
 
 
 # ------------------------------------------------------------

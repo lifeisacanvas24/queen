@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/daemons/clock_daemon.py — Market Clock Daemon (v1.3)
+# queen/daemons/clock_daemon.py — Market Clock Daemon (v1.4)
 # ============================================================
 """Continuously emits market ticks using queen.helpers.market.MarketClock.
 ✅ Supports --force-live (bypass holiday/weekend pause)
@@ -13,11 +13,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
-import json
 import time
 from pathlib import Path
 
-from queen.helpers import market
+from queen.helpers import io, market  # <-- use io helper
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -67,6 +66,9 @@ def build_table(state, tick_count, runtime):
     table.add_row("📅 Gate", gate_display)
     table.add_row("📊 Session", state.get("session", "N/A"))
     table.add_row("📈 Market", "🟩 OPEN" if state.get("is_open") else "🔒 CLOSED")
+    # Optional: display next_open when closed
+    if not state.get("is_open") and state.get("next_open"):
+        table.add_row("⏭️ Next Open", str(state["next_open"]))
     table.add_row("⏱️ Ticks", str(tick_count))
     table.add_row("🧭 Runtime", f"{int(runtime)}s")
 
@@ -99,35 +101,41 @@ async def run_daemon(args: argparse.Namespace):
     log_path = Path(args.log_file)
     if args.log:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        if not log_path.exists():
-            log_path.write_text("")
 
     async def tick_listener(live: Live):
         nonlocal tick_count, state
         while True:
             tick = await queue.get()
-            tick_count += 1
-            now = dt.datetime.now(market.MARKET_TZ)
-            state = market.get_market_state()
-            runtime = time.time() - start_time
-            live.update(build_table(state, tick_count, runtime))
+            try:
+                tick_count += 1
+                now = dt.datetime.now(market.MARKET_TZ)  # noqa: F841 (useful if printed later)
+                state = market.get_market_state()
+                runtime = time.time() - start_time
+                live.update(build_table(state, tick_count, runtime))
 
-            if args.log:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "timestamp": tick["timestamp"].isoformat(),
-                                "gate": tick["gate"],
-                                "session": tick["session"],
-                                "is_open": tick["is_open"],
-                            }
-                        )
-                        + "\n"
+                if args.log:
+                    io.append_jsonl(
+                        log_path,
+                        {
+                            "timestamp": tick["timestamp"].isoformat(),
+                            "gate": tick["gate"],
+                            "session": tick["session"],
+                            "is_open": tick["is_open"],
+                        },
                     )
+            finally:
+                queue.task_done()
 
-    with Live(build_table(state, 0, 0), refresh_per_second=1, console=console) as live:
-        await asyncio.gather(clock.start(), tick_listener(live))
+    try:
+        with Live(
+            build_table(state, 0, 0), refresh_per_second=1, console=console
+        ) as live:
+            await asyncio.gather(clock.start(), tick_listener(live))
+    except asyncio.CancelledError:
+        # clean shutdown
+        raise
+    except KeyboardInterrupt:
+        console.print("\n[red]🛑 Interrupted by user.[/red]")
 
 
 def run_cli(argv: list[str] | None = None):
