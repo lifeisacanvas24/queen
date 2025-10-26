@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/instruments.py — v9.3 (Robust Loader + Caches)
+# queen/helpers/instruments.py — v9.4 (Robust Loader + IO-DRY + Caches)
 # ============================================================
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional
 
 import polars as pl
+from queen.helpers import io  # <-- DRY: central IO helpers
 from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 from queen.settings.settings import PATHS as _PATHS
@@ -40,38 +41,17 @@ def _all_instrument_paths() -> Iterable[Path]:
     return uniq.values()
 
 
-# -------- Readers -------------------------------------------------------------
+# -------- Readers (DRY via queen.helpers.io) ---------------------------------
 def _read_any(path: Path) -> pl.DataFrame:
-    if not path.exists():
-        log.warning(f"[Instruments] File missing: {path}")
-        return pl.DataFrame()
-
-    try:
-        suf = path.suffix.lower()
-        if suf == ".csv":
-            return pl.read_csv(path)
-
-        # Peek first non-whitespace byte in binary
-        with path.open("rb") as fh:
-            # skip leading whitespace/newlines
-            first = b""
-            while True:
-                ch = fh.read(1)
-                if not ch:
-                    break
-                if not ch.isspace():
-                    first = ch
-                    break
-        if first == b"[":
-            return pl.read_json(path)  # JSON array
-        # NDJSON (jsonlines) or fallback JSON
-        try:
-            return pl.read_ndjson(path)
-        except Exception:
-            return pl.read_json(path)
-    except Exception as e:
-        log.error(f"[Instruments] Read failed for {path.name} → {e}")
-        return pl.DataFrame()
+    """Polars-first reader for parquet/csv/json/ndjson using shared IO layer."""
+    df = io.read_any(path)
+    if df.is_empty():
+        # Maintain previous visibility on empty/missing files
+        if not Path(path).exists():
+            log.warning(f"[Instruments] File missing: {path}")
+        else:
+            log.warning(f"[Instruments] Empty/unsupported file: {path.name}")
+    return df
 
 
 def _normalize_columns(df: pl.DataFrame) -> pl.DataFrame:
@@ -293,7 +273,7 @@ def load_active_universe() -> set[str]:
     if not p.exists():
         return set()
     try:
-        df = pl.read_csv(p)
+        df = io.read_csv(p)  # <-- DRY
         cols = {c.lower() for c in df.columns}
         col = (
             "symbol"
@@ -325,7 +305,7 @@ def list_symbols_from_active_universe(mode: str = "MONTHLY") -> list[str]:
         return sorted(base)
 
     try:
-        udf = pl.read_csv(ufile)
+        udf = io.read_csv(ufile)  # <-- DRY
         if "symbol" not in udf.columns:
             return sorted(base)
         allowed = set(udf["symbol"].drop_nulls().unique().to_list())
@@ -339,7 +319,7 @@ def list_symbols_from_active_universe(mode: str = "MONTHLY") -> list[str]:
 
 # -------- Self-test -----------------------------------------------------------
 if __name__ == "__main__":
-    print("📘 Instruments Resolver — v9.3")
+    print("📘 Instruments Resolver — v9.4")
     for m in ("MONTHLY", "PORTFOLIO", "WEEKLY", "INTRADAY"):
         df = load_instruments_df(m)
         print(m, len(df))

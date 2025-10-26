@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/io.py — v2.0 (Atomic + Compressed + Polars-first)
+# queen/helpers/io.py — v2.1 (Atomic + Compressed + Polars-first)
 # ============================================================
 from __future__ import annotations
 
@@ -49,9 +49,8 @@ def append_jsonl(path: str | Path, record: dict) -> None:
     """Append one JSON object per line (creates file if missing)."""
     path = _p(path)
     ensure_parent(path)
-    # use atomic append by writing to temp and concatenating when file doesn't exist
     line = (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8")
-    # Best-effort append (atomicity at line-level is OS-dependent; acceptable for alerts)
+    # Best-effort append (line-level atomicity is OS-dependent)
     with open(path, "ab") as f:
         f.write(line)
 
@@ -62,7 +61,7 @@ def read_jsonl(path: str | Path, limit: Optional[int] = None) -> list[dict]:
         return []
     out: list[dict] = []
     with open(path, encoding="utf-8") as f:
-        for i, line in enumerate(f):
+        for line in f:
             try:
                 out.append(json.loads(line))
             except Exception:
@@ -92,7 +91,6 @@ def write_parquet(
 ) -> None:
     path = _p(path)
     ensure_parent(path)
-    # write to tmp then atomic replace
     with tempfile.NamedTemporaryFile(
         dir=str(path.parent), suffix=".parquet", delete=False
     ) as tmp:
@@ -120,7 +118,7 @@ def read_parquet(path: str | Path) -> pl.DataFrame:
         return pl.DataFrame()
 
 
-# -------- CSV / JSON (optional minis) --------
+# -------- CSV / JSON --------
 def write_csv(path: str | Path, df: pl.DataFrame) -> None:
     path = _p(path)
     ensure_parent(path)
@@ -140,6 +138,17 @@ def write_csv(path: str | Path, df: pl.DataFrame) -> None:
         raise
 
 
+def read_csv(path: str | Path) -> pl.DataFrame:
+    path = _p(path)
+    if not path.exists():
+        return pl.DataFrame()
+    try:
+        return pl.read_csv(path)
+    except Exception as e:
+        log.error(f"[IO] read_csv failed → {e}")
+        return pl.DataFrame()
+
+
 def write_json(path: str | Path, df: pl.DataFrame) -> None:
     path = _p(path)
     ensure_parent(path)
@@ -157,3 +166,34 @@ def write_json(path: str | Path, df: pl.DataFrame) -> None:
         except Exception:
             pass
         raise
+
+
+def read_json(path: str | Path) -> pl.DataFrame:
+    """Reads JSON array or NDJSON automatically into Polars."""
+    path = _p(path)
+    if not path.exists():
+        return pl.DataFrame()
+    try:
+        # Try JSON array first, then NDJSON
+        try:
+            return pl.read_json(path)
+        except Exception:
+            return pl.read_ndjson(path)
+    except Exception as e:
+        log.error(f"[IO] read_json failed → {e}")
+        return pl.DataFrame()
+
+
+# -------- Convenience: read_any --------
+def read_any(path: str | Path) -> pl.DataFrame:
+    """Read parquet/csv/json/ndjson by extension, else empty DF."""
+    path = _p(path)
+    suf = path.suffix.lower()
+    if suf == ".parquet":
+        return read_parquet(path)
+    if suf == ".csv":
+        return read_csv(path)
+    if suf in {".json", ".ndjson"}:
+        return read_json(path)
+    log.warning(f"[IO] read_any: unsupported extension for {path.name}")
+    return pl.DataFrame()

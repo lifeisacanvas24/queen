@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/market.py — v9.3 (Settings-Driven + Polars + DRY)
+# queen/helpers/market.py — v9.4 (Settings-Driven + Polars + DRY)
 # ============================================================
 """Market calendar & timing utilities for NSE/BSE.
 
@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, Optional, Set
 
 import polars as pl
+from queen.helpers import io
 from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 from zoneinfo import ZoneInfo
@@ -82,22 +83,17 @@ def _normalize_holiday_df(df: pl.DataFrame) -> pl.DataFrame:
     return df.select("date")
 
 
-def _load_holidays() -> Dict[int, Set[str]]:
-    df = _normalize_holiday_df(_read_holidays_polars(HOLIDAY_FILE))
-    if df.is_empty():
-        return {}
-    dates = df["date"].to_list()
-    out: Dict[int, Set[str]] = {}
-    for d in dates:
-        try:
-            y = int(d.split("-")[0])
-        except Exception:
-            continue
-        out.setdefault(y, set()).add(d)
-    log.info(
-        f"[Market] Loaded {sum(len(v) for v in out.values())} holidays from {HOLIDAY_FILE.name}"
-    )
-    return out
+def _read_holidays_polars(path: Path) -> pl.DataFrame:
+    if not path.exists():
+        log.warning(f"[Market] Holiday file not found: {path}")
+        return pl.DataFrame()
+    try:
+        if path.suffix.lower() == ".csv":
+            return io.read_csv(path)
+        return io.read_json(path)
+    except Exception as e:
+        log.error(f"[Market] Holiday read failed for {path.name} → {e}")
+        return pl.DataFrame()
 
 
 def _holidays() -> Dict[int, Set[str]]:
@@ -215,22 +211,6 @@ def get_gate(now: Optional[dt.datetime] = None) -> str:
     return "CLOSED"
 
 
-def get_market_state() -> dict:
-    now = dt.datetime.now(MARKET_TZ)
-    sess = current_session(now)
-    working = is_working_day(now.date())
-    return {
-        "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "is_open": is_market_open(now),  # True only during REGULAR
-        "is_holiday": is_holiday(now.date()),
-        "is_working_day": working,
-        "intraday_available": _intraday_available(now),
-        "session": sess,
-        "gate": get_gate(now),
-        "next_open": next_working_day(now.date()).isoformat(),
-    }
-
-
 def current_historical_service_day(now: dt.datetime | None = None) -> date:
     """Exchange date that the historical endpoint effectively exposes now."""
     now = ensure_tz_aware(now or dt.datetime.now(MARKET_TZ))
@@ -245,6 +225,23 @@ def current_historical_service_day(now: dt.datetime | None = None) -> date:
     return last_working_day(d - timedelta(days=1))
 
 
+def get_market_state() -> dict:
+    now = dt.datetime.now(MARKET_TZ)
+    sess = current_session(now)
+    working = is_working_day(now.date())
+    return {
+        "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "is_open": is_market_open(now),  # True only during REGULAR
+        "is_holiday": is_holiday(now.date()),
+        "is_working_day": working,
+        "intraday_available": _intraday_available(now),
+        "session": sess,
+        "gate": get_gate(now),
+        "next_open": next_working_day(now.date()).isoformat(),
+        "service_day": current_historical_service_day(now).isoformat(),  # NEW
+    }
+
+
 # ------------------------------------------------------------
 # ⏳ Async helpers
 # ------------------------------------------------------------
@@ -254,12 +251,17 @@ async def sleep_until_next_candle(
     """Sleep until next aligned bar close for given minute interval."""
     now = dt.datetime.now(MARKET_TZ)
     seconds_today = now.hour * 3600 + now.minute * 60 + now.second
-    period = interval_minutes * 60
+    period = max(60, int(interval_minutes * 60))  # floor at 1m period
     mod = seconds_today % period
+    # base wait until end of this bar
     delay = 1 if mod == 0 or mod >= (period - 2) else (period - mod)
+    # optional jitter around the boundary
     if jitter_ratio:
-        jitter = random.uniform(-jitter_ratio, jitter_ratio) * (interval_minutes * 60)
-        delay = max(0.0, delay + jitter)
+        jitter = random.uniform(-jitter_ratio, jitter_ratio) * period
+        delay = delay + jitter
+    # 👇 snap to sane bounds
+    if delay < 1.0:
+        delay = 1.0
     if emit_log:
         nxt = (now + dt.timedelta(seconds=delay)).strftime("%H:%M:%S")
         log.info(f"[MarketClock] Sleeping {delay:.2f}s → next candle {nxt} IST")
@@ -385,6 +387,41 @@ def historical_available() -> bool:
 # ✅ Self-test
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse
+    import asyncio as _asyncio
     import json as _json
+    import time
 
-    print(_json.dumps(get_market_state(), indent=2))
+    parser = argparse.ArgumentParser(description="Market utilities CLI")
+    parser.add_argument(
+        "--state", action="store_true", help="Print current market state JSON"
+    )
+    parser.add_argument(
+        "--sleep-test",
+        action="store_true",
+        help="One-shot sleep_until_next_candle demo",
+    )
+    parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=1,
+        help="Interval minutes for sleep-test",
+    )
+    parser.add_argument(
+        "--jitter", type=float, default=0.3, help="Jitter ratio for sleep-test"
+    )
+    args = parser.parse_args()
+
+    if args.state:
+        print(_json.dumps(get_market_state(), indent=2))
+    elif args.sleep_test:
+
+        async def _run():
+            t0 = time.monotonic()
+            await sleep_until_next_candle(args.interval_minutes, args.jitter, True)
+            dt_sec = time.monotonic() - t0
+            log.info(f"[SleepTest] Slept ~{dt_sec:.2f}s (>= 1.0s expected)")
+
+        _asyncio.run(_run())
+    else:
+        parser.print_help()

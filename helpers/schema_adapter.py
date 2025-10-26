@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/schema_adapter.py — v9.1 (Settings-Aware + Introspection)
+# queen/helpers/schema_adapter.py — v9.3 (Settings-Aware + DRY + Introspection)
 # ============================================================
 """Queen Schema Adapter — Unified Broker Schema Bridge
 ------------------------------------------------------
@@ -39,6 +39,7 @@ API_SCHEMA_PATH = Path(BROKER_CFG["API_SCHEMA"]).expanduser().resolve()
 DRIFT_LOG = SETTINGS.log_file("SCHEMA_DRIFT_LOG")
 DRIFT_LOG.parent.mkdir(parents=True, exist_ok=True)
 MARKET_TZ_NAME = SETTINGS.EXCHANGE["MARKET_TIMEZONE"]  # e.g., "Asia/Kolkata"
+DRIFT_LOG_MAX = 500  # keep last N drift records
 
 
 # ============================================================
@@ -46,7 +47,7 @@ MARKET_TZ_NAME = SETTINGS.EXCHANGE["MARKET_TIMEZONE"]  # e.g., "Asia/Kolkata"
 # ============================================================
 def _load_schema() -> dict:
     try:
-        schema = json.loads(API_SCHEMA_PATH.read_text())
+        schema = json.loads(API_SCHEMA_PATH.read_text(encoding="utf-8"))
         log.info(f"[SchemaAdapter] Loaded broker schema: {API_SCHEMA_PATH.name}")
         return schema
     except Exception as e:
@@ -60,10 +61,9 @@ DEFAULT_SCHEMA = ["timestamp", "open", "high", "low", "close", "volume", "oi"]
 
 
 # ============================================================
-# 🔎 Introspection helpers (new)
+# 🔎 Introspection helpers
 # ============================================================
 def _parse_range_token(tok: str) -> Tuple[int, int]:
-    """Parse '1-15' → (1,15) or '1' → (1,1)."""
     tok = str(tok).strip()
     if "-" in tok:
         a, b = tok.split("-", 1)
@@ -73,22 +73,18 @@ def _parse_range_token(tok: str) -> Tuple[int, int]:
 
 
 def _collect_intraday_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
-    i = SCHEMA.get("intraday_candle_api", {}).get("supported_timelines", {})
+    intr = SCHEMA.get("intraday_candle_api", {}).get("supported_timelines", {})
     out: Dict[str, Iterable[Tuple[int, int]]] = {}
-    for unit, spec in i.items():
-        # intraday section uses {"intervals":"1-300"} style
+    for unit, spec in intr.items():
         rng = spec.get("intervals")
-        if isinstance(rng, str):
-            out[unit] = [_parse_range_token(rng)]
-        else:
-            out[unit] = []
+        out[unit] = [_parse_range_token(rng)] if isinstance(rng, str) else []
     return out
 
 
 def _collect_historical_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
-    h = SCHEMA.get("historical_candle_api", {}).get("supported_timelines", {})
+    hist = SCHEMA.get("historical_candle_api", {}).get("supported_timelines", {})
     out: Dict[str, Iterable[Tuple[int, int]]] = {}
-    for unit, entries in h.items():
+    for unit, entries in hist.items():
         ranges: list[Tuple[int, int]] = []
         if isinstance(entries, list):
             for ent in entries:
@@ -102,12 +98,6 @@ def _collect_historical_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
 def get_supported_intervals(
     unit: str | None = None, *, intraday: bool | None = None
 ) -> Dict[str, Iterable[Tuple[int, int]]]:
-    """Return supported interval ranges from SCHEMA.
-    - unit: 'minutes'|'hours'|'days'|'weeks'|'months' (optional)
-    - intraday: True→intraday table, False→historical table, None→merge view
-
-    Returns a dict mapping unit -> list of (min,max) inclusive tuples.
-    """
     intr = _collect_intraday_supported()
     hist = _collect_historical_supported()
 
@@ -116,9 +106,7 @@ def get_supported_intervals(
     elif intraday is False:
         table = hist
     else:
-        # merged (prefer hist if both exist for same unit)
-        merged = {**intr, **hist}
-        table = merged
+        table = {**intr, **hist}
 
     if unit:
         u = unit.strip().lower()
@@ -129,13 +117,9 @@ def get_supported_intervals(
 def validate_interval(
     unit: str, interval: int, *, intraday: bool | None = None
 ) -> bool:
-    """Check if interval is supported for the given unit."""
     table = get_supported_intervals(unit, intraday=intraday)
     ranges = list(table.values())[0] if table else []
-    for lo, hi in ranges:
-        if lo <= interval <= hi:
-            return True
-    return False
+    return any(lo <= interval <= hi for lo, hi in ranges)
 
 
 # ============================================================
@@ -159,6 +143,11 @@ def _normalize(candles: list[list[Any]]) -> list[list[Any]]:
     return normalized
 
 
+def _safe_select(df: pl.DataFrame, cols: list[str]) -> pl.DataFrame:
+    exprs = [(pl.col(c) if c in df.columns else pl.lit(None).alias(c)) for c in cols]
+    return df.select(exprs)
+
+
 # ============================================================
 # 🕒 Timestamp Parsing
 # ============================================================
@@ -166,14 +155,41 @@ def _safe_parse(df: pl.DataFrame, column="timestamp") -> pl.DataFrame:
     try:
         if df.is_empty() or column not in df.columns:
             return df
+
         if df[column].dtype == pl.Datetime:
+            try:
+                if df[column].dtype.tz is None:  # type: ignore[attr-defined]
+                    return df.with_columns(
+                        pl.col(column).dt.replace_time_zone(MARKET_TZ_NAME)
+                    ).sort(column)
+            except Exception:
+                pass
             return df
+
+        if df[column].dtype in (
+            pl.Int64,
+            pl.Int32,
+            pl.UInt64,
+            pl.UInt32,
+            pl.Float64,
+            pl.Float32,
+        ):
+            s = pl.col(column).cast(pl.Int64, strict=False)
+            parsed = (
+                pl.when(s > 1_000_000_000_000)
+                .then(pl.from_epoch(s, time_unit="ms", tz=MARKET_TZ_NAME))
+                .otherwise(pl.from_epoch(s, time_unit="s", tz=MARKET_TZ_NAME))
+                .alias(column)
+            )
+            return df.with_columns(parsed).sort(column)
+
         parsed = (
-            pl.Series(df[column])
+            pl.col(column)
             .str.strptime(pl.Datetime, strict=False)
-            .dt.replace_time_zone(MARKET_TZ_NAME)  # <-- use settings tz name
+            .dt.replace_time_zone(MARKET_TZ_NAME)
+            .alias(column)
         )
-        return df.with_columns(parsed.alias(column)).sort(column)
+        return df.with_columns(parsed).sort(column)
     except Exception as e:
         log.warning(f"[SchemaAdapter] Timestamp parse failed → {e}")
         return df
@@ -215,7 +231,7 @@ def finalize_candle_df(df: pl.DataFrame, symbol: str, isin: str) -> pl.DataFrame
                 df = df.with_columns(pl.lit(val).alias(meta))
         df = _safe_parse(df)
         _detect_drift(df.columns)
-        return df.select(DEFAULT_SCHEMA + ["symbol", "isin"])
+        return _safe_select(df, DEFAULT_SCHEMA + ["symbol", "isin"])
     except Exception as e:
         log.error(f"[SchemaAdapter] finalize_candle_df failed → {e}")
         return df
@@ -243,8 +259,10 @@ def _log_drift(cols: list[str]):
     except Exception:
         existing = []
     existing.append(record)
+    if len(existing) > DRIFT_LOG_MAX:
+        existing = existing[-DRIFT_LOG_MAX:]
     DRIFT_LOG.write_text(json.dumps(existing, indent=2))
-    log.info(f"[SchemaDrift] Logged drift → {DRIFT_LOG.name}")
+    log.info(f"[SchemaDrift] Logged drift → {DRIFT_LOG.name} (len={len(existing)})")
 
 
 # ============================================================
@@ -299,6 +317,9 @@ def run_cli():
     parser.add_argument(
         "--intervals", action="store_true", help="Show supported intervals"
     )
+    parser.add_argument(
+        "--drift-sim", type=int, default=0, help="Append N simulated drift entries"
+    )
     args = parser.parse_args()
 
     sample = [
@@ -311,7 +332,6 @@ def run_cli():
         df = to_candle_df(sample, "UPSTOX_TEST")
         df_final = finalize_candle_df(df, "UPSTOX_TEST", "ISIN999")
         print_summary(df_final, "Test Data Summary")
-
     elif args.summary:
         console.rule("[bold cyan]📄 Current Schema Summary")
         table = Table(show_header=True, title="Broker Field Mapping")
@@ -320,13 +340,11 @@ def run_cli():
         for section, fields in SCHEMA.get("field_mapping", {}).items():
             table.add_row(section, ", ".join(fields))
         console.print(Panel(table, title="[bold green]📘 Broker Schema[/bold green]"))
-
     elif args.validate:
         console.rule("[bold yellow]🔍 Schema Validation")
         df = pl.DataFrame({"timestamp": [1], "open": [10], "close": [20]})
         _detect_drift(df.columns)
         console.print(Panel("✅ Validation completed.", style="green bold"))
-
     elif args.intervals:
         console.rule("[bold blue]⏱ Supported Intervals")
         intr = get_supported_intervals(intraday=True)
@@ -344,7 +362,13 @@ def run_cli():
         console.print(
             Panel(table, title="[bold green]🕒 Broker Capability[/bold green]")
         )
-
+    elif args.drift_sim > 0:
+        console.rule("[bold yellow]🧪 Simulating drift entries")
+        for i in range(args.drift_sim):
+            _log_drift([f"sim_col_{i}", "open", "close"])
+        console.print(
+            Panel(f"Inserted {args.drift_sim} drift entries.", style="yellow")
+        )
     else:
         parser.print_help()
 
