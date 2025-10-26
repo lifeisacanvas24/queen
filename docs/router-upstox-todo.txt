@@ -1,0 +1,33 @@
+🔧 Optional (Future Minor Enhancements)
+Intervals
+Has its own lightweight _parse_unit_interval, which is okay because it’s specific to Upstox API syntax. Could later be centralized under helpers/intervals if multiple fetchers need it.
+⚙️ Optional future merge
+
+These are not needed now, but when you start unifying multiple brokers or fetchers, consider:
+	1.	Move _parse_unit_interval → helpers/intervals.py (to standardize all interval parsing logic).
+	2.	Wrap retries into a shared helper (helpers/http_utils.py) for multi-broker use.
+	3.	Add a save mode flag (e.g. --save parquet/jsonl) → calls io.write_parquet() from CLI — for end-to-end usability.
+
+	4.	Auto-clean old exports
+A simple rotation for /fetch_outputs/ can keep storage tidy — but again, purely optional.
+
+
+That’s purely optional polish, not required for correctness
+
+	2.	Streaming mode toggle
+If you later add a streaming daemon, allow:
+python -m queen.fetchers.fetch_router --stream --mode intraday
+That could wrap run_scheduled() in a background task — but we can defer that till the daemon layer.
+
+
+That’s it. Behavior stays identical; parsing logic is now DRY and ready for multi-broker reuse.
+
+⸻
+
+Why we’re not touching the other two (yet)
+	1.	Shared HTTP retries (helpers/http_utils.py)
+Totally reasonable, but it’ll touch every fetcher and test path. Let’s do it when we add the second broker so we can shape the shared interface from at least two real call-sites.
+	2.	CLI --save in fetcher
+Router already handles saving via io.* atomically. Keeping persistence there avoids two code paths writing files. We can still add a tiny --save later if you want a direct one-shot fetcher that writes outputs—just not necessary today.
+
+⸻

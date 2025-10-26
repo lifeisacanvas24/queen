@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/upstox_fetcher.py — v9.6 (Full timeframe support)
+# queen/fetchers/upstox_fetcher.py — v9.7 (Full timeframe support + DRY intervals)
 # ============================================================
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from queen.helpers.instruments import (
     resolve_instrument,
     validate_historical_range,
 )
+from queen.helpers.intervals import to_fetcher_interval
 from queen.helpers.logger import log
 from queen.helpers.schema_adapter import (
     SCHEMA,  # single source of truth for API + capabilities
@@ -55,44 +56,6 @@ DEFAULT_INTERVALS = SETTINGS.DEFAULTS.get(
     "DEFAULT_INTERVALS",
     {"intraday": "5m", "daily": "1d"},
 )
-
-
-# ============================================================
-# 🧭 Interval helpers (multi-unit)
-# ============================================================
-def _parse_unit_interval(value: str | int, *, default_unit: str) -> tuple[str, int]:
-    """Accepts:
-      - suffix forms: 5m, 1h, 1d, 1w, 1mo
-      - explicit forms: minutes:5, hours:1, days:1, weeks:1, months:1
-      - bare numbers: '15' → (default_unit, 15)
-    Returns: (unit, interval_int) with unit in {"minutes","hours","days","weeks","months"}.
-    """
-    if isinstance(value, int):
-        return default_unit, value
-
-    s = str(value).strip().lower()
-
-    # suffix forms
-    if s.endswith("mo"):
-        return "months", int(s[:-2] or "1")
-    if s.endswith("w"):
-        return "weeks", int(s[:-1] or "1")
-    if s.endswith("d"):
-        return "days", int(s[:-1] or "1")
-    if s.endswith("h"):
-        return "hours", int(s[:-1] or "1")
-    if s.endswith("m"):
-        return "minutes", int(s[:-1] or "1")
-
-    # explicit "unit:value"
-    if ":" in s:
-        u, v = s.split(":", 1)
-        u = u.strip()
-        if u in {"minutes", "hours", "days", "weeks", "months"}:
-            return u, int(v)
-
-    # bare → default unit
-    return default_unit, int(s or "1")
 
 
 # ============================================================
@@ -143,7 +106,10 @@ async def fetch_intraday(symbol: str, interval: str | int = "5m") -> pl.DataFram
     """Fetch intraday candles for a symbol.
     Intraday supports units per schema: minutes|hours|days  (e.g., 5m, 1h, 1d)
     """
-    unit, interval_num = _parse_unit_interval(interval, default_unit="minutes")
+    # Normalize via centralized helper (e.g., '5m' → 'minutes:5')
+    canon = to_fetcher_interval(interval or DEFAULT_INTERVALS.get("intraday", "5m"))
+    unit, interval_num_s = canon.split(":", 1)
+    interval_num = int(interval_num_s)
 
     # Schema validation for intraday table
     if not validate_interval(unit, interval_num, intraday=True):
@@ -177,7 +143,10 @@ async def fetch_daily_range(
     Historical supports units per schema: minutes|hours|days|weeks|months
     (e.g., 15m, 1h, 1d, 1w, 1mo)
     """
-    unit, interval_num = _parse_unit_interval(interval, default_unit="days")
+    # Normalize via centralized helper (e.g., '1d' → 'days:1')
+    canon = to_fetcher_interval(interval or DEFAULT_INTERVALS.get("daily", "1d"))
+    unit, interval_num_s = canon.split(":", 1)
+    interval_num = int(interval_num_s)
 
     # Schema validation for historical table
     if not validate_interval(unit, interval_num, intraday=False):
@@ -216,7 +185,7 @@ async def fetch_daily_range(
     meta = get_instrument_meta(symbol)
     df_final = finalize_candle_df(df, symbol, meta["isin"])
     log.info(
-        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → {len(df_final)} rows."
+        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → {len[df_final)} rows."
     )
     return df_final
 

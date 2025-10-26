@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/fetch_router.py — v9.4 (Unified Async Orchestrator)
+# queen/fetchers/fetch_router.py — v9.5 (Unified Async Orchestrator)
 # ============================================================
 """Queen Fetch Router — Unified Async Dispatcher
 -------------------------------------------------
@@ -27,9 +27,10 @@ from typing import Dict, List, Optional, Sequence
 
 import polars as pl
 from queen.fetchers.upstox_fetcher import fetch_unified
+from queen.helpers import io
 from queen.helpers.fetch_utils import warn_if_same_day_eod
 from queen.helpers.instruments import load_instruments_df
-from queen.helpers.intervals import parse_minutes
+from queen.helpers.intervals import parse_minutes, to_fetcher_interval
 from queen.helpers.logger import log
 from queen.helpers.market import (
     current_historical_service_day,
@@ -88,19 +89,23 @@ async def _save_results(results: Dict[str, pl.DataFrame], out_path: Path) -> Non
     if not dfs:
         log.warning("[Router] No valid dataframes to save.")
         return
+
     combined = pl.concat(dfs, how="vertical_relaxed")
+
     match EXPORT_FORMAT:
         case "parquet":
-            combined.write_parquet(out_path)
+            io.write_parquet(out_path, combined)
         case "csv":
-            combined.write_csv(out_path)
+            io.write_csv(out_path, combined)
         case "json":
-            combined.write_json(out_path)
+            io.write_json(out_path, combined)
         case _:
-            combined.write_parquet(out_path.with_suffix(".parquet"))
+            # fallback stays atomic as well
+            io.write_parquet(out_path.with_suffix(".parquet"), combined)
             log.warning(
                 f"[Router] Unknown export format '{EXPORT_FORMAT}', wrote parquet instead."
             )
+
     log.info(f"[Router] 💾 Saved results → {out_path}")
 
 
@@ -140,8 +145,17 @@ async def _fetch_batch(
     tasks = (
         _fetch_symbol(sym, mode, from_date, to_date, interval, sem) for sym in symbols
     )
-    results = await asyncio.gather(*tasks, return_exceptions=False)
-    return dict(zip(symbols, results))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    out: Dict[str, pl.DataFrame] = {}
+    for sym, res in zip(symbols, results):
+        if isinstance(res, Exception):
+            # This catches catastrophic crashes *outside* _fetch_symbol’s try/except
+            log.error(f"[Fetch] ❌ {sym} task crashed → {res}")
+            out[sym] = pl.DataFrame()
+        else:
+            out[sym] = res
+    return out
 
 
 # ============================================================
@@ -184,9 +198,7 @@ async def run_router(
         # Let the fetcher decide the default interval for daily/historical
         effective_interval: str | int | None = interval
         if mode.lower() == "daily":
-            effective_interval = (
-                None  # fetcher will use DEFAULTS['DEFAULT_INTERVALS']['daily']
-            )
+            effective_interval = None  # fetcher will use DEFAULT_INTERVALS['daily']
 
         if mode.lower() == "daily":
             target = current_historical_service_day()
@@ -243,14 +255,14 @@ async def run_scheduled(
         if state["is_open"]:
             today = datetime.now().strftime("%Y-%m-%d")
             log.info(f"[Router] Market LIVE — triggering fetch @ {state['timestamp']}")
+            # Canonicalize the intraday interval once here for consistency
+            intraday_interval = to_fetcher_interval(f"{interval_minutes}m")
             await run_router(
                 symbols,
                 mode=mode,
                 from_date=today,
                 to_date=today,
-                interval=(
-                    f"{interval_minutes}m" if mode.lower() == "intraday" else None
-                ),
+                interval=(intraday_interval if mode.lower() == "intraday" else None),
             )
         else:
             log.info(
