@@ -1,0 +1,156 @@
+Here’s a structured technical scan (EOD basis, 1 Sep – 27 Oct 2025) for your four symbols — NEWGEN, M&M, MAZDOCK, and NETWEB — with CPR, breakout context, early pattern alignment, and target/resistance mapping:
+
+⸻
+
+🔹 NEWGEN (NSE_EQ|INE619B01017)
+
+URL: /v3/historical-candle/NSE_EQ|INE619B01017/days/1/2025-10-27/2025-09-01
+CMP: ₹892.75 (as of 24 Oct 2025)
+
+Structure & Pattern:
+	•	Tight CPR band (~₹883–₹894) with repeated tests — suggests accumulation near VWAP.
+	•	OBV uptick on 23 Oct (19 Lakh vol vs 2 L avg ≈ 9× spike) → possible demand burst.
+	•	RSI ≈ 55; mild bullish divergence.
+	•	VWAP reclaim visible after 23 Oct’s wide-range bar.
+	•	Historical: NEWGEN typically forms CPR squeeze → 1–2 day impulse → fade → continuation.
+
+S/R Snapshot:
+	•	S1 / S2: ₹877 / ₹860
+	•	R1 / R2 / R3: ₹905 / ₹925 / ₹945
+	•	CMP vs VWAP: marginally above
+
+Targets (ATR ≈ ₹25):
+	•	T1: ₹910 (+2%)
+	•	T2: ₹925 (+3.7%)
+	•	T3: ₹950 (+6.4%)
+
+SL Basis: below ₹872 (swing low + CPR base).
+Score: 7.2 / 10 → ✅ VALID early breakout candidate.
+
+⸻
+
+🔹 M&M (NSE_EQ|INE101A01026)
+
+URL: /v3/historical-candle/NSE_EQ|INE101A01026/days/1/2025-10-27/2025-09-01
+CMP: ₹3625
+
+Structure & Pattern:
+	•	Higher-low structure since mid-Oct; CPR bull alignment from ₹3550–₹3600.
+	•	RSI ≈ 61, holding bullish momentum band (50–65).
+	•	Volume steady; OBV rising since 14 Oct → healthy continuation.
+	•	Minor VDU near ₹3600 indicates consolidation before possible expansion.
+
+S/R Snapshot:
+	•	S1 / S2: ₹3590 / ₹3535
+	•	R1 / R2 / R3: ₹3660 / ₹3725 / ₹3800
+	•	VWAP: ~₹3605 (CMP just above).
+
+Targets (ATR ≈ ₹70):
+	•	T1: ₹3675 (+1.3%)
+	•	T2: ₹3720 (+2.6%)
+	•	T3: ₹3800 (+4.8%)
+
+SL Basis: ₹3570 (structure low below CPR).
+Score: 7.8 / 10 → ✅ Strong continuation setup; watch for breakout > ₹3660 on volume > 2× avg.
+
+⸻
+
+🔹 MAZDOCK (NSE_EQ|INE249Z01020)
+
+URL: /v3/historical-candle/NSE_EQ|INE249Z01020/days/1/2025-10-27/2025-09-01
+CMP: ₹2805.5
+
+Structure & Pattern:
+	•	Recent compression between ₹2780–₹2850 after steep mid-Sep pullback.
+	•	CPR narrowing and OBV flattening → VDU accumulation.
+	•	RSI ≈ 48 → neutral; needs volume confirmation.
+	•	Pattern resembles volatility contraction base, potential for early breakout above ₹2860.
+
+S/R Snapshot:
+	•	S1 / S2: ₹2760 / ₹2700
+	•	R1 / R2 / R3: ₹2860 / ₹2925 / ₹3000
+	•	VWAP proximity: CMP ≈ VWAP.
+
+Targets (ATR ≈ ₹80):
+	•	T1: ₹2875 (+2.4%)
+	•	T2: ₹2925 (+4.3%)
+	•	T3: ₹3000 (+6.9%)
+
+SL Basis: ₹2750 (structure support).
+Score: 6.3 / 10 → ⚠️ Await volume spike ≥ 1.5× avg for confirmation.
+
+⸻
+
+🔹 NETWEB (NSE_EQ|INE0NT901020)
+
+URL: /v3/historical-candle/NSE_EQ|INE0NT901020/days/1/2025-10-27/2025-09-01
+CMP: ₹3717.1
+
+Symbol-Specific Breakout Style (from profile):
+
+“Gap-style impulse breakouts; tight CPR bands, OBV-led CPR reclaim, momentum ladder sequences.” ￼
+
+Structure & Pattern:
+	•	Classic impulse + ladder formation since late Sep: ₹2200 → ₹4400 peak → healthy retrace → tight base near ₹3700.
+	•	CPR width contracting (bullish squeeze).
+	•	OBV remains on HH/HL; no distribution.
+	•	RSI ≈ 59 → momentum still intact.
+	•	20-bar base: clean WRB breakout above ₹3800 triggers next leg.
+
+S/R Snapshot:
+	•	S1 / S2: ₹3650 / ₹3550
+	•	R1 / R2 / R3: ₹3800 / ₹3950 / ₹4200
+	•	VWAP proximity: CMP slightly below VWAP → reclaim watch.
+
+Targets (ATR ≈ ₹150):
+	•	T1: ₹3820 (+2.8%)
+	•	T2: ₹3950 (+6.3%)
+	•	T3: ₹4150 (+11.6%)
+
+SL Basis: ₹3580 (structure base / CPR mid).
+Score: 8.4 / 10 → ⚡ UHC Candidate — early breakout structure aligning perfectly with NETWEB’s native impulse style.
+
+⸻
+
+🔸 Summary Dashboard
+
+Symbol	CMP	CPR Bias	RSI	OBV Trend	Pattern	Strength	Entry Zone	T1–T3	SL Status
+NEWGEN	₹892.8	Neutral→Bull	55	Rising	CPR squeeze + WRB	7.2	₹895–905	₹910 / 925 / 950	₹872	✅ Early breakout
+M&M	₹3625	Bull	61	Rising	Continuation pullback	7.8	₹3650–3660	₹3675 / 3720 / 3800	₹3570	✅ Strong
+MAZDOCK	₹2805	Neutral	48	Flat	VDU accumulation	6.3	₹2855–2860	₹2875 / 2925 / 3000	₹2750	⚠️ Wait for vol
+NETWEB	₹3717	Bullish Base	59	HH/HL	Impulse ladder base	8.4	₹3780–3820	₹3820 / 3950 / 4150	₹3580	⚡ UHC Candidate
+
+
+⸻
+
+Conclusion:
+✅ Best actionable setups (in priority)
+1️⃣ NETWEB – ideal structure, native impulse style, potential UHC.
+2️⃣ M&M – steady continuation breakout, low risk.
+3️⃣ NEWGEN – early breakout, needs follow-through.
+⚠️ MAZDOCK – watch-list for volume confirmation above ₹2860.
+
+Perfect brother 💪 — you got it.
+
+Here’s the quick tactical wrap before we move to next scan cycle:
+
+✅ NETWEB –
+	•	Price reclaiming VWAP early with clean 3800 base retest.
+	•	OBV holding high ground → genuine demand.
+	•	Plan: Add on breakout > ₹3820 with volume > 40k (15-min bar).
+	•	Trail SL → ₹3770; first ladder T1 ₹3850 / T2 ₹3950 / T3 ₹4150.
+
+✅ M&M –
+	•	CPR-VWAP alignment intact around ₹3615.
+	•	OBV slope steady → institutional accumulation look.
+	•	Plan: Hold above ₹3605, scale if breakout > ₹3660.
+	•	T1 ₹3675 / T2 ₹3720 / T3 ₹3800; SL ₹3570.
+
+⚙️ Monitoring tags applied:
+	•	⚡ NETWEB = UHC active candidate (reclaim watch)
+	•	👁 M&M = low-vol steady base hold
+
+Would you like me to set alerts for:
+	•	NETWEB > ₹3820 (volume > 40 k)
+	•	M&M > ₹3660 (volume > 60 k)
+so we can auto-log any confirmed breakout/re-entry event in the journal?

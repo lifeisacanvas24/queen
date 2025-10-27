@@ -151,21 +151,36 @@ def _safe_select(df: pl.DataFrame, cols: list[str]) -> pl.DataFrame:
 # ============================================================
 # 🕒 Timestamp Parsing
 # ============================================================
-def _safe_parse(df: pl.DataFrame, column="timestamp") -> pl.DataFrame:
+
+
+def _safe_parse(df: pl.DataFrame, column: str = "timestamp") -> pl.DataFrame:
+    """Normalize the timestamp column to tz-aware Datetime in MARKET_TZ_NAME.
+
+    Accepted inputs:
+      • tz-aware strings (ISO8601, 'Z' or '+hh:mm', with/without fractional secs)
+      • naive strings (assumed to be MARKET_TZ_NAME)
+      • epoch seconds / milliseconds (int/float)
+      • Datetime with/without tz (attach tz if missing)
+    """
     try:
         if df.is_empty() or column not in df.columns:
             return df
 
+        # 1) Already Datetime
         if df[column].dtype == pl.Datetime:
             try:
-                if df[column].dtype.tz is None:  # type: ignore[attr-defined]
+                # attach tz if missing, else keep tz and convert to market tz
+                if getattr(df[column].dtype, "tz", None) is None:
                     return df.with_columns(
                         pl.col(column).dt.replace_time_zone(MARKET_TZ_NAME)
                     ).sort(column)
+                return df.with_columns(
+                    pl.col(column).dt.convert_time_zone(MARKET_TZ_NAME)
+                ).sort(column)
             except Exception:
-                pass
-            return df
+                return df  # leave as-is on failure
 
+        # 2) Numeric epochs (s/ms)
         if df[column].dtype in (
             pl.Int64,
             pl.Int32,
@@ -176,20 +191,42 @@ def _safe_parse(df: pl.DataFrame, column="timestamp") -> pl.DataFrame:
         ):
             s = pl.col(column).cast(pl.Int64, strict=False)
             parsed = (
-                pl.when(s > 1_000_000_000_000)
-                .then(pl.from_epoch(s, time_unit="ms", tz=MARKET_TZ_NAME))
-                .otherwise(pl.from_epoch(s, time_unit="s", tz=MARKET_TZ_NAME))
+                pl.when(s > 1_000_000_000_000)  # ms threshold
+                .then(pl.from_epoch(s, time_unit="ms", tz="UTC"))
+                .otherwise(pl.from_epoch(s, time_unit="s", tz="UTC"))
+                .dt.convert_time_zone(MARKET_TZ_NAME)
                 .alias(column)
             )
             return df.with_columns(parsed).sort(column)
 
+        # 3) Strings → parse explicitly
+        ts = pl.col(column)
+
+        # First, normalize trailing 'Z' to an explicit offset so a single %z format can parse it.
+        # Then try without fractional seconds; strict=False also accepts fractions.
+        parsed_tz = ts.str.replace(r"Z$", "+00:00").str.strptime(
+            pl.Datetime(time_zone="UTC"),
+            format="%Y-%m-%dT%H:%M:%S%z",
+            strict=False,
+        )
+
+        # If that produced nulls (i.e., no offset present), treat as naive in MARKET_TZ_NAME.
         parsed = (
-            pl.col(column)
-            .str.strptime(pl.Datetime, strict=False)
-            .dt.replace_time_zone(MARKET_TZ_NAME)
+            pl.when(parsed_tz.is_not_null())
+            .then(parsed_tz.dt.convert_time_zone(MARKET_TZ_NAME))
+            .otherwise(
+                # Accept both ' ' and 'T' as separator, and optional fractional seconds
+                ts.str.strptime(
+                    pl.Datetime(time_zone=MARKET_TZ_NAME),
+                    format="%Y-%m-%d%t%H:%M:%S%.f",
+                    strict=False,
+                )
+            )
             .alias(column)
         )
+
         return df.with_columns(parsed).sort(column)
+
     except Exception as e:
         log.warning(f"[SchemaAdapter] Timestamp parse failed → {e}")
         return df

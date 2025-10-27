@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/daemons/alert_v2.py — v0.12.2 (DRY helpers)
-# Closed-market aware · intraday probe · backfill · daily fallback
+# queen/daemons/alert_v2.py — v0.12.1
+# Closed-market aware · backfill · daily fallback
 # Debug tails · colored crosses · settings-driven heuristics
+# Startup summary of effective knobs
 # ============================================================
 from __future__ import annotations
 
@@ -20,20 +21,17 @@ from queen.alerts.evaluator import eval_rule
 from queen.alerts.rules import Rule, load_rules
 from queen.fetchers.upstox_fetcher import fetch_unified
 from queen.helpers import io
-
-# DRY helpers
 from queen.helpers.common import (
     colorize,
-    indicator_kwargs,
+    indicator_call_kwargs,
     logger_supports_color,
-    timeframe_key,
     utc_now_iso,
 )
 from queen.helpers.instruments import get_listing_date, validate_historical_range
 from queen.helpers.logger import log
 from queen.helpers.market import MARKET_TZ, get_market_state, is_working_day
 from queen.settings.indicator_policy import min_bars_for_indicator
-from queen.settings.patterns import required_lookback  # canonical source
+from queen.settings.patterns import required_lookback  # ✅ settings owner
 from queen.settings.settings import DEFAULTS, alert_path_jsonl, alert_path_rules
 from queen.technicals.patterns.core import EXPORTS as PATTERNS
 from queen.technicals.registry import get_indicator
@@ -57,6 +55,15 @@ _PRICE_MIN_BARS = int(_ALERTS.get("PRICE_MIN_BARS", 5))
 # ------------------------------------------------------------
 _LAST_FIRE: dict[tuple[str, str], float] = {}
 
+# ============================================================
+# 🧠 Helpers
+# ============================================================
+
+
+# ------------------------------------------------------------
+# 🎨 Console colors
+# ------------------------------------------------------------
+
 
 # ------------------------------------------------------------
 # 📅 Helpers
@@ -74,11 +81,26 @@ def _backfill_days(start: date, max_days: int) -> Iterable[date]:
 # ------------------------------------------------------------
 # 📏 Policy (settings-first)
 # ------------------------------------------------------------
+def _timeframe_key(tf: str) -> str:
+    tf = (tf or "").lower()
+    if tf.endswith("m"):
+        return f"intraday_{tf}"
+    if tf.endswith("h"):
+        return f"hourly_{tf}"
+    if tf == "1d":
+        return "daily"
+    if tf == "1w":
+        return "weekly"
+    if tf == "1mo":
+        return "monthly"
+    return f"intraday_{tf}"
+
+
 def _min_bars_for(rule: Rule) -> int:
     """Priority:
-    1) YAML override (rule.params.min_bars)
-    2) Settings policy for indicators (indicator_policy.min_bars_for_indicator)
-    3) Heuristics for pattern/price
+    1) YAML override: rule.params.min_bars
+    2) Settings policy for indicators: indicator_policy.min_bars_for_indicator()
+    3) Heuristics from DEFAULTS['ALERTS'] for pattern/price
     """
     # 1) explicit override
     if rule.params and "min_bars" in rule.params:
@@ -89,7 +111,7 @@ def _min_bars_for(rule: Rule) -> int:
 
     k = (rule.kind or "").lower()
 
-    # 2) indicator policy
+    # 2) indicator: settings-driven policy first
     if k == "indicator":
         try:
             return max(
@@ -99,7 +121,6 @@ def _min_bars_for(rule: Rule) -> int:
                 ),
             )
         except Exception:
-            # safe fallback heuristic
             length = 14
             if rule.params and "length" in rule.params:
                 try:
@@ -108,24 +129,24 @@ def _min_bars_for(rule: Rule) -> int:
                     pass
             return max(_INDICATOR_MIN_FLOOR, length * _INDICATOR_MIN_MULT)
 
-    # 3a) pattern — settings-driven lookback + cushion
+    # 3a) pattern: computed lookback + cushion
     if k == "pattern":
         try:
             lb = int(
                 required_lookback(
-                    rule.pattern or "", timeframe_key(rule.timeframe or "1m")
+                    rule.pattern or "", _timeframe_key(rule.timeframe or "1m")
                 )
             )
         except Exception:
             lb = 40
         return max(1, lb + _PATTERN_CUSHION)
 
-    # 3b) price — small fixed window
+    # 3b) price
     return max(1, _PRICE_MIN_BARS)
 
 
 def _days_for_interval(interval: str, need_bars: int) -> int:
-    iv = (interval or "").lower()
+    iv = interval.lower()
     if iv == "1d":
         return max(need_bars + 20, 120)
     if iv == "1w":
@@ -156,7 +177,10 @@ def _clamp_to_listing(
 # 📥 Fetchers
 # ------------------------------------------------------------
 async def _fetch_intraday(
-    symbol: str, interval: str, from_date: str | None = None, to_date: str | None = None
+    symbol: str,
+    interval: str,
+    from_date: str | None = None,
+    to_date: str | None = None,
 ) -> pl.DataFrame:
     return await fetch_unified(
         symbol, mode="intraday", interval=interval, from_date=from_date, to_date=to_date
@@ -186,7 +210,11 @@ async def _fetch_daily_window(
 
 
 async def _fetch_df_intraday_with_backfill(
-    symbol: str, interval: str, min_bars: int, backfill_days: int, debug: bool
+    symbol: str,
+    interval: str,
+    min_bars: int,
+    backfill_days: int,
+    debug: bool,
 ) -> pl.DataFrame:
     today_local = datetime.now(MARKET_TZ).date()
     if validate_historical_range(symbol, today_local):
@@ -229,34 +257,35 @@ async def run_daemon(
     debug: bool = False,
     cooldown: int = DEFAULT_COOLDOWN,
     force_closed: bool = False,
-    no_market_gate: bool = False,
-    probe_intraday: bool = True,
     backfill_days: int = 0,
     no_intraday_backfill: bool = False,
     daily_fallback: bool = False,
     daily_bars: int = _DEFAULT_DAILY_FALLBACK_BARS,
     closed_eval_daily: bool = False,
     debug_values: int = 0,
-    color_mode: str = "auto",
+    color_mode: str = "auto",  # "auto" | "always" | "never"
     http_post: Optional[str] = None,
     http_timeout: float = 3.0,
     post_only: bool = False,
 ):
     # color gate
-    color_ok = (color_mode == "always") or (
-        color_mode == "auto" and logger_supports_color(logging.getLogger())
-    )
+    if color_mode == "always":
+        color_ok = True
+    elif color_mode == "never":
+        color_ok = False
+    else:
+        color_ok = logger_supports_color(logging.getLogger())
 
     # rules + sinks
     rules = load_rules(rules_path)
     src = Path(rules_path) if rules_path else alert_path_rules()
     out = Path(out_path) if out_path else alert_path_jsonl()
-    client: httpx.AsyncClient | None = (
-        httpx.AsyncClient(timeout=http_timeout) if http_post else None
-    )
+    client: httpx.AsyncClient | None = None
+    if http_post:
+        client = httpx.AsyncClient(timeout=http_timeout)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # startup summary
+    # ---- startup summary ----
     log.info(
         colorize(
             "[AlertV2] Knobs → "
@@ -266,27 +295,11 @@ async def run_daemon(
             f"per_indicator_overrides={len(_INDICATOR_MIN_BARS_MAP)}, "
             f"color_mode={color_mode} (enabled={color_ok})",
             "cyan",
-            _CONSOLE_COLORS,
             color_ok,
         )
     )
     log.info(f"[AlertV2] Loaded {len(rules)} rule(s) from {src.resolve()}")
     log.info(f"[AlertV2] Writing alerts → {out.resolve()}")
-
-    async def _intraday_probe(sym: str, interval: str) -> bool:
-        """Lightweight check: if we can fetch intraday rows for *today*, consider it 'open'."""
-        try:
-            today = datetime.now(MARKET_TZ).date()
-            if not validate_historical_range(sym, today):
-                return False
-            dfp = await _fetch_intraday(sym, interval)
-            if dfp.is_empty():
-                return False
-            # check last row date matches today
-            last_date = dfp.select(pl.col("timestamp").dt.date()).tail(1)[0, 0]
-            return last_date == today
-        except Exception:
-            return False
 
     async def evaluate_once():
         state = get_market_state()
@@ -299,46 +312,14 @@ async def run_daemon(
             df: Optional[pl.DataFrame] = None
 
             try:
-                # --- Closed-market handling (with optional probe) ---
-                if tf.endswith(("m", "h")) and not force_closed and not no_market_gate:
-                    if not market_open and probe_intraday:
-                        try:
-                            if debug:
-                                log.info(
-                                    colorize(
-                                        f"[Debug] {sym} {rule.name}: calendar says closed — probing intraday…",
-                                        "cyan",
-                                        _CONSOLE_COLORS,
-                                        color_ok,
-                                    )
-                                )
-                            if await _intraday_probe(sym, tf):
-                                market_open = True
-                                if debug:
-                                    log.info(
-                                        colorize(
-                                            f"[Debug] {sym} {rule.name}: probe found live intraday — proceeding as open",
-                                            "cyan",
-                                            _CONSOLE_COLORS,
-                                            color_ok,
-                                        )
-                                    )
-                        except Exception as e:
-                            log.error(f"Error probing intraday for {sym}: {e}")
-
-                if (
-                    tf.endswith(("m", "h"))
-                    and not market_open
-                    and not force_closed
-                    and not no_market_gate
-                ):
+                # --- Closed-market handling ---
+                if tf.endswith(("m", "h")) and not market_open and not force_closed:
                     if closed_eval_daily:
                         if debug:
                             log.info(
                                 colorize(
                                     f"[Debug] {sym} {rule.name}: market closed — evaluating daily instead of {tf}",
                                     "cyan",
-                                    _CONSOLE_COLORS,
                                     color_ok,
                                 )
                             )
@@ -349,13 +330,12 @@ async def run_daemon(
                                 colorize(
                                     f"[Debug] {sym} {rule.name}: market closed; skipping {tf}",
                                     "yellow",
-                                    _CONSOLE_COLORS,
                                     color_ok,
                                 )
                             )
                         continue
 
-                # --- Fetch ---
+                # --- Fetch data ---
                 if df is None:
                     if tf.endswith(("m", "h")):
                         if no_intraday_backfill:
@@ -373,27 +353,25 @@ async def run_daemon(
                     else:
                         df = await _fetch_daily_window(sym, "1d", need)
 
-                # --- Fallback ---
+                # --- Optional fallback ---
                 if df.is_empty() and daily_fallback and tf.endswith(("m", "h")):
                     if debug:
                         log.info(
                             colorize(
                                 f"[Debug] {sym} intraday empty after backfill — falling back to daily",
                                 "yellow",
-                                _CONSOLE_COLORS,
                                 color_ok,
                             )
                         )
                     df = await _fetch_daily_window(sym, "1d", max(need, daily_bars))
 
-                # --- Guards ---
+                # guards
                 if df.is_empty():
                     if debug:
                         log.info(
                             colorize(
                                 f"[Debug] {sym} {rule.name}: empty df for {tf}",
                                 "yellow",
-                                _CONSOLE_COLORS,
                                 color_ok,
                             )
                         )
@@ -402,7 +380,7 @@ async def run_daemon(
                 if df.height > need:
                     df = df.tail(need)
 
-                # --- Debug tails ---
+                # --- debug-values tail ---
                 if debug and debug_values > 0:
                     try:
                         k = (rule.kind or "").lower()
@@ -412,13 +390,14 @@ async def run_daemon(
                                 colorize(
                                     f"[Debug] {sym} {rule.name}: close tail({debug_values}) → {tail}",
                                     "cyan",
-                                    _CONSOLE_COLORS,
                                     color_ok,
                                 )
                             )
                         elif k == "indicator":
                             fn = get_indicator((rule.indicator or "").lower())
-                            outv = fn(df, **indicator_kwargs(rule.params))
+                            outv = fn(
+                                df, **indicator_call_kwargs(rule.params)
+                            )  # ✅ filtered kwargs
                             if isinstance(outv, pl.DataFrame):
                                 for c in outv.columns:
                                     if pl.datatypes.is_numeric(outv[c].dtype):
@@ -432,7 +411,6 @@ async def run_daemon(
                                             colorize(
                                                 f"[Debug] {sym} {rule.name}: {c} tail({debug_values}) → {vals}",
                                                 "cyan",
-                                                _CONSOLE_COLORS,
                                                 color_ok,
                                             )
                                         )
@@ -447,7 +425,6 @@ async def run_daemon(
                                     colorize(
                                         f"[Debug] {sym} {rule.name}: {nm} tail({debug_values}) → {vals}",
                                         "cyan",
-                                        _CONSOLE_COLORS,
                                         color_ok,
                                     )
                                 )
@@ -462,7 +439,6 @@ async def run_daemon(
                                     colorize(
                                         f"[Debug] {sym} {rule.name}: {rule.pattern} tail({debug_values}) → {vals}",
                                         "cyan",
-                                        _CONSOLE_COLORS,
                                         color_ok,
                                     )
                                 )
@@ -471,12 +447,11 @@ async def run_daemon(
                             colorize(
                                 f"[Debug] {sym} {rule.name}: debug-values failed → {e}",
                                 "yellow",
-                                _CONSOLE_COLORS,
                                 color_ok,
                             )
                         )
 
-                # --- Evaluate ---
+                # --- Evaluate rule ---
                 ok, meta = eval_rule(rule, df)
                 rname = rule.name or rule.pattern or rule.indicator or "unnamed"
 
@@ -490,7 +465,6 @@ async def run_daemon(
                                 colorize(
                                     f"[Debug] cooldown skip: {sym} | {rname} ({now-last:.1f}s)",
                                     "yellow",
-                                    _CONSOLE_COLORS,
                                     color_ok,
                                 )
                             )
@@ -514,24 +488,18 @@ async def run_daemon(
                     if not post_only:
                         io.append_jsonl(out, evt)
                     _LAST_FIRE[key] = now
-
-                    # HTTP sink
+                    # optional HTTP sink
                     if client and http_post:
                         try:
                             await client.post(http_post, json=evt)
                         except Exception as e:
                             log.info(f"[AlertV2] HTTP sink error → {e}")
 
-                    # Success line
+                    # Colorized success line for crosses
                     if (rule.op or "").startswith("crosses"):
-                        success_color = "green" if rule.op == "crosses_above" else "red"
+                        color = "green" if rule.op == "crosses_above" else "red"
                         log.info(
-                            colorize(
-                                f"[AlertV2] 🔔 {sym} | {rname}",
-                                success_color,
-                                _CONSOLE_COLORS,
-                                color_ok,
-                            )
+                            colorize(f"[AlertV2] 🔔 {sym} | {rname}", color, color_ok)
                         )
                     else:
                         log.info(f"[AlertV2] 🔔 {sym} | {rname}")
@@ -540,7 +508,7 @@ async def run_daemon(
                         last2 = (meta or {}).get("last2")
                         level = (meta or {}).get("level")
                         msg = f"[Debug] {sym} {rname}: {rule.op} level={level} — last2={last2} (no trigger)"
-                        log.info(colorize(msg, "yellow", _CONSOLE_COLORS, color_ok))
+                        log.info(colorize(msg, "yellow", color_ok))
             except Exception as e:
                 log.error(
                     f"[AlertV2] eval failed for {rule.name or rule} on {sym} → {e}"
@@ -575,16 +543,6 @@ def run_cli():
     p.add_argument("--debug", action="store_true")
     p.add_argument("--cooldown", type=int, default=DEFAULT_COOLDOWN)
     p.add_argument("--force-closed", action="store_true")
-    p.add_argument(
-        "--no-market-gate",
-        action="store_true",
-        help="Ignore market-open gate; always evaluate intraday rules.",
-    )
-    p.add_argument(
-        "--no-probe-intraday",
-        action="store_true",
-        help="Disable smart intraday probe when calendar says closed.",
-    )
     p.add_argument("--backfill-days", type=int, default=0)
     p.add_argument("--no-intraday-backfill", action="store_true")
     p.add_argument("--daily-fallback", action="store_true")
@@ -627,8 +585,6 @@ def run_cli():
             debug=args.debug,
             cooldown=args.cooldown,
             force_closed=args.force_closed,
-            no_market_gate=args.no_market_gate,
-            probe_intraday=not args.no_probe_intraday,
             backfill_days=args.backfill_days,
             no_intraday_backfill=args.no_intraday_backfill,
             daily_fallback=args.daily_fallback,

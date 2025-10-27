@@ -1,18 +1,42 @@
-# Oversold tag + recovery
-- name: NSDL RSI < 30
-  symbol: NSDL
-  kind: indicator
-  indicator: rsi
-  timeframe: 1d
-  op: lt
-  value: 30
-  params: { length: 14 }
+# ============================================================
+# Demo rules: 5m price + 5m RSI + 1d bullish_engulfing
+# ============================================================
 
-- name: NSDL RSI crosses 30 up
-  symbol: NSDL
-  kind: indicator
-  indicator: rsi
-  timeframe: 1d
-  op: crosses_above
-  value: 30
-  params: { length: 14 }
+rules:
+  # 1) PRICE — intraday 5m (guaranteed)
+  - name: "BSE — price > 1 (5m)"
+    symbol: "BSE"
+    kind: "price"
+    timeframe: "5m"
+    op: "gt"
+    value: 1
+
+  # 2) INDICATOR — RSI intraday 5m (guaranteed)
+  - name: "BSE — RSI < 100 (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    indicator: "rsi"
+    timeframe: "5m"
+    op: "lt"
+    value: 100
+    params:
+      length: 14
+
+  # Optional: if you specifically want a *cross* demo (may or may not fire soon),
+  # uncomment this and comment the LT rule above:
+  # - name: "BSE — RSI crosses 50 down (5m)"
+  #   symbol: "BSE"
+  #   kind: "indicator"
+  #   indicator: "rsi"
+  #   timeframe: "5m"
+  #   op: "crosses_below"
+  #   value: 50
+  #   params:
+  #     length: 14
+
+  # 3) PATTERN — daily bullish engulfing (fires only if present today)
+  - name: "GODFRYPHLP — Bullish Engulfing (1d)"
+    symbol: "GODFRYPHLP"
+    kind: "pattern"
+    pattern: "bullish_engulfing" # canonical
+    timeframe: "1d"

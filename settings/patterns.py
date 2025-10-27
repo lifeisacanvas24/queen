@@ -39,7 +39,7 @@ JAPANESE: Dict[str, Dict[str, Any]] = {
         },
         "_note": "Doji: Indecision marker; confirmation needed from next candle body expansion.",
     },
-    "engulfing_bullish": {
+    "bullish_engulfing": {
         "candles_required": 2,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 30},
@@ -49,7 +49,7 @@ JAPANESE: Dict[str, Dict[str, Any]] = {
         },
         "_note": "Bullish Engulfing: Full-body reversal; OBV uptick strengthens reliability.",
     },
-    "engulfing_bearish": {
+    "bearish_engulfing": {
         "candles_required": 2,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 30},
@@ -272,6 +272,21 @@ def validate() -> dict:
     return {"ok": not errs, "count": total, "errors": errs}
 
 
+def required_lookback(name: str, context_key: str) -> int:
+    nm = (name or "").strip().lower()
+    ctx = (context_key or "").strip().lower()
+    for g in ["japanese", "cumulative"]:
+        p = get_pattern(g, nm)
+        if not p:
+            continue
+        c = (p.get("contexts") or {}).get(ctx) or {}
+        lb = c.get("lookback")
+        if isinstance(lb, int) and lb > 0:
+            return lb
+    candles = required_candles(nm, group=None)
+    return max(20, candles * 10)
+
+
 # ------------------------------------------------------------
 # ✅ Self-Test
 # ------------------------------------------------------------
@@ -282,7 +297,7 @@ if __name__ == "__main__":
     pprint(list_patterns("japanese"))
     print("hammer/daily lookback →", required_lookback("hammer", "daily"))
     print(
-        "engulfing_bullish/1h via ctx →",
-        required_lookback("engulfing_bullish", "hourly_1h"),
+        "bullish_engulfing/1h via ctx →",
+        required_lookback("bullish_engulfing", "hourly_1h"),
     )
     print("validate →", validate())

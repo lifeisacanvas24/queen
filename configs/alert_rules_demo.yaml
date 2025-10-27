@@ -1,0 +1,25 @@
+# queen/configs/alert_rules_demo.yaml
+rules:
+  - name: "BSE — price > 1 (5m)"
+    symbol: "BSE"
+    kind: "price"
+    timeframe: "5m"
+    op: "gt"
+    value: 1
+
+  - name: "BSE — RSI crosses 70 down (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    indicator: "rsi"
+    timeframe: "5m"
+    op: "crosses_below"
+    value: 70
+    params:
+      length: 14
+      min_bars: 30 # <— override; avoids early-session empties
+
+  - name: "GODFRYPHLP — Bullish Engulfing (1d)"
+    symbol: "GODFRYPHLP"
+    kind: "pattern"
+    pattern: "bullish_engulfing"
+    timeframe: "1d"

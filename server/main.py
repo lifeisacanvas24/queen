@@ -1,10 +1,14 @@
+# queen/server/main.py
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-from queen.settings import settings as SETTINGS
 from starlette.requests import Request
 
 from .routers import alerts
+
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 
 def create_app() -> FastAPI:
@@ -21,10 +25,8 @@ def create_app() -> FastAPI:
     # Routers
     app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 
-    # Static+templates (Bulma via CDN; templates for quick UI)
-    templates = Jinja2Templates(
-        directory=str(SETTINGS.PATHS["ROOT"].parent / "server" / "templates")
-    )
+    # Templates
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.state.templates = templates
 
     @app.get("/")

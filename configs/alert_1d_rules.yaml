@@ -1,0 +1,29 @@
+# queen/configs/alert_1d_rules.yaml
+# Daily rules so they work regardless of market session.
+
+rules:
+  # 1) Simple daily price threshold (fires instantly since price > 1)
+  - name: "BSE — price > 1 (1d)"
+    symbol: "BSE"
+    kind: "price"
+    timeframe: "1d"
+    op: "gt"
+    value: 1
+
+  # 2) Daily RSI cross below 70 (debug will show last2 vs level)
+  - name: "BSE — RSI crosses 70 down (1d)"
+    symbol: "BSE"
+    kind: "indicator"
+    indicator: "rsi"
+    timeframe: "1d"
+    op: "crosses_below"
+    value: 70
+    params:
+      length: 14
+
+  # 3) Daily pattern (purple card)
+  - name: "GODFRYPHLP — Bullish Engulfing (1d)"
+    symbol: "GODFRYPHLP"
+    kind: "pattern"
+    pattern: "bullish_engulfing"
+    timeframe: "1d"

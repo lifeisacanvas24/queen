@@ -6,35 +6,126 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Bulma -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    .card-pad { padding: 0.75rem 1rem; }
+    .hidden   { display: none !important; }
+    .filter-bar .tag { cursor: pointer; user-select: none; }
+  </style>
 </head>
 <body class="has-background-light">
 <section class="section">
   <div class="container">
     <h1 class="title">📣 Live Alerts</h1>
     <p class="subtitle">Streaming from <code>alerts.jsonl</code></p>
+    <div class="filter-bar mb-4">
+      <span class="tag is-warning mr-2 filter-chip" data-kind="price">Price</span>
+      <span class="tag is-success mr-2 filter-chip" data-kind="indicator">Indicator</span>
+      <span class="tag is-link    mr-2 filter-chip" data-kind="pattern">Pattern</span>
+      <span class="tag is-light ml-3" id="filter-all">All</span>
+      <span class="tag is-light ml-1" id="filter-none">None</span>
+    </div>
     <div id="alerts" class="content"></div>
   </div>
 </section>
 
 <script>
   const box = document.getElementById('alerts');
-  const evt = new EventSource('/alerts/stream');
+
+  // active filter state
+  const FILTER = { price: true, indicator: true, pattern: true };
+
+  function colorFor(kind) {
+    const k = (kind || '').toLowerCase();
+    if (k === 'price')     return 'is-warning';
+    if (k === 'indicator') return 'is-success';
+    if (k === 'pattern')   return 'is-link';
+    return 'is-info';
+  }
+
+  function isVisible(kind) {
+    return FILTER[(kind || '').toLowerCase()] ?? true;
+  }
+
+  function renderAlert(j) {
+    const d = j.detail || {};
+    const kind = (d.kind || '').toLowerCase();
+    const colorClass = colorFor(kind);
+    const ts = j.ts || j.timestamp || '';
+    const header = `${j.symbol} — ${j.rule || (d.indicator || d.pattern || kind)}`;
+
+    let line = '';
+    if (kind === 'price') {
+      line = `${d.op || ''} <strong>${(+d.value).toFixed(2)}</strong>`;
+    } else if (kind === 'indicator') {
+      const nm = d.indicator || '';
+      const last = (typeof d.last === 'number') ? d.last.toFixed(2) : (d.last || '');
+      line = `${nm} ${d.op || ''} <strong>${d.value ?? ''}</strong> · last ${last}`;
+    } else if (kind === 'pattern') {
+      line = `${d.pattern || ''} → <strong>${String(d.value)}</strong>`;
+    }
+    const tf = d.timeframe || '';
+    const meta = [tf].filter(Boolean).join(' · ');
+
+    // note data-kind + hidden class (based on current filter)
+    const hiddenClass = isVisible(kind) ? '' : 'hidden';
+    return `
+      <article class="message ${colorClass} ${hiddenClass}" data-kind="${kind}">
+        <div class="message-header">
+          <span>${header}</span>
+          <span>${ts}</span>
+        </div>
+        <div class="message-body card-pad">
+          ${line}
+          ${meta ? `<br><small>${meta}</small>` : ''}
+        </div>
+      </article>`;
+  }
+
+  // Apply filter to existing cards
+  function applyFilter() {
+    document.querySelectorAll('#alerts [data-kind]').forEach(el => {
+      const k = el.getAttribute('data-kind') || '';
+      el.classList.toggle('hidden', !isVisible(k));
+    });
+    // chip styles (active chips are solid; inactive become light)
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      const k = chip.getAttribute('data-kind');
+      chip.classList.toggle('is-light', !FILTER[k]);
+    });
+  }
+
+  // Wire chips
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const k = chip.getAttribute('data-kind');
+      FILTER[k] = !FILTER[k];
+      applyFilter();
+    });
+  });
+  document.getElementById('filter-all').addEventListener('click', () => {
+    FILTER.price = FILTER.indicator = FILTER.pattern = true; applyFilter();
+  });
+  document.getElementById('filter-none').addEventListener('click', () => {
+    FILTER.price = FILTER.indicator = FILTER.pattern = false; applyFilter();
+  });
+
+  // Prefetch recent alerts
+  fetch('/alerts/recent')
+    .then(r => r.ok ? r.json() : [])
+    .then(list => {
+      for (const j of list) box.insertAdjacentHTML('afterbegin', renderAlert(j));
+      applyFilter();
+    })
+    .catch(() => {});
+
+  // Live stream
+  const evt = new EventSource('/alerts/stream?replay=25');
   evt.onmessage = (e) => {
     try {
       const j = JSON.parse(e.data);
-      const html = `
-        <article class="message is-info">
-          <div class="message-header">
-            <span>${j.symbol}</span>
-            <span>${j.timestamp || ''}</span>
-          </div>
-          <div class="message-body">
-            <strong>${j.symbol}</strong> close <strong>${(+j.last_close).toFixed(2)}</strong>
-            ${j.op} <strong>${(+j.threshold).toFixed(2)}</strong>
-            <br><small>${j.session} • ${j.gate} • ${j.interval_min || ''}m</small>
-          </div>
-        </article>`;
-      box.insertAdjacentHTML('afterbegin', html);
+      box.insertAdjacentHTML('afterbegin', renderAlert(j));
+      // ensure newly inserted card respects filter
+      applyFilter();
     } catch (_) {}
   };
 </script>

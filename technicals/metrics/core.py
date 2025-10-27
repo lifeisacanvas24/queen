@@ -1,5 +1,5 @@
 # ============================================================
-# quant/metrics/core.py — Auto-Discovery Metrics Engine (v2.1)
+# queen/technicalsmetrics/core.py — Auto-Discovery Metrics Engine (v2.1)
 # ============================================================
 """Quant-Core Metrics Engine — Config-Driven + Auto-Discovery
 
@@ -32,9 +32,11 @@ logger = get_logger("MetricsCore")
 # 🧩 Dynamic Metric Function Discovery
 # ============================================================
 
+
 def _discover_metric_functions() -> dict[str, callable]:
     """Scan quant.metrics.* for compute_*() functions."""
     import quant.metrics as metrics_pkg
+
     discovered = {}
     base_path = Path(metrics_pkg.__file__).parent
 
@@ -53,6 +55,7 @@ def _discover_metric_functions() -> dict[str, callable]:
 
 _DISCOVERED_FUNCS = None
 
+
 def get_metric_functions(force_refresh: bool = False) -> dict[str, callable]:
     """Cached discovery of all compute_*() metric functions."""
     global _DISCOVERED_FUNCS
@@ -66,27 +69,30 @@ def get_metric_functions(force_refresh: bool = False) -> dict[str, callable]:
 # ============================================================
 
 
-
-
-
 def compute_all_metrics(df: pl.DataFrame, interval: str = "5m") -> dict:
     if df.is_empty():
         logger.warning("⚠️ Empty DataFrame passed to Metrics Engine.")
         return {}
 
     metrics = {
-        "timestamp": dt.datetime.now(pytz.timezone("Asia/Kolkata")).isoformat(timespec="seconds"),
+        "timestamp": dt.datetime.now(pytz.timezone("Asia/Kolkata")).isoformat(
+            timespec="seconds"
+        ),
         "interval": interval,
-        "symbol_count": len(df)
+        "symbol_count": len(df),
     }
 
     try:
-        metrics_cfg_path = config.get_path("paths.metrics_config", fallback="./configs/metrics.json")
+        metrics_cfg_path = config.get_path(
+            "paths.metrics_config", fallback="./configs/metrics.json"
+        )
         metrics_cfg = config.load_json(metrics_cfg_path)  # <— ✅ FIX
         enabled = set(metrics_cfg.get("enabled", []))
     except Exception as e:
         logger.error(f"[Metrics] Failed to load metrics config: {e}")
         enabled = set()
+
+
 # ============================================================
 # 🧠 Example Metric Function (for developers)
 # ============================================================
