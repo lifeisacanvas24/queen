@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_ai_inference.py
+# queen/technicals/signals/tactical/ai_inference.py
 # ------------------------------------------------------------
 # 🤖 Phase 5.2 — Tactical AI Inference Engine
 # Loads the trained AI model (Phase 5.1) and
@@ -38,8 +38,12 @@ def load_model(model_path: str = "quant/models/tactical_ai_model.pkl"):
 def prepare_features(df: pl.DataFrame):
     """Extract numeric features from the most recent bar."""
     features = [
-        "CMV", "Reversal_Score", "Confidence",
-        "ATR_Ratio", "BUY_Ratio", "SELL_Ratio"
+        "CMV",
+        "Reversal_Score",
+        "Confidence",
+        "ATR_Ratio",
+        "BUY_Ratio",
+        "SELL_Ratio",
     ]
     existing = [c for c in features if c in df.columns]
     if not existing:
@@ -75,16 +79,17 @@ def predict_next_move(model, scaler, df_live: dict[str, pl.DataFrame]):
 
         # simple bias determination
         bias = (
-            "🟢 BUY Likely" if prob_buy > 0.6
-            else "🔴 SELL Likely" if prob_sell > 0.6
+            "🟢 BUY Likely"
+            if prob_buy > 0.6
+            else "🔴 SELL Likely"
+            if prob_sell > 0.6
             else "⚪ Neutral"
         )
 
         results.append((tf, prob_buy, prob_sell, bias))
 
     df_out = pl.DataFrame(
-        results,
-        schema=["timeframe", "BUY_Prob", "SELL_Prob", "Forecast"]
+        results, schema=["timeframe", "BUY_Prob", "SELL_Prob", "Forecast"]
     )
     return df_out
 
@@ -113,7 +118,10 @@ def render_ai_forecast(df_out: pl.DataFrame):
 # ============================================================
 # 🚀 Main Inference Entrypoint
 # ============================================================
-def run_ai_inference(df_live: dict[str, pl.DataFrame], model_path: str = "quant/models/tactical_ai_model.pkl"):
+def run_ai_inference(
+    df_live: dict[str, pl.DataFrame],
+    model_path: str = "quant/models/tactical_ai_model.pkl",
+):
     """Convenience wrapper to load, infer, and render."""
     model, scaler = load_model(model_path)
     df_out = predict_next_move(model, scaler, df_live)
@@ -127,14 +135,16 @@ def run_ai_inference(df_live: dict[str, pl.DataFrame], model_path: str = "quant/
 if __name__ == "__main__":
     # Mock single timeframe for demo
     n = 100
-    df = pl.DataFrame({
-        "CMV": np.random.uniform(-1, 1, n),
-        "Reversal_Score": np.random.uniform(0, 5, n),
-        "Confidence": np.random.uniform(0.5, 1.0, n),
-        "ATR_Ratio": np.random.uniform(0.8, 1.4, n),
-        "BUY_Ratio": np.random.uniform(0.0, 1.0, n),
-        "SELL_Ratio": np.random.uniform(0.0, 1.0, n),
-    })
+    df = pl.DataFrame(
+        {
+            "CMV": np.random.uniform(-1, 1, n),
+            "Reversal_Score": np.random.uniform(0, 5, n),
+            "Confidence": np.random.uniform(0.5, 1.0, n),
+            "ATR_Ratio": np.random.uniform(0.8, 1.4, n),
+            "BUY_Ratio": np.random.uniform(0.0, 1.0, n),
+            "SELL_Ratio": np.random.uniform(0.0, 1.0, n),
+        }
+    )
 
     df_live = {"5m": df, "15m": df, "1h": df}
     run_ai_inference(df_live)

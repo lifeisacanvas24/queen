@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_cognitive_orchestrator.py
+# queen/technicals/signals/tactical/cognitive_orchestrator.py
 # ------------------------------------------------------------
 # 🧠 Phase 7.0 — Tactical Cognitive Orchestrator
 # Unifies perception → learning → optimization → reflection
@@ -32,6 +32,7 @@ ENABLE_INTROSPECTION = True
 ENABLE_OPTIMIZATION = True
 ENABLE_DASHBOARD = True
 
+
 # ============================================================
 # 🧩 Safe execution wrapper
 # ============================================================
@@ -46,6 +47,7 @@ def _safe_run(func, label, *args, **kwargs):
         console.print(f"⚠️ [{label}] Skipped: {e}")
         console.print(traceback.format_exc())
         return None
+
 
 # ============================================================
 # 🚀 Cognitive Loop
@@ -88,6 +90,7 @@ def run_cognitive_cycle(global_health_dfs=None):
 
     console.print(f"🧭 Completed cognitive cycle at [cyan]{ts_start}[/cyan]")
 
+
 # ============================================================
 # 🔁 Continuous Daemon Mode
 # ============================================================
@@ -99,8 +102,11 @@ def run_autonomous_loop(global_health_dfs=None, interval=COGNITIVE_LOOP_INTERVAL
         cycle += 1
         console.print(f"\n🌀 Starting Cycle #{cycle}")
         run_cognitive_cycle(global_health_dfs)
-        console.print(f"💤 Sleeping for {interval/3600:.1f} hours before next cycle ...")
+        console.print(
+            f"💤 Sleeping for {interval/3600:.1f} hours before next cycle ..."
+        )
         time.sleep(interval)
+
 
 # ============================================================
 # 🧪 Stand-alone test

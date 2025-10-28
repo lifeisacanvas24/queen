@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/volume_chaikin.py
+# queen/technicals/indicators/volume_chaikin.py
 # ------------------------------------------------------------
 # ⚙️ Chaikin Oscillator — Volume Momentum Engine
 # Config-driven, NaN-safe, headless for Quant-Core v4.x
@@ -10,7 +10,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.utils_indicator_health import _log_indicator_warning
 from quant.utils.path_manager import get_dev_snapshot_path
@@ -73,7 +72,9 @@ def compute_chaikin(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         norm = np.clip((chaikin_osc - chaikin_min) / (chaikin_max - chaikin_min), 0, 1)
     else:
         norm = np.zeros_like(chaikin_osc)
-        _log_indicator_warning("CHAiKIN", context, "Zero or invalid normalization range detected.")
+        _log_indicator_warning(
+            "CHAiKIN", context, "Zero or invalid normalization range detected."
+        )
 
     # Bias classification
     bias = np.full(len(chaikin_osc), "➡️ Neutral", dtype=object)
@@ -88,13 +89,15 @@ def compute_chaikin(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         np.where(flow_change < 0, "⬇️ Distributing", "➡️ Stable"),
     )
 
-    return df.with_columns([
-        pl.Series("Chaikin_ADL", adl),
-        pl.Series("Chaikin_Osc", chaikin_osc),
-        pl.Series("Chaikin_norm", norm),
-        pl.Series("Chaikin_Bias", bias),
-        pl.Series("Chaikin_Flow", flow),
-    ])
+    return df.with_columns(
+        [
+            pl.Series("Chaikin_ADL", adl),
+            pl.Series("Chaikin_Osc", chaikin_osc),
+            pl.Series("Chaikin_norm", norm),
+            pl.Series("Chaikin_Bias", bias),
+            pl.Series("Chaikin_Flow", flow),
+        ]
+    )
 
 
 # ============================================================

@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/signals/tactical/tactical_meta_introspector.py
+# queen/technicals/signals/tactical/meta_introspector.py
 # ------------------------------------------------------------
 # 🧠 Phase 6.3 — Tactical Meta Introspector
 # The self-analysis engine that replays memory snapshots,

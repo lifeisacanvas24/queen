@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/trend_adx_dmi.py
+# queen/technicals/indicators/trend_adx_dmi.py
 # ------------------------------------------------------------
 # ⚙️ ADX + DMI (Average Directional Movement Index)
 # Config-driven, NaN-safe, headless for Quant-Core 4.x
@@ -9,7 +9,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.utils_indicator_health import _log_indicator_warning
 from quant.utils.path_manager import get_dev_snapshot_path

@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/signals/tactical/tactical_meta_memory.py
+# queen/technicals/signals/tactical/meta_memory.py
 # ------------------------------------------------------------
 # 🧠 Phase 6.2 — Tactical Meta Memory
 # Persistent quant "brain" that logs model evolution, drift,

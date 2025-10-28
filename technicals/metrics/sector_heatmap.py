@@ -1,3 +1,4 @@
+# queen/technicals/metrics/sector_heatmap.py
 import polars as pl
 
 
@@ -8,7 +9,9 @@ def compute_sector_heatmap(df: pl.DataFrame) -> dict:
     try:
         grouped = df.groupby("sector").agg(pl.col("close").mean().alias("avg_close"))
         return {
-            "sector_heatmap": {r["sector"]: round(float(r["avg_close"]), 2) for r in grouped.to_dicts()}
+            "sector_heatmap": {
+                r["sector"]: round(float(r["avg_close"]), 2) for r in grouped.to_dicts()
+            }
         }
     except Exception:
         return {}

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_live_supervisor.py
+# queen/technicals/signals/tactical/live_supervisor.py
 # ------------------------------------------------------------
 # 🛰️ Phase 7.2 — Tactical Live Supervisor
 # Manages multiple Tactical Live Daemons concurrently with
@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     "alert_enabled": True,
 }
 
+
 # ============================================================
 # 🧩 Load / Save Config
 # ============================================================
@@ -55,13 +56,16 @@ def save_health_status(status: dict):
     with open(HEALTHCHECK_LOG, "w") as f:
         json.dump(status, f, indent=2)
 
+
 # ============================================================
 # 🧠 Supervisor Tasks
 # ============================================================
 async def run_daemon_task(symbol: str, tf: str, interval: int):
     """Wrap the daemon runner in an async task with supervision."""
     ts = datetime.now(timezone.utc).isoformat()
-    console.print(f"🚀 Launching daemon for [yellow]{symbol}[/yellow] @ [cyan]{tf}[/cyan]")
+    console.print(
+        f"🚀 Launching daemon for [yellow]{symbol}[/yellow] @ [cyan]{tf}[/cyan]"
+    )
     try:
         run_daemon(interval=interval)
         save_checkpoint("success", f"{symbol}:{tf} run completed at {ts}")
@@ -71,7 +75,14 @@ async def run_daemon_task(symbol: str, tf: str, interval: int):
         console.print(f"⚠️ [red]{symbol}:{tf}[/red] failed — {err}")
         send_alert(f"Daemon failure: {symbol}:{tf} — {err}")
         save_checkpoint("failed", err)
-        return {"symbol": symbol, "tf": tf, "status": "failed", "timestamp": ts, "error": err}
+        return {
+            "symbol": symbol,
+            "tf": tf,
+            "status": "failed",
+            "timestamp": ts,
+            "error": err,
+        }
+
 
 # ============================================================
 # 🧭 Supervisor Loop
@@ -98,7 +109,9 @@ async def run_supervisor():
 
     while running:
         cycle += 1
-        console.rule(f"[bold cyan]Cycle #{cycle} — {datetime.now(timezone.utc).isoformat()}[/bold cyan]")
+        console.rule(
+            f"[bold cyan]Cycle #{cycle} — {datetime.now(timezone.utc).isoformat()}[/bold cyan]"
+        )
 
         tasks = []
         start_time = time.time()
@@ -111,8 +124,12 @@ async def run_supervisor():
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Record health
-        healthy = [r for r in results if isinstance(r, dict) and r.get("status") == "success"]
-        failed = [r for r in results if isinstance(r, dict) and r.get("status") != "success"]
+        healthy = [
+            r for r in results if isinstance(r, dict) and r.get("status") == "success"
+        ]
+        failed = [
+            r for r in results if isinstance(r, dict) and r.get("status") != "success"
+        ]
 
         health_summary = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -126,17 +143,30 @@ async def run_supervisor():
         save_health_status(health_summary)
 
         # Display Rich table
-        table = Table(title="🧩 Supervisor Health Summary", header_style="bold cyan", expand=True)
-        table.add_column("Symbol"); table.add_column("TF"); table.add_column("Status"); table.add_column("Timestamp")
+        table = Table(
+            title="🧩 Supervisor Health Summary", header_style="bold cyan", expand=True
+        )
+        table.add_column("Symbol")
+        table.add_column("TF")
+        table.add_column("Status")
+        table.add_column("Timestamp")
         for res in results:
             if isinstance(res, dict):
-                table.add_row(res.get("symbol","—"), res.get("tf","—"), res.get("status","—"), res.get("timestamp","—"))
+                table.add_row(
+                    res.get("symbol", "—"),
+                    res.get("tf", "—"),
+                    res.get("status", "—"),
+                    res.get("timestamp", "—"),
+                )
         console.print(table)
 
-        console.print(f"💤 Sleeping for {cfg['healthcheck_interval']/60:.1f} min before next supervision check...\n")
+        console.print(
+            f"💤 Sleeping for {cfg['healthcheck_interval']/60:.1f} min before next supervision check...\n"
+        )
         await asyncio.sleep(cfg["healthcheck_interval"])
 
     console.print("[green]✅ Supervisor stopped gracefully.[/green]")
+
 
 # ============================================================
 # 🧪 Stand-alone Entry

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_ai_trainer.py
+# queen/technicals/signals/tactical/ai_trainer.py
 # ------------------------------------------------------------
 # 🤖 Phase 5.1 — Tactical AI Trainer
 # Learns from historical tactical_event_log.csv
@@ -20,6 +20,7 @@ from sklearn.preprocessing import StandardScaler
 
 console = Console()
 
+
 # ============================================================
 # ⚙️ Load & Prepare Data
 # ============================================================
@@ -39,10 +40,18 @@ def preprocess(df: pl.DataFrame):
         return None, None
 
     # Feature engineering (choose any subset that exists)
-    cols = [c for c in [
-        "CMV", "Reversal_Score", "Confidence",
-        "ATR_Ratio", "BUY_Ratio", "SELL_Ratio"
-    ] if c in df.columns]
+    cols = [
+        c
+        for c in [
+            "CMV",
+            "Reversal_Score",
+            "Confidence",
+            "ATR_Ratio",
+            "BUY_Ratio",
+            "SELL_Ratio",
+        ]
+        if c in df.columns
+    ]
 
     if not cols:
         console.print("⚠️ No numeric columns found to train on.")
@@ -106,11 +115,15 @@ def save_model(model, scaler, path: str = "quant/models/tactical_ai_model.pkl"):
 # 📊 Render Summary
 # ============================================================
 def render_training_summary(model, acc: float):
-    table = Table(title="🤖 Tactical AI Trainer — Summary", header_style="bold blue", expand=True)
+    table = Table(
+        title="🤖 Tactical AI Trainer — Summary", header_style="bold blue", expand=True
+    )
     table.add_column("Model")
     table.add_column("Accuracy")
     table.add_column("Notes")
-    table.add_row("LogisticRegression", f"{acc:.3f}", "Baseline classifier for reversals")
+    table.add_row(
+        "LogisticRegression", f"{acc:.3f}", "Baseline classifier for reversals"
+    )
     console.print(table)
 
 
@@ -125,7 +138,9 @@ def main():
         return
     model, scaler = model_data
     save_model(model, scaler)
-    render_training_summary(model, acc=model.score(StandardScaler().fit_transform(X), y))
+    render_training_summary(
+        model, acc=model.score(StandardScaler().fit_transform(X), y)
+    )
 
 
 if __name__ == "__main__":

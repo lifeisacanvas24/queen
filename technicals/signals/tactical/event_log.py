@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_event_log.py
+# queen/technicals/signals/tactical/event_log.py
 # ------------------------------------------------------------
 # 🧭 Unified Tactical Event Logger (Phase 4.9)
 # Collects tactical engine outputs and appends structured

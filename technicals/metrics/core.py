@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicalsmetrics/core.py — Auto-Discovery Metrics Engine (v2.1)
+# queen/technicals/metrics/core.py — Auto-Discovery Metrics Engine (v2.1)
 # ============================================================
 """Quant-Core Metrics Engine — Config-Driven + Auto-Discovery
 

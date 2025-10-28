@@ -1,5 +1,5 @@
 # ============================================================
-# quant/tactical/helpers.py — Tactical Input Auto-Builder v1.0
+# queen/technicals/signals/tactical/helpers.py — Tactical Input Auto-Builder v1.0
 # ============================================================
 """Auto-computes tactical fusion inputs (RScore, VolX, LBX)
 from available indicator modules, with graceful fallbacks.

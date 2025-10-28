@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_absorption.py
+# queen/technicals/signals/tactical/absorption.py
 # ------------------------------------------------------------
 # ⚙️ Smart Money Absorption Engine
 # Detects accumulation/distribution via volume absorption behavior
@@ -19,7 +19,7 @@ def detect_absorption_zones(
     mfi_col: str = "MFI",
     chaikin_col: str = "Chaikin_Osc",
     lookback: int = 5,
-    absorption_threshold: float = 0.85
+    absorption_threshold: float = 0.85,
 ) -> pl.DataFrame:
     """Detect potential absorption candles (smart money defending levels).
     Uses CMV, volume, MFI, and Chaikin oscillator relationships.
@@ -31,15 +31,27 @@ def detect_absorption_zones(
     cmv = np.array(df[cmv_col])
     volume = np.array(df[volume_col])
     mfi = np.array(df[mfi_col]) if mfi_col in df.columns else np.zeros_like(cmv)
-    chaikin = np.array(df[chaikin_col]) if chaikin_col in df.columns else np.zeros_like(cmv)
+    chaikin = (
+        np.array(df[chaikin_col]) if chaikin_col in df.columns else np.zeros_like(cmv)
+    )
 
     absorption = np.full(len(cmv), "➡️ Stable", dtype=object)
 
     for i in range(lookback, len(cmv)):
         # Hidden accumulation: CMV flat, volume rising, MFI improving, Chaikin positive
-        hidden_buy = abs(cmv[i] - cmv[i - 1]) < 0.05 and volume[i] > volume[i - 1] and mfi[i] > mfi[i - 1] and chaikin[i] > 0
+        hidden_buy = (
+            abs(cmv[i] - cmv[i - 1]) < 0.05
+            and volume[i] > volume[i - 1]
+            and mfi[i] > mfi[i - 1]
+            and chaikin[i] > 0
+        )
         # Hidden distribution: CMV flat, volume rising, MFI dropping, Chaikin negative
-        hidden_sell = abs(cmv[i] - cmv[i - 1]) < 0.05 and volume[i] > volume[i - 1] and mfi[i] < mfi[i - 1] and chaikin[i] < 0
+        hidden_sell = (
+            abs(cmv[i] - cmv[i - 1]) < 0.05
+            and volume[i] > volume[i - 1]
+            and mfi[i] < mfi[i - 1]
+            and chaikin[i] < 0
+        )
 
         if hidden_buy:
             absorption[i] = "🟩 Accumulation Zone (Smart Money Buy Defense)"
@@ -58,7 +70,9 @@ def summarize_absorption(df: pl.DataFrame) -> str:
     acc_count = (df["Absorption_Score"] > 0).sum()
     dist_count = (df["Absorption_Score"] < 0).sum()
     last_flag = str(df["Absorption_Flag"].drop_nulls()[-1])
-    return f"Accumulations: {acc_count} | Distributions: {dist_count} | Last: {last_flag}"
+    return (
+        f"Accumulations: {acc_count} | Distributions: {dist_count} | Last: {last_flag}"
+    )
 
 
 # ============================================================
@@ -76,12 +90,9 @@ if __name__ == "__main__":
     chaikin[100:110] += 1500  # surge during accumulation
     mfi = np.linspace(40, 80, n) + np.random.normal(0, 5, n)
 
-    df = pl.DataFrame({
-        "CMV": cmv,
-        "volume": volume,
-        "Chaikin_Osc": chaikin,
-        "MFI": mfi
-    })
+    df = pl.DataFrame(
+        {"CMV": cmv, "volume": volume, "Chaikin_Osc": chaikin, "MFI": mfi}
+    )
 
     df = detect_absorption_zones(df)
     print("✅ Absorption Diagnostic →", summarize_absorption(df))
@@ -92,7 +103,11 @@ if __name__ == "__main__":
     plt.title("Smart Money Absorption Zones")
     acc_idx = np.where(df["Absorption_Score"] > 0)[0]
     dist_idx = np.where(df["Absorption_Score"] < 0)[0]
-    plt.scatter(acc_idx, df["volume"][acc_idx], color="green", label="Accumulation", zorder=5)
-    plt.scatter(dist_idx, df["volume"][dist_idx], color="red", label="Distribution", zorder=5)
+    plt.scatter(
+        acc_idx, df["volume"][acc_idx], color="green", label="Accumulation", zorder=5
+    )
+    plt.scatter(
+        dist_idx, df["volume"][dist_idx], color="red", label="Distribution", zorder=5
+    )
     plt.legend()
     plt.show()

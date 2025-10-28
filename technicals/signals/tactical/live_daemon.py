@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_live_daemon.py
+# queen/technicals/signals/tactical/live_daemon.py
 # ------------------------------------------------------------
 # 🧩 Phase 7.1 — Tactical Live Daemon
 # Background process that runs the Cognitive Orchestrator
@@ -27,6 +27,7 @@ RETRY_DELAY = 60 * 5  # 5 min
 CHECKPOINT_INTERVAL = 60 * 60 * 6  # every 6 h
 ALERT_CHANNEL = None  # placeholder for Slack/email in future
 
+
 # ============================================================
 # 💾 Checkpoint & Alert Helpers
 # ============================================================
@@ -41,10 +42,12 @@ def save_checkpoint(status: str, details: str = ""):
         json.dump(state, f, indent=2)
     console.print(f"🧭 [green]Checkpoint saved:[/green] {status}")
 
+
 def send_alert(message: str):
     # Hook for integration with Slack/email
     console.print(f"🚨 [red]ALERT:[/red] {message}")
     # (Extendable: push to alerting service)
+
 
 # ============================================================
 # 🔁 Daemon Loop
@@ -56,7 +59,9 @@ def run_daemon(global_health_dfs=None, interval=CHECKPOINT_INTERVAL):
 
     def handle_sigint(sig, frame):
         nonlocal running
-        console.print("\n🛑 [yellow]SIGINT received — shutting down gracefully...[/yellow]")
+        console.print(
+            "\n🛑 [yellow]SIGINT received — shutting down gracefully...[/yellow]"
+        )
         save_checkpoint("terminated", "manual stop")
         running = False
 
@@ -71,7 +76,9 @@ def run_daemon(global_health_dfs=None, interval=CHECKPOINT_INTERVAL):
             save_checkpoint("success", f"Cycle completed at {ts}")
             retry_count = 0
 
-            console.print(f"💤 Sleeping for {interval/3600:.1f} h before next cycle...\n")
+            console.print(
+                f"💤 Sleeping for {interval/3600:.1f} h before next cycle...\n"
+            )
             time.sleep(interval)
 
         except Exception as e:
@@ -90,6 +97,7 @@ def run_daemon(global_health_dfs=None, interval=CHECKPOINT_INTERVAL):
             time.sleep(RETRY_DELAY)
 
     console.print("🧘 [green]Daemon stopped gracefully.[/green]")
+
 
 # ============================================================
 # 🧪 Stand-alone entry

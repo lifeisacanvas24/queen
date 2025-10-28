@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_bias_regime.py
+# queen/technicals/signals/tactical/bias_regime.py
 # ------------------------------------------------------------
 # ⚙️ Tactical Bias Regime Engine (Phase 4.6)
 # Classifies Trend / Range / Volatile conditions using CMV,
@@ -38,9 +38,7 @@ def compute_bias_regime(
     df = df.with_columns(
         ((pl.col("high") - pl.col("low")).abs()).fill_null(0).alias("TR")
     )
-    df = df.with_columns(
-        pl.col("TR").rolling_mean(window_atr).alias("ATR")
-    )
+    df = df.with_columns(pl.col("TR").rolling_mean(window_atr).alias("ATR"))
 
     # --- ATR ratio relative to rolling mean ---
     atr_ratio = df["ATR"] / df["ATR"].rolling_mean(window_atr)
@@ -56,7 +54,11 @@ def compute_bias_regime(
 
     # --- Helper for numeric safety ---
     def safe_num(x, default=0.0):
-        return float(x) if isinstance(x, (int, float)) and not (x is None or np.isnan(x)) else default
+        return (
+            float(x)
+            if isinstance(x, (int, float)) and not (x is None or np.isnan(x))
+            else default
+        )
 
     # --- Regime classification ---
     regime = []
@@ -82,10 +84,12 @@ def compute_bias_regime(
         "NEUTRAL": "⚫ Neutral",
     }
 
-    df = df.with_columns([
-        pl.Series("Regime_State", regime),
-        pl.Series("Regime_Emoji", [emoji_map[r] for r in regime]),
-    ])
+    df = df.with_columns(
+        [
+            pl.Series("Regime_State", regime),
+            pl.Series("Regime_Emoji", [emoji_map[r] for r in regime]),
+        ]
+    )
 
     return df
 
@@ -105,4 +109,8 @@ if __name__ == "__main__":
     }
     df = pl.DataFrame(data)
     out = compute_bias_regime(df)
-    print(out.select(["ADX", "CMV", "ATR", "ATR_Ratio", "CMV_Flips", "Regime_Emoji"]).tail(10))
+    print(
+        out.select(
+            ["ADX", "CMV", "ATR", "ATR_Ratio", "CMV_Flips", "Regime_Emoji"]
+        ).tail(10)
+    )

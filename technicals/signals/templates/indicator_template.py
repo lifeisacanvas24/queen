@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/templates/indicator_template.py
+# queen/technicals/signals/tactical/templates/indicator_template.py
 # ------------------------------------------------------------
 # 🧱 Headless Indicator Template — Quant-Core v4.x Standard
 # ------------------------------------------------------------
@@ -40,13 +40,21 @@ def compute_indicator(df: pl.DataFrame, context: str = "default") -> pl.DataFram
     required_cols = ["close"]
     for col in required_cols:
         if col not in df.columns:
-            _log_indicator_warning("TEMPLATE_INDICATOR", context, f"Missing '{col}' column — skipping computation.")
+            _log_indicator_warning(
+                "TEMPLATE_INDICATOR",
+                context,
+                f"Missing '{col}' column — skipping computation.",
+            )
             return df
 
     # Example numeric conversion
     close = df["close"].to_numpy().astype(float, copy=False)
     if len(close) < lookback:
-        _log_indicator_warning("TEMPLATE_INDICATOR", context, f"Insufficient data (<{lookback}) for computation.")
+        _log_indicator_warning(
+            "TEMPLATE_INDICATOR",
+            context,
+            f"Insufficient data (<{lookback}) for computation.",
+        )
         return df.with_columns([pl.Series("template_value", np.zeros_like(close))])
 
     # --------------------------------------------------------
@@ -57,10 +65,12 @@ def compute_indicator(df: pl.DataFrame, context: str = "default") -> pl.DataFram
     values = np.nan_to_num(values, nan=0.0)
     norm = (values - np.min(values)) / (np.ptp(values) if np.ptp(values) != 0 else 1.0)
 
-    return df.with_columns([
-        pl.Series("template_value", values),
-        pl.Series("template_norm", norm),
-    ])
+    return df.with_columns(
+        [
+            pl.Series("template_value", values),
+            pl.Series("template_norm", norm),
+        ]
+    )
 
 
 # ============================================================
@@ -92,6 +102,7 @@ if __name__ == "__main__":
 
     if VISUAL_DEBUG:
         import matplotlib.pyplot as plt
+
         plt.figure(figsize=(10, 5))
         plt.plot(df["close"], label="Close", alpha=0.4)
         plt.plot(df["template_value"], label="Template Value", color="gold")

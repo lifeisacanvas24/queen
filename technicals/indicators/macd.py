@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/momentum_macd.py
+# queen/technicals/indicators/momentum_macd.py
 # ------------------------------------------------------------
 # ⚙️ MACD (Moving Average Convergence Divergence)
 # Config-driven, NaN-safe, headless for Quant-Core 4.x
@@ -9,7 +9,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.utils_indicator_health import _log_indicator_warning
 from quant.utils.path_manager import get_dev_snapshot_path
@@ -42,7 +41,9 @@ def compute_macd(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
 
     df = df.clone()
     if "close" not in df.columns:
-        _log_indicator_warning("MACD", context, "Missing 'close' column — skipping computation.")
+        _log_indicator_warning(
+            "MACD", context, "Missing 'close' column — skipping computation."
+        )
         return df
 
     # --- Safe extraction
@@ -52,16 +53,20 @@ def compute_macd(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         close = np.array(df["close"], dtype=float)
 
     if len(close) < slow_period:
-        _log_indicator_warning("MACD", context, f"Insufficient data (<{slow_period}) for MACD computation.")
+        _log_indicator_warning(
+            "MACD", context, f"Insufficient data (<{slow_period}) for MACD computation."
+        )
         zeros = np.zeros_like(close)
-        return df.with_columns([
-            pl.Series("MACD_line", zeros),
-            pl.Series("MACD_signal", zeros),
-            pl.Series("MACD_hist", zeros),
-            pl.Series("MACD_norm", zeros),
-            pl.Series("MACD_slope", zeros),
-            pl.Series("MACD_crossover", np.full(len(close), False)),
-        ])
+        return df.with_columns(
+            [
+                pl.Series("MACD_line", zeros),
+                pl.Series("MACD_signal", zeros),
+                pl.Series("MACD_hist", zeros),
+                pl.Series("MACD_norm", zeros),
+                pl.Series("MACD_slope", zeros),
+                pl.Series("MACD_crossover", np.full(len(close), False)),
+            ]
+        )
 
     # --- EMA computation
     macd_fast = ema(close, fast_period)
@@ -79,7 +84,9 @@ def compute_macd(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         max_abs = np.nanmax(np.abs(macd_hist))
     if not np.isfinite(max_abs) or max_abs == 0:
         max_abs = 1.0
-        _log_indicator_warning("MACD", context, "All-NaN slice encountered — normalization skipped.")
+        _log_indicator_warning(
+            "MACD", context, "All-NaN slice encountered — normalization skipped."
+        )
     macd_norm = np.clip(macd_hist / max_abs, -1, 1)
 
     # --- Slope normalization
@@ -92,14 +99,16 @@ def compute_macd(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
     # --- Crossovers
     crossover = macd_line > signal_line
 
-    return df.with_columns([
-        pl.Series("MACD_line", macd_line),
-        pl.Series("MACD_signal", signal_line),
-        pl.Series("MACD_hist", macd_hist),
-        pl.Series("MACD_norm", macd_norm),
-        pl.Series("MACD_slope", slope_norm),
-        pl.Series("MACD_crossover", crossover),
-    ])
+    return df.with_columns(
+        [
+            pl.Series("MACD_line", macd_line),
+            pl.Series("MACD_signal", signal_line),
+            pl.Series("MACD_hist", macd_hist),
+            pl.Series("MACD_norm", macd_norm),
+            pl.Series("MACD_slope", slope_norm),
+            pl.Series("MACD_crossover", crossover),
+        ]
+    )
 
 
 # ============================================================
@@ -119,7 +128,7 @@ def summarize_macd(df: pl.DataFrame) -> dict:
         "MACD_line": round(last_val, 3),
         "MACD_signal": round(last_signal, 3),
         "MACD_hist": round(hist, 3),
-        "bias": bias
+        "bias": bias,
     }
 
 

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_liquidity_trap.py
+# queen/technicals/signals/tactical/tactical_liquidity_trap.py
 # ------------------------------------------------------------
 # ⚙️ Liquidity Trap & Absorption Candle Detection Engine
 # Detects false breakouts and smart money absorption events
@@ -20,7 +20,7 @@ def detect_liquidity_trap(
     chaikin_col: str = "Chaikin_Osc",
     threshold_sps: float = 0.85,
     vol_spike: float = 1.5,
-    lookback: int = 5
+    lookback: int = 5,
 ) -> pl.DataFrame:
     """Detect potential liquidity traps and absorption candles using CMV, SPS, and volume-based metrics."""
     if cmv_col not in df.columns or sps_col not in df.columns:
@@ -31,17 +31,25 @@ def detect_liquidity_trap(
     cmv = np.array(df[cmv_col])
     sps = np.array(df[sps_col])
     mfi = np.array(df[mfi_col]) if mfi_col in df.columns else np.zeros_like(cmv)
-    chaikin = np.array(df[chaikin_col]) if chaikin_col in df.columns else np.zeros_like(cmv)
+    chaikin = (
+        np.array(df[chaikin_col]) if chaikin_col in df.columns else np.zeros_like(cmv)
+    )
 
     traps = np.full(len(cmv), "➡️ Stable", dtype=object)
 
     for i in range(lookback, len(cmv)):
         cmv_flip = (cmv[i - 1] > 0 and cmv[i] < 0) or (cmv[i - 1] < 0 and cmv[i] > 0)
         sps_exhausted = sps[i - 1] > threshold_sps and sps[i] < sps[i - 1]
-        vol_absorb = (chaikin[i] < 0 and mfi[i] < mfi[i - 1]) or (chaikin[i] > 0 and mfi[i] < 40)
+        vol_absorb = (chaikin[i] < 0 and mfi[i] < mfi[i - 1]) or (
+            chaikin[i] > 0 and mfi[i] < 40
+        )
 
         if cmv_flip and sps_exhausted and vol_absorb:
-            traps[i] = "🟥 Bear Trap → Short Squeeze Setup" if cmv[i] < 0 else "🟩 Bull Trap → Long Liquidation Risk"
+            traps[i] = (
+                "🟥 Bear Trap → Short Squeeze Setup"
+                if cmv[i] < 0
+                else "🟩 Bull Trap → Long Liquidation Risk"
+            )
 
     df = df.with_columns(pl.Series("Liquidity_Trap", traps))
     return df
@@ -73,12 +81,7 @@ if __name__ == "__main__":
     mfi = 50 + 20 * np.sin(t + 1)
     chaikin = np.cos(t) * 1000 + np.random.normal(0, 100, n)
 
-    df = pl.DataFrame({
-        "CMV": cmv,
-        "SPS": sps,
-        "MFI": mfi,
-        "Chaikin_Osc": chaikin
-    })
+    df = pl.DataFrame({"CMV": cmv, "SPS": sps, "MFI": mfi, "Chaikin_Osc": chaikin})
 
     df = detect_liquidity_traps(df)
     print("✅ Liquidity Trap Diagnostic →", summarize_liquidity_traps(df))

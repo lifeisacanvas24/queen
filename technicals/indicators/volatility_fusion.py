@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/fusion/volatility_fusion.py
+# queen/technicals/indicators/volatility_fusion.py
 # ------------------------------------------------------------
 # ⚙️ Volatility Diagnostic Fusion Layer — Quant-Core v4.x
 # ------------------------------------------------------------
@@ -14,7 +14,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.indicators.vol_keltner import compute_keltner
 from quant.signals.utils_indicator_health import _log_indicator_warning
@@ -24,7 +23,9 @@ from quant.utils.path_manager import get_dev_snapshot_path
 # ============================================================
 # 🧠 Volatility Fusion Core
 # ============================================================
-def compute_volatility_fusion(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
+def compute_volatility_fusion(
+    df: pl.DataFrame, context: str = "default"
+) -> pl.DataFrame:
     """Fuse volatility diagnostics from Keltner, ATR (proxy), and Bollinger bands."""
     params = get_indicator_params("VOL_FUSION", context)
     normalize_window = params.get("normalize_window", 50)
@@ -35,7 +36,11 @@ def compute_volatility_fusion(df: pl.DataFrame, context: str = "default") -> pl.
     df = df.clone()
     for col in ["high", "low", "close"]:
         if col not in df.columns:
-            _log_indicator_warning("VOL_FUSION", context, f"Missing '{col}' column — cannot compute fusion.")
+            _log_indicator_warning(
+                "VOL_FUSION",
+                context,
+                f"Missing '{col}' column — cannot compute fusion.",
+            )
             return df
 
     # --- 1️⃣ Keltner Base ---
@@ -49,11 +54,14 @@ def compute_volatility_fusion(df: pl.DataFrame, context: str = "default") -> pl.
     # --- 2️⃣ ATR Proxy (optional) ---
     try:
         from quant.signals.indicators.vol_atr import compute_atr_indicator
+
         df_atr = compute_atr_indicator(df, context=context)
         atr_norm = df_atr["ATR_norm"].to_numpy().astype(float)
     except ImportError:
         atr_norm = kc_norm * 0.9
-        _log_indicator_warning("VOL_FUSION", context, "vol_atr.py not found — using Keltner ATR proxy.")
+        _log_indicator_warning(
+            "VOL_FUSION", context, "vol_atr.py not found — using Keltner ATR proxy."
+        )
 
     # --- 3️⃣ Fused Volatility Index ---
     volx = (weight_keltner * kc_norm) + (weight_atr * atr_norm)
@@ -67,7 +75,7 @@ def compute_volatility_fusion(df: pl.DataFrame, context: str = "default") -> pl.
         volx - rolling_min,
         np.maximum(rolling_max - rolling_min, 1e-9),
         out=np.zeros_like(volx),
-        where=(rolling_max - rolling_min) != 0
+        where=(rolling_max - rolling_min) != 0,
     )
     volx_norm = np.nan_to_num(volx_norm)
 
@@ -78,13 +86,19 @@ def compute_volatility_fusion(df: pl.DataFrame, context: str = "default") -> pl.
 
     # --- 6️⃣ Health Diagnostics ---
     if np.isnan(volx_norm).any():
-        _log_indicator_warning("VOL_FUSION", context, "NaN detected in VolX_norm — check input data continuity.")
+        _log_indicator_warning(
+            "VOL_FUSION",
+            context,
+            "NaN detected in VolX_norm — check input data continuity.",
+        )
 
-    return df_kc.with_columns([
-        pl.Series("VolX", volx),
-        pl.Series("VolX_norm", volx_norm),
-        pl.Series("VolX_bias", bias),
-    ])
+    return df_kc.with_columns(
+        [
+            pl.Series("VolX", volx),
+            pl.Series("VolX_norm", volx_norm),
+            pl.Series("VolX_bias", bias),
+        ]
+    )
 
 
 # ============================================================
@@ -98,16 +112,14 @@ def summarize_volatility(df: pl.DataFrame) -> dict:
     last_val = float(df["VolX_norm"][-1])
     last_bias = str(df["VolX_bias"][-1])
     state = (
-        "📈 Expansion" if "Expansion" in last_bias
-        else "⚠️ Squeeze" if "Squeeze" in last_bias
+        "📈 Expansion"
+        if "Expansion" in last_bias
+        else "⚠️ Squeeze"
+        if "Squeeze" in last_bias
         else "➡️ Stable"
     )
 
-    return {
-        "VolX_norm": round(last_val, 3),
-        "VolX_bias": last_bias,
-        "State": state
-    }
+    return {"VolX_norm": round(last_val, 3), "VolX_bias": last_bias, "State": state}
 
 
 # ============================================================

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/tactical/core.py — Tactical Fusion Engine (v2.0)
+# queen/technicals/signals/tactical/core.py — Tactical Fusion Engine (v2.0)
 # ============================================================
 """Adaptive Tactical Fusion Engine — blends regime (RScore), volatility (VolX),
 and liquidity (LBX) metrics into a unified Tactical Index.

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_exhaustion.py
+# queen/technicals/signals/tactical/exhaustion.py
 # ------------------------------------------------------------
 # ⚡ Tactical Exhaustion Bar Detector (Phase 4.7)
 # Detects exhaustion candles — high volume spikes,
@@ -42,22 +42,22 @@ def detect_exhaustion_bars(
     try:
         vol_ma = np.array(
             df.select(pl.col(volume_col).rolling_mean(window_size=lookback_vol))
-              .to_series()
-              .fill_null(0)
-              .to_numpy(),
+            .to_series()
+            .fill_null(0)
+            .to_numpy(),
             dtype=float,
         )
     except TypeError:
         # Backward compatibility with older Polars (<1.5)
         vol_ma = np.array(
             df.select(pl.col(volume_col).rolling_mean(window=lookback_vol))
-              .to_series()
-              .fill_null(0)
-              .to_numpy(),
+            .to_series()
+            .fill_null(0)
+            .to_numpy(),
             dtype=float,
         )
 
-    with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide="ignore", invalid="ignore"):
         vol_spike = np.where(vol_ma != 0, vol / vol_ma, 1.0)
 
     # --- Candle wick ratio ---
@@ -90,12 +90,14 @@ def detect_exhaustion_bars(
             signals[i] = "🟩 Bullish Exhaustion"
 
     # --- Attach results ---
-    df = df.with_columns([
-        pl.Series("Volume_Spike", vol_spike),
-        pl.Series("Wick_Ratio", wick_ratio),
-        pl.Series("CMV_Delta", cmv_delta),
-        pl.Series("Exhaustion_Signal", signals),
-    ])
+    df = df.with_columns(
+        [
+            pl.Series("Volume_Spike", vol_spike),
+            pl.Series("Wick_Ratio", wick_ratio),
+            pl.Series("CMV_Delta", cmv_delta),
+            pl.Series("Exhaustion_Signal", signals),
+        ]
+    )
 
     return df
 
@@ -106,17 +108,19 @@ def detect_exhaustion_bars(
 if __name__ == "__main__":
     n = 120
     np.random.seed(42)
-    df = pl.DataFrame({
-        "high": np.random.uniform(100, 110, n),
-        "low": np.random.uniform(95, 105, n),
-        "close": np.random.uniform(97, 108, n),
-        "volume": np.random.randint(1000, 5000, n),
-        "CMV": np.random.uniform(-1, 1, n),
-    })
+    df = pl.DataFrame(
+        {
+            "high": np.random.uniform(100, 110, n),
+            "low": np.random.uniform(95, 105, n),
+            "close": np.random.uniform(97, 108, n),
+            "volume": np.random.randint(1000, 5000, n),
+            "CMV": np.random.uniform(-1, 1, n),
+        }
+    )
 
     result = detect_exhaustion_bars(df)
     print(
-        result
-        .select(["volume", "Volume_Spike", "Wick_Ratio", "CMV_Delta", "Exhaustion_Signal"])
-        .tail(10)
+        result.select(
+            ["volume", "Volume_Spike", "Wick_Ratio", "CMV_Delta", "Exhaustion_Signal"]
+        ).tail(10)
     )

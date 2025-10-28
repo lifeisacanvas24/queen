@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/breadth_momentum.py
+# queen/technicals/indicators/breadth_momentum.py
 # ------------------------------------------------------------
 # ⚙️ Breadth Momentum Engine — Short-term Market Acceleration
 # Config-driven, NaN-safe, diagnostic-logged, and headless
@@ -9,7 +9,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.utils.path_manager import get_dev_snapshot_path
 
 

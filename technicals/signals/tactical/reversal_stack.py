@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_reversal_stack.py
+# queen/technicals/signals/tactical/reversal_stack.py
 # ------------------------------------------------------------
 # 🔥 Tactical Reversal Stack Engine (Phase 4.8)
 # Combines Bias Regime, Divergence, Squeeze, Liquidity Trap,
@@ -89,10 +89,12 @@ def compute_reversal_stack(
         else:
             alert[i] = "➡️ Stable"
 
-    df = df.with_columns([
-        pl.Series("Reversal_Score", score),
-        pl.Series("Reversal_Stack_Alert", alert),
-    ])
+    df = df.with_columns(
+        [
+            pl.Series("Reversal_Score", score),
+            pl.Series("Reversal_Stack_Alert", alert),
+        ]
+    )
 
     return df
 
@@ -103,22 +105,31 @@ def compute_reversal_stack(
 if __name__ == "__main__":
     n = 60
     np.random.seed(42)
-    df = pl.DataFrame({
-        "Regime_State": np.random.choice(["TREND", "RANGE", "VOLATILE"], n),
-        "Divergence_Signal": np.random.choice(
-            ["Bullish Divergence", "Bearish Divergence", ""], n
-        ),
-        "Squeeze_Signal": np.random.choice(
-            ["Squeeze Ready", "Squeeze Release", ""], n
-        ),
-        "Liquidity_Trap": np.random.choice(
-            ["Bull Trap", "Bear Trap", ""], n
-        ),
-        "Exhaustion_Signal": np.random.choice(
-            ["🟩 Bullish Exhaustion", "🟥 Bearish Exhaustion", "➡️ Stable"], n
-        ),
-    })
+    df = pl.DataFrame(
+        {
+            "Regime_State": np.random.choice(["TREND", "RANGE", "VOLATILE"], n),
+            "Divergence_Signal": np.random.choice(
+                ["Bullish Divergence", "Bearish Divergence", ""], n
+            ),
+            "Squeeze_Signal": np.random.choice(
+                ["Squeeze Ready", "Squeeze Release", ""], n
+            ),
+            "Liquidity_Trap": np.random.choice(["Bull Trap", "Bear Trap", ""], n),
+            "Exhaustion_Signal": np.random.choice(
+                ["🟩 Bullish Exhaustion", "🟥 Bearish Exhaustion", "➡️ Stable"], n
+            ),
+        }
+    )
 
     out = compute_reversal_stack(df)
-    print(out.select(["Regime_State", "Divergence_Signal", "Exhaustion_Signal",
-                      "Reversal_Score", "Reversal_Stack_Alert"]).tail(10))
+    print(
+        out.select(
+            [
+                "Regime_State",
+                "Divergence_Signal",
+                "Exhaustion_Signal",
+                "Reversal_Score",
+                "Reversal_Stack_Alert",
+            ]
+        ).tail(10)
+    )

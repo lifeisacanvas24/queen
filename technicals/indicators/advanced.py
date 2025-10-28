@@ -1,5 +1,5 @@
 # ============================================================
-# quant/indicators/advanced.py (v1.0 — Quant-Core)
+# queen/technicals/indicators/advanced.py (v1.0 — Quant-Core)
 # ============================================================
 """Advanced technical indicators — pure Polars, production-ready.
 
@@ -18,6 +18,7 @@ import polars as pl
 # ⚙️ Core Helpers
 # ============================================================
 
+
 def _true_range(df: pl.DataFrame) -> pl.Series:
     """Compute True Range (TR) for ATR-based indicators."""
     prev_close = df["close"].shift(1)
@@ -31,6 +32,7 @@ def _true_range(df: pl.DataFrame) -> pl.Series:
 # 📊 ATR (Average True Range)
 # ============================================================
 
+
 def atr(df: pl.DataFrame, period: int = 14) -> pl.Series:
     """Compute Average True Range (ATR) using Wilder's smoothing."""
     tr = _true_range(df)
@@ -42,6 +44,7 @@ def atr(df: pl.DataFrame, period: int = 14) -> pl.Series:
 # 💎 Bollinger Bands
 # ============================================================
 
+
 def bollinger_bands(
     df: pl.DataFrame, period: int = 20, stddev: float = 2.0, column: str = "close"
 ) -> tuple[pl.Series, pl.Series, pl.Series]:
@@ -51,6 +54,7 @@ def bollinger_bands(
     upper = ma + stddev * std
     lower = ma - stddev * std
     return ma, upper, lower
+
 
 def supertrend(
     df: pl.DataFrame, period: int = 10, multiplier: float = 3.0
@@ -69,7 +73,9 @@ def supertrend(
     tr_df = pl.DataFrame({"tr1": tr1, "tr2": tr2, "tr3": tr3})
     try:
         # Polars ≥ 1.0 syntax
-        tr = tr_df.select(pl.max_horizontal(pl.col("tr1"), pl.col("tr2"), pl.col("tr3"))).to_series()
+        tr = tr_df.select(
+            pl.max_horizontal(pl.col("tr1"), pl.col("tr2"), pl.col("tr3"))
+        ).to_series()
     except Exception:
         # fallback for very old Polars
         tr = tr_df.max(axis=1)
@@ -118,9 +124,11 @@ def supertrend(
 
     return pl.Series("supertrend", trend)
 
+
 # ============================================================
 # 📈 ATR Channels (Volatility Envelopes)
 # ============================================================
+
 
 def atr_channels(
     df: pl.DataFrame, period: int = 14, multiplier: float = 1.5
@@ -136,6 +144,7 @@ def atr_channels(
 # 🧩 Composite Attachment
 # ============================================================
 
+
 def attach_advanced(df: pl.DataFrame) -> pl.DataFrame:
     """Attach advanced indicators to DataFrame."""
     df = df.clone()
@@ -145,11 +154,13 @@ def attach_advanced(df: pl.DataFrame) -> pl.DataFrame:
 
     # Bollinger Bands
     mid, upper, lower = bollinger_bands(df)
-    df = df.with_columns([
-        mid.alias("bb_mid"),
-        upper.alias("bb_upper"),
-        lower.alias("bb_lower"),
-    ])
+    df = df.with_columns(
+        [
+            mid.alias("bb_mid"),
+            upper.alias("bb_upper"),
+            lower.alias("bb_lower"),
+        ]
+    )
 
     # Supertrend
     st = supertrend(df)
@@ -157,9 +168,11 @@ def attach_advanced(df: pl.DataFrame) -> pl.DataFrame:
 
     # ATR Channels
     upper_ch, lower_ch = atr_channels(df)
-    df = df.with_columns([
-        upper_ch.alias("atr_upper"),
-        lower_ch.alias("atr_lower"),
-    ])
+    df = df.with_columns(
+        [
+            upper_ch.alias("atr_upper"),
+            lower_ch.alias("atr_lower"),
+        ]
+    )
 
     return df

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/breadth_cumulative.py
+# queen/technicals/indicators/breadth_cumulative.py
 # ------------------------------------------------------------
 # ⚙️ Cumulative Breadth & Persistence Engine (Headless)
 # Config-driven, NaN-safe, with diagnostic snapshot logging
@@ -9,7 +9,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.utils_indicator_health import _log_indicator_warning
 from quant.utils.path_manager import get_dev_snapshot_path
@@ -38,45 +37,52 @@ def compute_breadth(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         _log_indicator_warning(
             "BREADTH_CUMULATIVE",
             context,
-            f"Missing required columns {required_cols - set(df.columns)} — skipping computation."
+            f"Missing required columns {required_cols - set(df.columns)} — skipping computation.",
         )
         return df
 
     # --- Handle NaN/inf values safely
-    df = df.with_columns([
-        pl.col("CMV").fill_null(0).fill_nan(0),
-        pl.col("SPS").fill_null(0).fill_nan(0)
-    ])
+    df = df.with_columns(
+        [pl.col("CMV").fill_null(0).fill_nan(0), pl.col("SPS").fill_null(0).fill_nan(0)]
+    )
 
     # --- Rolling means
-    df = df.with_columns([
-        pl.col("CMV").rolling_mean(window_size=window).alias("CMV_Breadth"),
-        pl.col("SPS").rolling_mean(window_size=window).alias("SPS_Breadth")
-    ])
+    df = df.with_columns(
+        [
+            pl.col("CMV").rolling_mean(window_size=window).alias("CMV_Breadth"),
+            pl.col("SPS").rolling_mean(window_size=window).alias("SPS_Breadth"),
+        ]
+    )
 
     # --- Breadth persistence
-    df = df.with_columns([
-        (((pl.col("CMV_Breadth") + pl.col("SPS_Breadth")) / 2)
-         .clip(-1, 1)
-         .alias("Breadth_Persistence"))
-    ])
+    df = df.with_columns(
+        [
+            (
+                ((pl.col("CMV_Breadth") + pl.col("SPS_Breadth")) / 2)
+                .clip(-1, 1)
+                .alias("Breadth_Persistence")
+            )
+        ]
+    )
 
     # --- Bias classification
-    df = df.with_columns([
-        pl.when(pl.col("Breadth_Persistence") > threshold_bullish)
-        .then(pl.lit("🟢 Bullish"))
-        .when(pl.col("Breadth_Persistence") < threshold_bearish)
-        .then(pl.lit("🔴 Bearish"))
-        .otherwise(pl.lit("⚪ Neutral"))
-        .alias("Breadth_Bias")
-    ])
+    df = df.with_columns(
+        [
+            pl.when(pl.col("Breadth_Persistence") > threshold_bullish)
+            .then(pl.lit("🟢 Bullish"))
+            .when(pl.col("Breadth_Persistence") < threshold_bearish)
+            .then(pl.lit("🔴 Bearish"))
+            .otherwise(pl.lit("⚪ Neutral"))
+            .alias("Breadth_Bias")
+        ]
+    )
 
     # --- Health diagnostic
     if df["Breadth_Persistence"].null_count() > 0:
         _log_indicator_warning(
             "BREADTH_CUMULATIVE",
             context,
-            "Detected NaN values in Breadth_Persistence — check CMV/SPS sources."
+            "Detected NaN values in Breadth_Persistence — check CMV/SPS sources.",
         )
 
     return df
@@ -94,15 +100,17 @@ def summarize_breadth(df: pl.DataFrame) -> dict:
     bias = str(df["Breadth_Bias"][-1])
 
     strength = (
-        "Strong" if abs(last_persist) > 0.6 else
-        "Moderate" if abs(last_persist) > 0.3 else
-        "Weak"
+        "Strong"
+        if abs(last_persist) > 0.6
+        else "Moderate"
+        if abs(last_persist) > 0.3
+        else "Weak"
     )
 
     return {
         "Breadth_Persistence": round(last_persist, 3),
         "Bias": bias,
-        "Strength": strength
+        "Strength": strength,
     }
 
 

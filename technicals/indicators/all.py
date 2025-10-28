@@ -1,5 +1,5 @@
 # ============================================================
-# quant/indicators/all.py (v1.0 — Unified Indicator Layer)
+# queen/technicals/indicators/all.py (v1.0 — Unified Indicator Layer)
 # ============================================================
 """Unified interface for all technical indicators in Quant-Core.
 
@@ -13,7 +13,6 @@ Features:
 from __future__ import annotations
 
 import polars as pl
-
 from quant.indicators.advanced import attach_advanced as attach_adv
 from quant.indicators.core import attach_indicators as attach_core
 
@@ -26,13 +25,19 @@ def _safe_merge(df_base: pl.DataFrame, df_add: pl.DataFrame) -> pl.DataFrame:
     if df_add.is_empty():
         return df_base
 
-    join_cols = [c for c in ["timestamp", "symbol"] if c in df_base.columns and c in df_add.columns]
+    join_cols = [
+        c
+        for c in ["timestamp", "symbol"]
+        if c in df_base.columns and c in df_add.columns
+    ]
     if not join_cols:
         # fallback — align by row position
         return pl.concat([df_base, df_add], how="horizontal")
 
     # Avoid duplicate columns (like close, open, etc.)
-    overlapping = [c for c in df_add.columns if c in df_base.columns and c not in join_cols]
+    overlapping = [
+        c for c in df_add.columns if c in df_base.columns and c not in join_cols
+    ]
     df_add = df_add.drop(overlapping)
 
     merged = df_base.join(df_add, on=join_cols, how="inner")
@@ -80,16 +85,20 @@ if __name__ == "__main__":
     # Simple sanity test
     import polars as pl
 
-    df = pl.DataFrame({
-        "timestamp": pl.datetime_range("2025-01-01", "2025-01-30", "1d", eager=True),
-        "open": range(100,130),
-        "high": range(101,131),
-        "low":  range(99,129),
-        "close": range(100,130),
-        "volume": [1000+i*10 for i in range(30)],
-        "oi": [0]*30,
-        "symbol": ["TEST"]*30
-    })
+    df = pl.DataFrame(
+        {
+            "timestamp": pl.datetime_range(
+                "2025-01-01", "2025-01-30", "1d", eager=True
+            ),
+            "open": range(100, 130),
+            "high": range(101, 131),
+            "low": range(99, 129),
+            "close": range(100, 130),
+            "volume": [1000 + i * 10 for i in range(30)],
+            "oi": [0] * 30,
+            "symbol": ["TEST"] * 30,
+        }
+    )
 
     full = attach_all_indicators(df)
     print(full.tail(5))

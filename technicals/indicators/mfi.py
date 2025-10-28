@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/indicators/volume_mfi.py
+# queen/technicals/indicators/volume_mfi.py
 # ------------------------------------------------------------
 # ⚙️ Money Flow Index (MFI)
 # Config-driven, NaN-safe, headless for Quant-Core v4.x
@@ -10,7 +10,6 @@ import json
 
 import numpy as np
 import polars as pl
-
 from quant.config import get_indicator_params
 from quant.signals.utils_indicator_health import _log_indicator_warning
 from quant.utils.path_manager import get_dev_snapshot_path
@@ -42,7 +41,9 @@ def compute_mfi(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
     volume = df["volume"].to_numpy().astype(float)
 
     if len(close) < period + 2:
-        _log_indicator_warning("MFI", context, f"Insufficient data (<{period+2}) for MFI.")
+        _log_indicator_warning(
+            "MFI", context, f"Insufficient data (<{period+2}) for MFI."
+        )
         return df
 
     # Typical Price
@@ -85,16 +86,22 @@ def compute_mfi(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
         np.where(bias_change < 0, "⬇️ Outflow", "➡️ Flat"),
     )
 
-    df = df.with_columns([
-        pl.Series("MFI", mfi_full),
-        pl.Series("MFI_norm", mfi_norm),
-        pl.Series("MFI_Bias", bias),
-        pl.Series("MFI_Flow", flow),
-    ])
+    df = df.with_columns(
+        [
+            pl.Series("MFI", mfi_full),
+            pl.Series("MFI_norm", mfi_norm),
+            pl.Series("MFI_Bias", bias),
+            pl.Series("MFI_Flow", flow),
+        ]
+    )
 
     # Diagnostics for NaN
     if np.isnan(mfi_full).any():
-        _log_indicator_warning("MFI", context, "Detected NaN values in MFI — incomplete rolling window or invalid input.")
+        _log_indicator_warning(
+            "MFI",
+            context,
+            "Detected NaN values in MFI — incomplete rolling window or invalid input.",
+        )
 
     return df
 
@@ -112,8 +119,10 @@ def summarize_mfi(df: pl.DataFrame) -> dict:
     flow = str(df["MFI_Flow"].drop_nulls()[-1])
 
     state = (
-        "🟩 Accumulation" if "Accumulation" in bias
-        else "🟥 Distribution" if "Distribution" in bias
+        "🟩 Accumulation"
+        if "Accumulation" in bias
+        else "🟥 Distribution"
+        if "Distribution" in bias
         else "⬜ Neutral"
     )
 

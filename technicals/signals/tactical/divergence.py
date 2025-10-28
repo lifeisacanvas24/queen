@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_divergence.py
+# queen/technicals/signals/tactical/divergence.py
 # ------------------------------------------------------------
 # ⚙️ Volume–Momentum Divergence Engine
 # Detects bullish/bearish divergences between price, CMV, and volume
@@ -17,7 +17,7 @@ def detect_divergence(
     price_col: str = "close",
     cmv_col: str = "CMV",
     lookback: int = 5,
-    threshold: float = 0.02
+    threshold: float = 0.02,
 ) -> pl.DataFrame:
     """Detects CMV–Price divergences (momentum disagreement zones).
     Flags potential reversal signals:
@@ -71,12 +71,7 @@ if __name__ == "__main__":
     mfi = 50 + 10 * np.cos(x)
     chaikin = np.sin(x * 1.2) * 1000
 
-    df = pl.DataFrame({
-        "close": price,
-        "CMV": cmv,
-        "MFI": mfi,
-        "Chaikin_Osc": chaikin
-    })
+    df = pl.DataFrame({"close": price, "CMV": cmv, "MFI": mfi, "Chaikin_Osc": chaikin})
 
     df = detect_divergence(df)
     print("✅ Divergence Diagnostic →", summarize_divergence(df))
@@ -87,7 +82,11 @@ if __name__ == "__main__":
     plt.title("Volume–Momentum Divergence Detection")
     bull_idx = np.where(df["Divergence_Score"] > 0)[0]
     bear_idx = np.where(df["Divergence_Score"] < 0)[0]
-    plt.scatter(bull_idx, df["close"][bull_idx], color="green", label="Bullish Div", zorder=5)
-    plt.scatter(bear_idx, df["close"][bear_idx], color="red", label="Bearish Div", zorder=5)
+    plt.scatter(
+        bull_idx, df["close"][bull_idx], color="green", label="Bullish Div", zorder=5
+    )
+    plt.scatter(
+        bear_idx, df["close"][bear_idx], color="red", label="Bearish Div", zorder=5
+    )
     plt.legend()
     plt.show()

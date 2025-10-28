@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/signals/tactical/tactical_meta_dashboard.py
+# queen/technicals/signals/tactical/meta_dashboard.py
 # ------------------------------------------------------------
 # 🎛️ Phase 6.1 — Tactical Meta Dashboard
 # Interactive monitoring dashboard for AI health, drift,

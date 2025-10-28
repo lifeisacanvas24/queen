@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Queen — Summary</title>
+<style>body{font-family:system-ui;background:#0f1115;color:#e8eaf2} .wrap{max-width:1000px;margin:24px auto}
+h1{margin:0 0 8px} table{width:100%;border-collapse:collapse} th,td{padding:8px 10px;border-bottom:1px solid #202737}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:#beddff}
+.badge{padding:3px 8px;border-radius:12px;border:1px solid #2a3448} .buy{color:#16c784;border-color:#1e825f}
+.sell{color:#ef5350;border-color:#9a3a38} .hold{color:#f6c343;border-color:#8f7630}
+</style></head>
+<body><div class="wrap">
+<h1>Queen — Summary</h1>
+<div>Updated: {{updated_at}} · Symbols: {{ ', '.join(symbols) if symbols else '—' }} · TF: {{timeframe}}</div>
+<table><thead><tr>
+<th>Symbol</th><th>CMP</th><th>VWAP</th><th>Bias</th><th>Strength</th><th>CPR (P/BC/TC)</th><th>RSI</th><th>OBV</th><th>Targets</th><th>Notes</th>
+</tr></thead><tbody>
+{% for it in items %}
+<tr>
+<td><b>{{it.symbol}}</b></td>
+<td>{{'%.2f' % it.cmp if it.cmp else '—'}}</td>
+<td>{{'%.2f' % it.vwap if it.vwap else '—'}}</td>
+<td><span class="badge {{ 'buy' if it.bias=='Bullish' else ('sell' if it.bias=='Bearish' else 'hold') }}">{{it.bias}}</span></td>
+<td>{{'%.1f' % it.strength}}</td>
+<td class="mono">
+  {% if it.cpr %} {{'%.2f' % it.cpr.pivot}} / {{'%.2f' % it.cpr.bc}} / {{'%.2f' % it.cpr.tc}} {% else %} — {% endif %}
+</td>
+<td>{{'%.1f' % it.rsi if it.rsi else '—'}}</td>
+<td>{{it.obv_trend}}</td>
+<td class="mono">{% for k,v in it.targets.items() %}{{k}}: {{'%.2f' % v}} {% endfor %}</td>
+<td class="mono">{{' · '.join(it.notes)}}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+</div></body></html>

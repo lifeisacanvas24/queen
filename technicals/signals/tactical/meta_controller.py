@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/signals/tactical/tactical_meta_controller.py
+# queen/technicals/signals/tactical/meta_controller.py
 # ------------------------------------------------------------
 # 🧠 Phase 6.0 — Tactical Meta Controller
 # The adaptive orchestration layer that supervises the AI engine

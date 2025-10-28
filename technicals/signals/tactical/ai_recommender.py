@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_ai_recommender.py
+# queen/technicals/signals/tactical/ai_recommender.py
 # ------------------------------------------------------------
 # 🧠 Phase 5.0 — Tactical AI Recommender (Learning Engine Base)
 # Learns from historical tactical events to forecast
@@ -32,7 +32,9 @@ def normalize_series(series: np.ndarray) -> np.ndarray:
 # ============================================================
 # 🧩 Core Learner — Historical Context Stats
 # ============================================================
-def analyze_event_log(log_path: str = "quant/logs/tactical_event_log.csv") -> pl.DataFrame:
+def analyze_event_log(
+    log_path: str = "quant/logs/tactical_event_log.csv",
+) -> pl.DataFrame:
     """Compute historical statistics per timeframe."""
     if not os.path.exists(log_path):
         console.print(f"⚠️ No event log found at {log_path}")
@@ -52,28 +54,40 @@ def analyze_event_log(log_path: str = "quant/logs/tactical_event_log.csv") -> pl
     # Aggregate signals by timeframe
     agg = (
         df.group_by("timeframe")
-        .agg([
-            pl.count().alias("Event_Count"),
-            pl.col("Reversal_Alert").filter(pl.col("Reversal_Alert").str.contains("BUY")).count().alias("BUY_Count"),
-            pl.col("Reversal_Alert").filter(pl.col("Reversal_Alert").str.contains("SELL")).count().alias("SELL_Count"),
-            pl.col("Reversal_Score").fill_null(0).mean().alias("Avg_Score"),
-        ])
-        .with_columns([
-            (pl.col("BUY_Count") / pl.col("Event_Count")).alias("BUY_Ratio"),
-            (pl.col("SELL_Count") / pl.col("Event_Count")).alias("SELL_Ratio"),
-        ])
-        .with_columns([
-            (pl.col("BUY_Ratio") - pl.col("SELL_Ratio")).alias("Bias_Skew"),
-        ])
+        .agg(
+            [
+                pl.count().alias("Event_Count"),
+                pl.col("Reversal_Alert")
+                .filter(pl.col("Reversal_Alert").str.contains("BUY"))
+                .count()
+                .alias("BUY_Count"),
+                pl.col("Reversal_Alert")
+                .filter(pl.col("Reversal_Alert").str.contains("SELL"))
+                .count()
+                .alias("SELL_Count"),
+                pl.col("Reversal_Score").fill_null(0).mean().alias("Avg_Score"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("BUY_Count") / pl.col("Event_Count")).alias("BUY_Ratio"),
+                (pl.col("SELL_Count") / pl.col("Event_Count")).alias("SELL_Ratio"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("BUY_Ratio") - pl.col("SELL_Ratio")).alias("Bias_Skew"),
+            ]
+        )
     )
 
     # Compute confidence score based on magnitude of skew and event volume
     skew_norm = normalize_series(agg["Bias_Skew"].to_numpy())
     count_norm = normalize_series(agg["Event_Count"].to_numpy())
 
-    agg = agg.with_columns([
-        pl.Series("Confidence", np.round((0.6 * skew_norm + 0.4 * count_norm), 2))
-    ])
+    agg = agg.with_columns(
+        [pl.Series("Confidence", np.round((0.6 * skew_norm + 0.4 * count_norm), 2))]
+    )
 
     return agg
 
@@ -116,7 +130,15 @@ def render_ai_recommender(log_path: str = "quant/logs/tactical_event_log.csv"):
         header_style="bold green",
         expand=True,
     )
-    for col in ["timeframe", "Event_Count", "BUY_Ratio", "SELL_Ratio", "Bias_Skew", "Confidence", "Forecast"]:
+    for col in [
+        "timeframe",
+        "Event_Count",
+        "BUY_Ratio",
+        "SELL_Ratio",
+        "Bias_Skew",
+        "Confidence",
+        "Forecast",
+    ]:
         table.add_column(col, justify="center")
 
     for row in df_forecast.iter_rows(named=True):

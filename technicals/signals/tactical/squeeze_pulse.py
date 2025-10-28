@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_squeeze_pulse.py
+# queen/technicals/signals/tactical/squeeze_pulse.py
 # ------------------------------------------------------------
 # ⚙️ Volume–Volatility Compression Engine (Squeeze Pulse)
 # Detects squeeze buildup (low volatility + high SPS/CMV) and
@@ -22,7 +22,7 @@ def detect_squeeze_pulse(
     atr_col: str = "atr_14",
     sps_col: str = "SPS",
     cmv_col: str = "CMV",
-    squeeze_threshold: float = 0.015
+    squeeze_threshold: float = 0.015,
 ) -> pl.DataFrame:
     """Detects Bollinger–Keltner squeeze compression and expansion pulses.
     Flags:
@@ -51,11 +51,16 @@ def detect_squeeze_pulse(
         if bb_upper[i] < kel_upper[i] and bb_lower[i] > kel_lower[i]:
             squeeze[i] = "⚡ Squeeze Ready"
         # 🚀 Expansion: BB outside Keltner after compression
-        elif bb_upper[i] > kel_upper[i] and bb_lower[i] < kel_lower[i] and bb_width > kel_width * (1 + squeeze_threshold):
+        elif (
+            bb_upper[i] > kel_upper[i]
+            and bb_lower[i] < kel_lower[i]
+            and bb_width > kel_width * (1 + squeeze_threshold)
+        ):
             squeeze[i] = "🚀 Squeeze Release"
 
     df = df.with_columns(pl.Series("Squeeze_Signal", squeeze))
     return df
+
 
 # ============================================================
 # 🔍 Diagnostic Summary
@@ -86,15 +91,17 @@ if __name__ == "__main__":
     sps = np.random.uniform(0.5, 1.0, n)
     cmv = np.sin(np.linspace(0, 6, n))
 
-    df = pl.DataFrame({
-        "bb_upper": bb_upper,
-        "bb_lower": bb_lower,
-        "keltner_upper": keltner_upper,
-        "keltner_lower": keltner_lower,
-        "atr_14": atr,
-        "SPS": sps,
-        "CMV_smooth": cmv
-    })
+    df = pl.DataFrame(
+        {
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "keltner_upper": keltner_upper,
+            "keltner_lower": keltner_lower,
+            "atr_14": atr,
+            "SPS": sps,
+            "CMV_smooth": cmv,
+        }
+    )
 
     df = detect_squeeze_pulse(df)
     print("✅ Squeeze Pulse Diagnostic →", summarize_squeeze(df))

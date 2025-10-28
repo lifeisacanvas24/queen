@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_mission_control_ui.py
+# queen/technicals/signals/tactical/mission_control_ui.py
 # ------------------------------------------------------------
 # 🧭 Phase 7.3 — Cockpit Mission Control UI
 # Web + Terminal dashboard for supervising all Tactical Daemons,
@@ -25,6 +25,7 @@ WEIGHT_LOG = "quant/config/indicator_weights.json"
 console = Console()
 app = FastAPI(title="🛰️ Quant Cockpit Mission Control")
 
+
 # ============================================================
 # 🧩 Helper Functions
 # ============================================================
@@ -34,14 +35,17 @@ def load_json(path: str) -> Dict:
             return json.load(f)
     return {}
 
+
 def load_csv_lines(path: str, limit: int = 100) -> List[Dict]:
     if not os.path.exists(path):
         return []
     import csv
+
     with open(path) as f:
         reader = csv.DictReader(f)
         rows = list(reader)
         return rows[-limit:]
+
 
 # ============================================================
 # 🛰️ API Routes
@@ -51,15 +55,18 @@ def get_health_status():
     """Return the latest supervisor health log."""
     return load_json(HEALTH_LOG)
 
+
 @app.get("/weights", response_class=JSONResponse)
 def get_weights():
     """Return the current indicator weights."""
     return load_json(WEIGHT_LOG)
 
+
 @app.get("/drift", response_class=JSONResponse)
 def get_drift_log():
     """Return drift log entries."""
     return load_csv_lines(DRIFT_LOG)
+
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
@@ -71,24 +78,30 @@ def index(request: Request):
     # --- Plotly: Drift Timeline Chart ---
     drift_chart = go.Figure()
     if drift:
-        drift_chart.add_trace(go.Scatter(
-            x=[d["timestamp"] for d in drift],
-            y=[float(d.get("drift_score", 0)) for d in drift],
-            mode="lines+markers",
-            name="Drift Score",
-        ))
-        drift_chart.update_layout(title="Model Drift Over Time", xaxis_title="Time", yaxis_title="Drift Score")
+        drift_chart.add_trace(
+            go.Scatter(
+                x=[d["timestamp"] for d in drift],
+                y=[float(d.get("drift_score", 0)) for d in drift],
+                mode="lines+markers",
+                name="Drift Score",
+            )
+        )
+        drift_chart.update_layout(
+            title="Model Drift Over Time", xaxis_title="Time", yaxis_title="Drift Score"
+        )
 
     drift_html = drift_chart.to_html(include_plotlyjs="cdn")
 
     # --- Weight Distribution Chart ---
     weight_chart = go.Figure()
     if weights:
-        weight_chart.add_trace(go.Bar(
-            x=list(weights.keys()),
-            y=list(weights.values()),
-            name="Indicator Weights",
-        ))
+        weight_chart.add_trace(
+            go.Bar(
+                x=list(weights.keys()),
+                y=list(weights.values()),
+                name="Indicator Weights",
+            )
+        )
         weight_chart.update_layout(title="Current Indicator Weights")
 
     weight_html = weight_chart.to_html(include_plotlyjs=False)
@@ -123,6 +136,7 @@ def index(request: Request):
     """
     return HTMLResponse(content=html)
 
+
 # ============================================================
 # 🩺 Terminal Summary Renderer
 # ============================================================
@@ -155,11 +169,15 @@ def render_terminal_summary():
         for d in drift[-5:]:
             console.print(f"  - {d.get('timestamp', '')} → {d.get('drift_score', '0')}")
 
+
 # ============================================================
 # 🧪 Standalone Launch
 # ============================================================
 if __name__ == "__main__":
     import uvicorn
+
     render_terminal_summary()
-    console.print("[green]🚀 Starting Mission Control Web UI at http://127.0.0.1:8000[/green]")
+    console.print(
+        "[green]🚀 Starting Mission Control Web UI at http://127.0.0.1:8000[/green]"
+    )
     uvicorn.run(app, host="0.0.0.0", port=8000)
