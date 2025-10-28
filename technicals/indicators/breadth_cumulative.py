@@ -1,136 +1,114 @@
 # ============================================================
 # queen/technicals/indicators/breadth_cumulative.py
 # ------------------------------------------------------------
-# ⚙️ Cumulative Breadth & Persistence Engine (Headless)
-# Config-driven, NaN-safe, with diagnostic snapshot logging
+# ⚙️ Cumulative Breadth & Persistence Engine (Headless, Polars)
+# Settings-driven via indicator_policy.params_for
 # ============================================================
 
-import json
+from __future__ import annotations
 
-import numpy as np
+import math
+
 import polars as pl
-from quant.config import get_indicator_params
-from quant.signals.utils_indicator_health import _log_indicator_warning
-from quant.utils.path_manager import get_dev_snapshot_path
+
+# Canonical settings owner
+from queen.settings.indicator_policy import params_for as _params_for
 
 
-# ============================================================
+# ------------------------------------------------------------
 # 🧠 Core Breadth Computation
-# ============================================================
-def compute_breadth(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
+# ------------------------------------------------------------
+def compute_breadth(df: pl.DataFrame, timeframe: str = "1d") -> pl.DataFrame:
     """Compute cumulative breadth from CMV/SPS columns:
     - CMV_Breadth (rolling mean)
     - SPS_Breadth (rolling mean)
-    - Breadth_Persistence (average bias strength)
-    - Breadth_Bias (Bullish/Bearish/Neutral)
+    - Breadth_Persistence (avg bias strength in [-1,1])
+    - Breadth_Bias (🟢/⚪/🔴)
+
+    Params are pulled from settings.indicator_policy via:
+      params_for("BREADTH_CUMULATIVE", timeframe)
+    with safe defaults if not present.
     """
-    params = get_indicator_params("BREADTH_CUMULATIVE", context)
-    window = params.get("window", 10)
-    threshold_bullish = params.get("threshold_bullish", 0.2)
-    threshold_bearish = params.get("threshold_bearish", -0.2)
+    if not isinstance(df, pl.DataFrame):
+        raise TypeError("compute_breadth: expected a Polars DataFrame")
 
-    df = df.clone()
-
-    # --- Validate required inputs
-    required_cols = {"CMV", "SPS"}
-    if not required_cols.issubset(df.columns):
-        _log_indicator_warning(
-            "BREADTH_CUMULATIVE",
-            context,
-            f"Missing required columns {required_cols - set(df.columns)} — skipping computation.",
-        )
+    required = {"CMV", "SPS"}
+    if not required.issubset(set(df.columns)):
+        # Return passthrough DF (no exception) so callers can chain safely
         return df
 
-    # --- Handle NaN/inf values safely
-    df = df.with_columns(
-        [pl.col("CMV").fill_null(0).fill_nan(0), pl.col("SPS").fill_null(0).fill_nan(0)]
-    )
+    # Resolve params from settings (falls back to sane defaults)
+    p = _params_for("BREADTH_CUMULATIVE", timeframe) or {}
+    window = int(p.get("window", 10))
+    thr_bull = float(p.get("threshold_bullish", 0.2))
+    thr_bear = float(p.get("threshold_bearish", -0.2))
 
-    # --- Rolling means
-    df = df.with_columns(
-        [
-            pl.col("CMV").rolling_mean(window_size=window).alias("CMV_Breadth"),
-            pl.col("SPS").rolling_mean(window_size=window).alias("SPS_Breadth"),
-        ]
-    )
-
-    # --- Breadth persistence
-    df = df.with_columns(
-        [
-            (
-                ((pl.col("CMV_Breadth") + pl.col("SPS_Breadth")) / 2)
-                .clip(-1, 1)
-                .alias("Breadth_Persistence")
-            )
-        ]
-    )
-
-    # --- Bias classification
-    df = df.with_columns(
-        [
-            pl.when(pl.col("Breadth_Persistence") > threshold_bullish)
+    # Null-safe rolling means
+    out = (
+        df.with_columns(
+            [
+                pl.col("CMV").cast(pl.Float64).fill_null(0).fill_nan(0).alias("CMV"),
+                pl.col("SPS").cast(pl.Float64).fill_null(0).fill_nan(0).alias("SPS"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.col("CMV").rolling_mean(window).alias("CMV_Breadth"),
+                pl.col("SPS").rolling_mean(window).alias("SPS_Breadth"),
+            ]
+        )
+        .with_columns(
+            ((pl.col("CMV_Breadth") + pl.col("SPS_Breadth")) / 2.0)
+            .clip(-1.0, 1.0)
+            .alias("Breadth_Persistence")
+        )
+        .with_columns(
+            pl.when(pl.col("Breadth_Persistence") > thr_bull)
             .then(pl.lit("🟢 Bullish"))
-            .when(pl.col("Breadth_Persistence") < threshold_bearish)
+            .when(pl.col("Breadth_Persistence") < thr_bear)
             .then(pl.lit("🔴 Bearish"))
             .otherwise(pl.lit("⚪ Neutral"))
             .alias("Breadth_Bias")
-        ]
+        )
     )
 
-    # --- Health diagnostic
-    if df["Breadth_Persistence"].null_count() > 0:
-        _log_indicator_warning(
-            "BREADTH_CUMULATIVE",
-            context,
-            "Detected NaN values in Breadth_Persistence — check CMV/SPS sources.",
-        )
-
-    return df
+    return out
 
 
-# ============================================================
+# ------------------------------------------------------------
 # 📊 Diagnostic Summary (Headless)
-# ============================================================
+# ------------------------------------------------------------
 def summarize_breadth(df: pl.DataFrame) -> dict:
     """Return structured summary for cockpit/fusion layers."""
-    if df.is_empty() or "Breadth_Bias" not in df.columns:
+    if not isinstance(df, pl.DataFrame):
         return {"status": "empty"}
 
-    last_persist = float(df["Breadth_Persistence"][-1])
-    bias = str(df["Breadth_Bias"][-1])
+    if (
+        df.is_empty()
+        or "Breadth_Persistence" not in df.columns
+        or "Breadth_Bias" not in df.columns
+    ):
+        return {"status": "empty"}
+
+    last_persist = df["Breadth_Persistence"][-1]
+    try:
+        val = float(last_persist) if last_persist is not None else float("nan")
+    except Exception:
+        val = float("nan")
+
+    bias = str(df["Breadth_Bias"][-1]) if "Breadth_Bias" in df.columns else "⚪ Neutral"
 
     strength = (
         "Strong"
-        if abs(last_persist) > 0.6
+        if (not math.isnan(val)) and abs(val) > 0.6
         else "Moderate"
-        if abs(last_persist) > 0.3
+        if (not math.isnan(val)) and abs(val) > 0.3
         else "Weak"
     )
 
     return {
-        "Breadth_Persistence": round(last_persist, 3),
+        "status": "ok",
+        "Breadth_Persistence": round(val, 3) if not math.isnan(val) else 0.0,
         "Bias": bias,
         "Strength": strength,
     }
-
-
-# ============================================================
-# 🧪 Standalone Headless Test (Config-Driven)
-# ============================================================
-if __name__ == "__main__":
-    np.random.seed(42)
-    n = 120
-    cmv = np.sin(np.linspace(0, 6, n)) + np.random.normal(0, 0.1, n)
-    sps = np.cos(np.linspace(0, 6, n)) + np.random.normal(0, 0.1, n)
-    df = pl.DataFrame({"CMV": cmv, "SPS": sps})
-
-    df = compute_breadth(df, context="daily")
-    summary = summarize_breadth(df)
-
-    # ✅ Headless diagnostic snapshot (no prints)
-    snapshot_path = get_dev_snapshot_path("breadth_cumulative")
-    with open(snapshot_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    # Optional console echo in dev mode (safe)
-    print(f"📊 [Headless] Snapshot written → {snapshot_path}")

@@ -1,111 +1,181 @@
 # ============================================================
 # queen/technicals/indicators/breadth_momentum.py
 # ------------------------------------------------------------
-# ⚙️ Breadth Momentum Engine — Short-term Market Acceleration
-# Config-driven, NaN-safe, diagnostic-logged, and headless
+# ⚙️ Breadth Momentum — short-term market acceleration
+# Settings-driven, NaN-safe, Polars-only, headless-friendly
 # ============================================================
 
-import json
+from __future__ import annotations
+
+import math
 
 import numpy as np
 import polars as pl
-from quant.utils.path_manager import get_dev_snapshot_path
+from queen.settings.indicator_policy import params_for as _params_for
 
 
-# ============================================================
-# 🧠 Core Breadth Momentum Computation
-# ============================================================
-# ============================================================
-# Tactical Regime Strength (RScore)
-# ============================================================
-def compute_rscore(df):
-    """Derive a Regime Strength score from breadth momentum.
-    Returns 0–1 normalized bullish strength measure.
+# ------------------------------------------------------------
+# 🧠 Core computation
+# ------------------------------------------------------------
+def compute_breadth_momentum(df: pl.DataFrame, timeframe: str = "1d") -> pl.DataFrame:
+    """Compute breadth momentum & bias.
+
+    Preferred inputs:
+      • CMV, SPS  (continuous breadth drivers)
+    Optional fallback:
+      • advancers, decliners
+
+    Outputs:
+      • Breadth_Momentum       ∈ [-1, 1] (float)
+      • Breadth_Momentum_Bias  one of {🟢 Bullish, ⚪ Neutral, 🔴 Bearish}
     """
-    try:
-        if "advancers" in df.columns and "decliners" in df.columns:
-            adv = df["advancers"].mean()
-            dec = df["decliners"].mean()
-            breadth_ratio = adv / (adv + dec + 1e-6)
-            return round(float(breadth_ratio), 3)
-        if "close" in df.columns:
-            # fallback proxy: positive close momentum fraction
-            mom = (df["close"].diff() > 0).mean()
-            return round(float(mom), 3)
-    except Exception:
-        pass
-    return 0.5
+    if not isinstance(df, pl.DataFrame) or df.is_empty():
+        return df
+
+    # Params from settings (indicator_policy INDICATORS / contexts)
+    p = _params_for("BREADTH_MOMENTUM", timeframe) or {}
+    fast = int(p.get("fast_window", 5))
+    slow = int(p.get("slow_window", 20))
+    thr_expand = float(p.get("threshold_expand", 0.15))
+    thr_contract = float(p.get("threshold_contract", -0.15))
+    clip_abs = float(p.get("clip_abs", 1.0))
+
+    out = df.clone()
+    cols = set(out.columns)
+    has_cmv_sps = {"CMV", "SPS"}.issubset(cols)
+    has_adv_dec = {"advancers", "decliners"}.issubset(cols)
+
+    if has_cmv_sps:
+        out = out.with_columns(
+            [
+                pl.col("CMV").cast(pl.Float64).fill_null(0).fill_nan(0).alias("CMV"),
+                pl.col("SPS").cast(pl.Float64).fill_null(0).fill_nan(0).alias("SPS"),
+            ]
+        )
+        out = out.with_columns(
+            [
+                (
+                    (pl.col("CMV") - pl.col("CMV").rolling_mean(slow))
+                    / (pl.col("CMV").rolling_std(slow).fill_null(1e-9))
+                ).alias("_cmv_z"),
+                (
+                    (pl.col("SPS") - pl.col("SPS").rolling_mean(slow))
+                    / (pl.col("SPS").rolling_std(slow).fill_null(1e-9))
+                ).alias("_sps_z"),
+            ]
+        )
+        out = out.with_columns(
+            ((pl.col("_cmv_z") + pl.col("_sps_z")) / 2.0)
+            .rolling_mean(fast)
+            .clip(-clip_abs, clip_abs)
+            .alias("Breadth_Momentum")
+        ).drop(["_cmv_z", "_sps_z"])
+
+    elif has_adv_dec:
+        out = out.with_columns(
+            [
+                pl.col("advancers").cast(pl.Float64).fill_null(0).fill_nan(0),
+                pl.col("decliners").cast(pl.Float64).fill_null(0).fill_nan(0),
+            ]
+        )
+        out = out.with_columns(
+            (pl.col("advancers") / (pl.col("advancers") + pl.col("decliners") + 1e-9))
+            .clip(0.0, 1.0)
+            .alias("_ratio")
+        )
+        out = out.with_columns(
+            ((pl.col("_ratio") * 2.0) - 1.0)
+            .rolling_mean(fast)
+            .clip(-1.0, 1.0)
+            .alias("Breadth_Momentum")
+        ).drop(["_ratio"])
+
+    else:
+        # Nothing to compute
+        return out
+
+    # Bias buckets
+    out = out.with_columns(
+        pl.when(pl.col("Breadth_Momentum") > thr_expand)
+        .then(pl.lit("🟢 Bullish"))
+        .when(pl.col("Breadth_Momentum") < thr_contract)
+        .then(pl.lit("🔴 Bearish"))
+        .otherwise(pl.lit("⚪ Neutral"))
+        .alias("Breadth_Momentum_Bias")
+    )
+    return out
 
 
-# ============================================================
-# 📊 Diagnostic Summary (Headless)
-# ============================================================
+# ------------------------------------------------------------
+# 📊 Summary helper (cockpit/fusion)
+# ------------------------------------------------------------
 def summarize_breadth_momentum(df: pl.DataFrame) -> dict:
-    """Return structured summary for cockpit/fusion layers."""
-    if df.is_empty() or "Breadth_Momentum_Bias" not in df.columns:
+    if not isinstance(df, pl.DataFrame) or df.is_empty():
+        return {"status": "empty"}
+    if (
+        "Breadth_Momentum" not in df.columns
+        or "Breadth_Momentum_Bias" not in df.columns
+    ):
         return {"status": "empty"}
 
-    last_val = float(df["Breadth_Momentum"][-1])
+    try:
+        last_val = float(df["Breadth_Momentum"][-1])
+    except Exception:
+        last_val = float("nan")
     bias = str(df["Breadth_Momentum_Bias"][-1])
 
     state = (
         "Strong Expansion"
-        if last_val > 0.4
+        if (not math.isnan(last_val) and last_val > 0.4)
         else "Mild Expansion"
-        if last_val > 0.15
+        if (not math.isnan(last_val) and last_val > 0.15)
         else "Weak Contraction"
-        if last_val < -0.15
+        if (not math.isnan(last_val) and last_val < -0.15)
         else "Deep Contraction"
-        if last_val < -0.4
+        if (not math.isnan(last_val) and last_val < -0.4)
         else "Stable"
     )
 
-    return {"Breadth_Momentum": round(last_val, 3), "Bias": bias, "State": state}
+    return {
+        "status": "ok",
+        "Breadth_Momentum": round(last_val, 3) if not math.isnan(last_val) else 0.0,
+        "Bias": bias,
+        "State": state,
+    }
 
 
-# ============================================================
-# ⚡ Tactical Regime Strength Accessor (RScore)
-# ============================================================
+# ------------------------------------------------------------
+# ⚡ Regime strength (0–1) accessor
+# ------------------------------------------------------------
 def compute_regime_strength(df: pl.DataFrame) -> float:
-    """Compute a regime strength score (0–1) for Tactical Fusion Engine.
-    Uses breadth expansion (advancers/decliners) or momentum fraction.
-    """
     try:
-        if df.is_empty():
+        if not isinstance(df, pl.DataFrame) or df.is_empty():
             return 0.5
 
-        if "advancers" in df.columns and "decliners" in df.columns:
-            adv = df["advancers"].mean()
-            dec = df["decliners"].mean()
-            ratio = adv / (adv + dec + 1e-6)
-            return round(float(np.clip(ratio, 0.0, 1.0)), 3)
+        if {"advancers", "decliners"}.issubset(set(df.columns)):
+            adv = float(pl.mean(df["advancers"])) if df["advancers"].len() else 0.0
+            dec = float(pl.mean(df["decliners"])) if df["decliners"].len() else 0.0
+            ratio = adv / (adv + dec + 1e-9)
+            return float(np.clip(ratio, 0.0, 1.0))
 
-        if "close" in df.columns:
-            mom = (df["close"].diff() > 0).mean()
-            return round(float(np.clip(mom, 0.0, 1.0)), 3)
-
+        if "Breadth_Momentum" in df.columns and df["Breadth_Momentum"].len():
+            v = float(df["Breadth_Momentum"][-1])
+            return float(np.clip((v + 1.0) / 2.0, 0.0, 1.0))
     except Exception:
         pass
     return 0.5
 
 
-# ============================================================
-# 🧪 Standalone Test (Headless, Config-driven Snapshot)
-# ============================================================
+# ------------------------------------------------------------
+# 🧪 Local sanity (no I/O)
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    np.random.seed(42)
-    n = 100
-    cmv = np.sin(np.linspace(0, 5, n)) + np.random.normal(0, 0.05, n)
-    sps = np.cos(np.linspace(0, 5, n)) + np.random.normal(0, 0.05, n)
-    df = pl.DataFrame({"CMV": cmv, "SPS": sps})
-
-    df = compute_breadth_momentum(df, context="intraday_15m")
-    summary = summarize_breadth_momentum(df)
-
-    # ✅ Headless diagnostic snapshot via config path
-    snapshot_path = get_dev_snapshot_path("breadth_momentum")
-    with open(snapshot_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    # Optional console echo in dev mode
-    print(f"📊 [Headless] Snapshot written → {snapshot_path}")
+    n = 120
+    x = np.linspace(0, 6, n)
+    cmv = np.sin(x) + np.random.normal(0, 0.1, n)
+    sps = np.cos(x) + np.random.normal(0, 0.1, n)
+    demo = pl.DataFrame({"CMV": cmv, "SPS": sps})
+    out = compute_breadth_momentum(demo, timeframe="intraday_15m")
+    print(out.select(["Breadth_Momentum", "Breadth_Momentum_Bias"]).tail(5))
+    print(summarize_breadth_momentum(out))
+    print("Regime strength:", compute_regime_strength(out))

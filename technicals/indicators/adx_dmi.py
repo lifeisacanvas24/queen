@@ -1,182 +1,175 @@
+#!/usr/bin/env python3
 # ============================================================
-# queen/technicals/indicators/trend_adx_dmi.py
+# queen/technicals/indicators/adx_dmi.py — v1.1 (Polars + Settings)
 # ------------------------------------------------------------
-# ⚙️ ADX + DMI (Average Directional Movement Index)
-# Config-driven, NaN-safe, headless for Quant-Core 4.x
+# Pure compute, no I/O. Settings-driven params via indicator_policy.
+# Exports:
+#   - adx_dmi(df, timeframe="15m", period=None, threshold_trend=None, threshold_consolidation=None)
+#   - adx_summary(df_like)
+#   - lbx(df_like, timeframe="15m")
 # ============================================================
 
-import json
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from quant.config import get_indicator_params
-from quant.signals.utils_indicator_health import _log_indicator_warning
-from quant.utils.path_manager import get_dev_snapshot_path
+from queen.helpers.pl_compat import _s2np
+from queen.settings.indicator_policy import params_for as _params_for
 
 
-# ============================================================
-# 🧠 Core ADX / DMI Computation
-# ============================================================
-def compute_adx(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
-    """Compute ADX/DMI with config parameters and diagnostic logging."""
-    params = get_indicator_params("ADX", context)
-    period = params.get("period", 14)
-    thr_trend = params.get("threshold_trend", 25)
-    thr_consol = params.get("threshold_consolidation", 15)
+def adx_dmi(
+    df: pl.DataFrame,
+    timeframe: str = "15m",
+    period: int | None = None,
+    threshold_trend: int | None = None,
+    threshold_consolidation: int | None = None,
+) -> pl.DataFrame:
+    """Polars/Numpy hybrid — returns a DataFrame with:
+      ['adx', 'di_plus', 'di_minus', 'adx_trend']
 
-    df = df.clone()
-    for col in ["high", "low", "close"]:
-        if col not in df.columns:
-            _log_indicator_warning(
-                "ADX", context, f"Missing '{col}' column — skipping."
-            )
-            return df
+    Params resolve from settings.indicator_policy (contexts) when timeframe is provided.
+    You may override with explicit kwargs.
+    """
+    if not isinstance(df, pl.DataFrame):
+        raise TypeError("adx_dmi: expected a Polars DataFrame")
 
-    high = df["high"].to_numpy().astype(float)
-    low = df["low"].to_numpy().astype(float)
-    close = df["close"].to_numpy().astype(float)
+    need_cols = {"high", "low", "close"}
+    if not need_cols.issubset(set(df.columns)):
+        missing = sorted(need_cols - set(df.columns))
+        raise ValueError(f"adx_dmi: missing required columns: {missing}")
 
-    if len(high) < period + 2:
-        _log_indicator_warning(
-            "ADX", context, f"Insufficient data (<{period+2}) for ADX."
+    # Resolve defaults from settings
+    if timeframe:
+        p = _params_for("ADX_DMI", timeframe) or _params_for("ADX", timeframe) or {}
+        period = int(period or p.get("period", 14))
+        threshold_trend = int(threshold_trend or p.get("threshold_trend", 25))
+        threshold_consolidation = int(
+            threshold_consolidation or p.get("threshold_consolidation", 15)
         )
-        zeros = np.zeros_like(high)
-        return df.with_columns(
-            [
-                pl.Series("ADX", zeros),
-                pl.Series("DI_plus", zeros),
-                pl.Series("DI_minus", zeros),
-                pl.Series("ADX_trend", ["⚪ Neutral"] * len(high)),
-            ]
+    else:
+        period = int(period or 14)
+        threshold_trend = int(threshold_trend or 25)
+        threshold_consolidation = int(threshold_consolidation or 15)
+
+    # Pull arrays in a forward-safe way
+    high = _s2np(df["high"])
+    low = _s2np(df["low"])
+    close = _s2np(df["close"])
+
+    n = df.height
+    if n < period + 2:
+        zeros = np.zeros(n, dtype=float)
+        return pl.DataFrame(
+            {
+                "adx": zeros,
+                "di_plus": zeros,
+                "di_minus": zeros,
+                "adx_trend": pl.Series("adx_trend", list(state), dtype=pl.Utf8),
+            }
         )
 
-    # --- Directional movements
+    # Directional movement
     up_move = np.diff(high, prepend=high[0])
-    down_move = np.diff(low, prepend=low[0]) * -1
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+    down_move = -np.diff(low, prepend=low[0])
+    plus_dm = np.where((up_move > down_move) & (up_move > 0.0), up_move, 0.0)
+    minus_dm = np.where((down_move > up_move) & (down_move > 0.0), down_move, 0.0)
 
-    # --- True range
+    # True range
     tr = np.maximum.reduce(
-        [
-            high - low,
-            np.abs(high - np.roll(close, 1)),
-            np.abs(low - np.roll(close, 1)),
-        ]
+        [high - low, np.abs(high - np.roll(close, 1)), np.abs(low - np.roll(close, 1))]
     )
-    tr[0] = high[0] - low[0]
+    tr[0] = max(high[0] - low[0], 1e-12)
 
-    # --- Wilder smoothing
-    def wilder_smooth(values, p):
-        smoothed = np.zeros_like(values)
-        smoothed[p - 1] = np.sum(values[:p])
+    # Wilder smoothing
+    def wilder_smooth(values: np.ndarray, p: int) -> np.ndarray:
+        sm = np.zeros_like(values, dtype=float)
+        sm[p - 1] = np.sum(values[:p])
         for i in range(p, len(values)):
-            smoothed[i] = smoothed[i - 1] - (smoothed[i - 1] / p) + values[i]
-        return smoothed
+            sm[i] = sm[i - 1] - (sm[i - 1] / p) + values[i]
+        return sm
 
     tr_s = wilder_smooth(tr, period)
     plus_s = wilder_smooth(plus_dm, period)
     minus_s = wilder_smooth(minus_dm, period)
 
     with np.errstate(all="ignore"):
-        di_plus = 100 * (plus_s / tr_s)
-        di_minus = 100 * (minus_s / tr_s)
-        dx = 100 * np.abs(di_plus - di_minus) / np.maximum(di_plus + di_minus, 1e-9)
+        di_plus = 100.0 * (plus_s / np.maximum(tr_s, 1e-12))
+        di_minus = 100.0 * (minus_s / np.maximum(tr_s, 1e-12))
+        dx = 100.0 * np.abs(di_plus - di_minus) / np.maximum(di_plus + di_minus, 1e-12)
 
-    adx = np.zeros_like(dx)
+    adx = np.zeros_like(dx, dtype=float)
     adx[period - 1] = np.nanmean(dx[:period])
     for i in range(period, len(dx)):
         adx[i] = ((adx[i - 1] * (period - 1)) + dx[i]) / period
     adx = np.nan_to_num(adx)
 
-    # --- Trend classification
-    trend_state = np.full(len(adx), "⚪ Neutral", dtype=object)
-    trend_state[adx >= thr_trend] = "🟢 Trending"
-    trend_state[adx <= thr_consol] = "🟡 Consolidating"
+    # Trend state (plain tokens for rules)
+    state = np.full(n, "neutral", dtype=object)
+    state[adx >= threshold_trend] = "trending"
+    state[adx <= threshold_consolidation] = "consolidating"
 
-    return df.with_columns(
-        [
-            pl.Series("ADX", adx),
-            pl.Series("DI_plus", di_plus),
-            pl.Series("DI_minus", di_minus),
-            pl.Series("ADX_trend", trend_state),
-        ]
+    return pl.DataFrame(
+        {
+            "adx": adx,
+            "di_plus": di_plus,
+            "di_minus": di_minus,
+            "adx_trend": state,
+        }
     )
 
 
-# ============================================================
-# 📊 Diagnostic Summary (Headless)
-# ============================================================
-def summarize_adx(df: pl.DataFrame) -> dict:
-    """Return structured ADX summary for cockpit/fusion layers."""
-    if df.height == 0 or "ADX" not in df.columns:
-        return {"status": "empty"}
+# ------------------------------------------------------------
+# Summaries / Helpers
+# ------------------------------------------------------------
+def adx_summary(df_or_out: pl.DataFrame) -> dict:
+    """Accepts either the output of adx_dmi() OR a raw DF (in which case we compute adx_dmi()).
+    Returns a compact dict for cockpit/meta layers.
+    """
+    df = df_or_out
+    if not {"adx", "di_plus", "di_minus", "adx_trend"}.issubset(df.columns):
+        # Assume raw price DF; compute with default TF
+        df = adx_dmi(df_or_out, timeframe="15m")
 
-    last_adx = float(df["ADX"][-1])
-    last_plus = float(df["DI_plus"][-1])
-    last_minus = float(df["DI_minus"][-1])
-    bias = str(df["ADX_trend"][-1])
+    last_adx = float(df["adx"][-1])
+    last_plus = float(df["di_plus"][-1])
+    last_minus = float(df["di_minus"][-1])
+    bias = str(df["adx_trend"][-1])
 
-    strength = (
-        "🟩 Strong" if last_adx > 25 else "🟨 Moderate" if last_adx > 15 else "⬜ Weak"
-    )
+    strength = "strong" if last_adx > 25 else "moderate" if last_adx > 15 else "weak"
 
     return {
-        "ADX": round(last_adx, 2),
-        "DI_plus": round(last_plus, 2),
-        "DI_minus": round(last_minus, 2),
-        "Strength": strength,
-        "Trend_Bias": bias,
+        "adx": round(last_adx, 2),
+        "di_plus": round(last_plus, 2),
+        "di_minus": round(last_minus, 2),
+        "trend_bias": bias,
+        "strength": strength,
     }
 
 
-# ============================================================
-# ⚡ Tactical Liquidity Bias Accessor (LBX)
-# ============================================================
-def compute_lbx(df: pl.DataFrame) -> float:
-    """Compute a 0–1 normalized trend bias score for Tactical Fusion Engine.
-    Derived from ADX average strength and directional alignment.
+def lbx(df_or_out: pl.DataFrame, timeframe: str = "15m") -> float:
+    """Liquidity Bias (0–1): blend of average ADX and DI alignment.
+    Accepts either adx_dmi output or a raw DF.
     """
+    if not {"adx", "di_plus", "di_minus"}.issubset(df_or_out.columns):
+        out = adx_dmi(df_or_out, timeframe=timeframe)
+    else:
+        out = df_or_out
+
     try:
-        if df.is_empty():
-            return 0.5
-
-        # ensure ADX columns exist — compute if missing
-        if "ADX" not in df.columns:
-            df = compute_adx(df)
-
-        adx_val = float(np.clip(df["ADX"].mean() / 50.0, 0.0, 1.0))
-        di_plus = float(df["DI_plus"].mean()) if "DI_plus" in df.columns else 0.0
-        di_minus = float(df["DI_minus"].mean()) if "DI_minus" in df.columns else 0.0
-
-        # directional strength bias
+        adx_val = float(np.clip(out["adx"].mean() / 50.0, 0.0, 1.0))
+        di_plus = float(np.mean(_s2np(out["di_plus"])))
+        di_minus = float(np.mean(_s2np(out["di_minus"])))
         dir_bias = np.tanh((di_plus - di_minus) / 50.0)
-        lbx = np.clip((adx_val * 0.7) + (dir_bias * 0.3), 0.0, 1.0)
-
-        return round(float(lbx), 3)
+        return float(np.clip((adx_val * 0.7) + (dir_bias * 0.3), 0.0, 1.0))
     except Exception:
         return 0.5
 
 
-# ============================================================
-# 🧪 Local Dev Diagnostic (Headless Snapshot)
-# ============================================================
-if __name__ == "__main__":
-    np.random.seed(42)
-    n = 200
-    base = np.linspace(100, 110, n) + np.random.normal(0, 1.5, n)
-    high = base + np.random.uniform(0.5, 2.0, n)
-    low = base - np.random.uniform(0.5, 2.0, n)
-    close = base + np.random.normal(0, 0.5, n)
-    df = pl.DataFrame({"high": high, "low": low, "close": close})
-
-    df = compute_adx(df, context="intraday_15m")
-    summary = summarize_adx(df)
-
-    # ✅ Headless diagnostic snapshot
-    snapshot_path = get_dev_snapshot_path("adx")
-    with open(snapshot_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    # Optional echo for dev
-    print(f"📊 [Headless] ADX snapshot written → {snapshot_path}")
+# ------------------------------------------------------------
+# Registry exports (for autoscan)
+# ------------------------------------------------------------
+EXPORTS = {
+    "adx_dmi": adx_dmi,
+    "adx_summary": adx_summary,
+    "lbx": lbx,
+}
