@@ -31,6 +31,8 @@ ENV: str = "dev"  # default environment
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT.parent / "data"
 STATIC = DATA / "static"
+SERVER = ROOT.parent / "server"
+
 
 RUNTIME_PATHS: Dict[str, Dict[str, Path]] = {
     "dev": {
@@ -74,6 +76,8 @@ PATHS = {
     "ROOT": ROOT,
     "STATIC": STATIC,
     "CONFIGS": ROOT.parent / "configs",
+    "SERVER": SERVER,
+    "TEMPLATES": SERVER / "templates",
     "RUNTIME": get_env_paths()["data_runtime"],
     "LOGS": get_env_paths()["logs"],
     "CACHE": get_env_paths()["cache"],

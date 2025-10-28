@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_meta_memory.py
+# queen/technicals/signals/tactical/tactical_meta_memory.py
 # ------------------------------------------------------------
 # 🧠 Phase 6.2 — Tactical Meta Memory
 # Persistent quant "brain" that logs model evolution, drift,
@@ -92,7 +92,13 @@ def show_memory_timeline():
         header_style="bold magenta",
         expand=True,
     )
-    for col in ["timestamp", "model_version", "last_retrain", "top_feature", "top_weight"]:
+    for col in [
+        "timestamp",
+        "model_version",
+        "last_retrain",
+        "top_feature",
+        "top_weight",
+    ]:
         if col in df.columns:
             table.add_column(col)
 

@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_meta_dashboard.py
+# queen/technicals/signals/tactical/tactical_meta_dashboard.py
 # ------------------------------------------------------------
 # 🎛️ Phase 6.1 — Tactical Meta Dashboard
 # Interactive monitoring dashboard for AI health, drift,
@@ -23,6 +23,7 @@ CONFIG_PATH = "quant/config/meta_controller.json"
 WEIGHTS_PATH = "quant/config/indicator_weights.json"
 DRIFT_LOG_PATH = "quant/logs/meta_drift_log.csv"
 
+
 # ============================================================
 # 📊 Helper: Load Drift Log
 # ============================================================
@@ -31,6 +32,7 @@ def load_drift_log() -> pl.DataFrame:
         console.print(f"⚠️ No drift log found at {DRIFT_LOG_PATH}")
         return pl.DataFrame(schema={"timestamp": str, "drift": float})
     return pl.read_csv(DRIFT_LOG_PATH)
+
 
 # ============================================================
 # 📈 Plot Drift Over Time
@@ -47,7 +49,7 @@ def plot_drift_timeline(df: pl.DataFrame):
             y=df["drift"].to_list(),
             mode="lines+markers",
             name="Model Drift",
-            line=dict(width=2)
+            line=dict(width=2),
         )
     )
     fig.update_layout(
@@ -58,6 +60,7 @@ def plot_drift_timeline(df: pl.DataFrame):
         height=400,
     )
     fig.show()
+
 
 # ============================================================
 # 📊 Indicator Weight Table + Plot
@@ -94,7 +97,7 @@ def render_indicator_weights():
             x=features,
             y=values,
             marker_color="lightgreen",
-            name="Indicator Importance (%)"
+            name="Indicator Importance (%)",
         )
     )
     fig.update_layout(
@@ -105,6 +108,7 @@ def render_indicator_weights():
         height=400,
     )
     fig.show()
+
 
 # ============================================================
 # 📋 Meta Configuration Summary
@@ -124,6 +128,7 @@ def show_meta_config():
     for k, v in cfg.items():
         table.add_row(k, str(v))
     console.print(table)
+
 
 # ============================================================
 # 🚀 Dashboard Entrypoint

@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Queen Cockpit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 24px; }
+      h1 { font-size: 20px; margin-bottom: 8px; }
+      .meta { color: #666; margin-bottom: 16px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+      th { text-align: left; background: #fafafa; }
+      .ok { color: #16a34a; font-weight: 600; }
+      .no { color: #ef4444; font-weight: 600; }
+      .badge { padding: 2px 6px; border-radius: 6px; font-size: 12px; background: #eef2ff; color: #3730a3; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      button { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; }
+      button:hover { background: #f6f6f6; }
+    </style>
+  </head>
+  <body>
+    <h1>Queen Cockpit — Pulse</h1>
+    <div class="meta">Auto-refreshes every 60s • <span id="updatedAt">—</span></div>
+
+    <div class="row" style="margin-bottom: 12px;">
+      <button id="refreshBtn">Refresh now</button>
+      <span class="badge" id="countBadge">0 results</span>
+      <button id="copyBtn" title="Copy visible trade plan rows">Copy trade plan</button>
+    </div>
+
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>TF</th>
+          <th>Rule</th>
+          <th>OK</th>
+          <th>Meta</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <script>
+      async function fetchPulse() {
+        const res = await fetch('/cockpit/pulse/state');
+        const data = await res.json();
+        render(data);
+      }
+
+      function render(data) {
+        const tbody = document.querySelector('#tbl tbody');
+        tbody.innerHTML = '';
+        const results = data.results || [];
+        document.getElementById('updatedAt').textContent = 'Updated at: ' + (data.updated_at || '—');
+        document.getElementById('countBadge').textContent = results.length + ' results';
+
+        for (const r of results) {
+          const tr = document.createElement('tr');
+          const ok = r.ok ? '<span class="ok">YES</span>' : '<span class="no">NO</span>';
+          const meta = JSON.stringify(r.meta || {});
+          tr.innerHTML = `
+            <td>${r.symbol || ''}</td>
+            <td>${r.timeframe || ''}</td>
+            <td>${r.rule || ''}</td>
+            <td>${ok}</td>
+            <td style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${meta}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      document.getElementById('refreshBtn').addEventListener('click', fetchPulse);
+      document.getElementById('copyBtn').addEventListener('click', () => {
+        const rows = [...document.querySelectorAll('#tbl tbody tr')].map(tr => {
+          const tds = tr.querySelectorAll('td');
+          return {
+            symbol: tds[0].textContent,
+            timeframe: tds[1].textContent,
+            rule: tds[2].textContent,
+            ok: tds[3].textContent,
+            meta: tds[4].textContent
+          };
+        });
+        navigator.clipboard.writeText(JSON.stringify(rows, null, 2));
+      });
+
+      // kick off + interval
+      fetchPulse();
+      setInterval(fetchPulse, 60000);
+    </script>
+  </body>
+</html>

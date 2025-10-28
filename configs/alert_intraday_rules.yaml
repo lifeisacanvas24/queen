@@ -27,3 +27,167 @@ rules:
     kind: "pattern"
     pattern: "bullish_engulfing"
     timeframe: "1d"
+
+  # --- Pattern: Hammer on BSE 5m ---
+  - name: "BSE — Hammer (5m)"
+    symbol: "BSE"
+    kind: "pattern"
+    timeframe: "5m"
+    pattern: "hammer"
+    params:
+      body_ratio: 2.0
+      upper_max_mult: 1.0
+
+  # --- Indicator: EMA20 crosses above EMA50 (bullish) on BSE 5m ---
+  - name: "BSE — EMA20 crosses EMA50 up (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    timeframe: "5m"
+    indicator: "ema_cross"
+    op: "crosses_above"
+    value: 0 # (we encode cross via a synthetic diff series = ema20 - ema50)
+    params:
+      fast: 20
+      slow: 50
+
+  # --- Indicator: VWAP reclaim (price crosses above vwap) on BSE 5m ---
+  - name: "BSE — VWAP reclaim (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    timeframe: "5m"
+    indicator: "price_minus_vwap"
+    op: "crosses_above"
+    value: 0
+    params: {}
+
+  # Pattern (5m) — Hammer
+  - name: "BSE — Hammer (5m)"
+    symbol: "BSE"
+    kind: "pattern"
+    timeframe: "5m"
+    pattern: "hammer"
+    params: {} # you can tune body_ratio/upper_max_mult later
+
+  # EMA cross: fast 20 over slow 50 → use ema_spread crosses above 0
+  - name: "BSE — EMA20 crosses EMA50 up (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    timeframe: "5m"
+    indicator: "ema_cross"
+    op: "crosses_above"
+    value: 0
+    params:
+      fast: 20
+      slow: 50
+
+  # VWAP reclaim: price - vwap crosses above 0
+  - name: "BSE — VWAP reclaim (5m)"
+    symbol: "BSE"
+    kind: "indicator"
+    timeframe: "5m"
+    indicator: "price_minus_vwap"
+    op: "crosses_above"
+    value: 0
+    params: {}
+
+  - name: BSE — EMA20 crosses EMA50 up (5m)
+    kind: indicator
+    symbol: BSE
+    timeframe: "5m"
+    indicator: ema_cross
+    op: crosses_above
+    value: 0
+    params:
+      fast: 20
+      slow: 50
+
+  - name: BSE — VWAP reclaim (5m)
+    kind: indicator
+    symbol: BSE
+    timeframe: "5m"
+    indicator: price_minus_vwap
+    op: crosses_above
+    value: 0
+
+  - name: BSE — EMA20 crosses EMA50 up (5m)
+    kind: indicator
+    symbol: BSE
+    timeframe: "5m"
+    indicator: ema_cross
+    op: crosses_above
+    value: 0
+    params:
+      fast: 20
+      slow: 50
+
+  - name: BSE — VWAP reclaim (5m)
+    kind: indicator
+    symbol: BSE
+    timeframe: "5m"
+    indicator: price_minus_vwap
+    op: crosses_above
+    value: 0
+
+  # alert_intraday_rules.yaml (additions)
+  - name: BSE — EMA20 crosses EMA50 up
+    symbol: BSE
+    kind: indicator
+    timeframe: "5m"
+    indicator: ema_cross
+    op: crosses_above
+    value: 0
+    params:
+      fast: 20
+      slow: 50
+
+  - name: BSE — VWAP reclaim
+    symbol: BSE
+    kind: indicator
+    timeframe: "5m"
+    indicator: price_minus_vwap
+    op: crosses_above
+    value: 0
+
+  - name: BSE — Hammer (5m)
+    symbol: BSE
+    kind: pattern
+    timeframe: "5m"
+    pattern: hammer
+    params: { body_ratio: 2.0, upper_max_mult: 1.0 }
+
+  - name: BSE — EMA20 crosses EMA50 up (5m)
+    symbol: BSE
+    kind: indicator
+    timeframe: "5m"
+    indicator: ema_cross
+    op: crosses_above
+    value: 0
+    params:
+      fast: 20
+      slow: 50
+
+  - name: BSE — VWAP reclaim (5m)
+    symbol: BSE
+    kind: indicator
+    timeframe: "5m"
+    indicator: price_minus_vwap
+    op: crosses_above
+    value: 0
+
+  - name: BSE — EMA21 rising (slope>0, 1d)
+    symbol: BSE
+    kind: indicator
+    timeframe: "1d"
+    indicator: ema_slope
+    op: gt
+    value: 0
+    params:
+      length: 21
+      periods: 1
+
+  - name: BSE — Hammer (5m)
+    symbol: BSE
+    kind: pattern
+    timeframe: "5m"
+    pattern: hammer
+    params: {} # uses defaults in detection

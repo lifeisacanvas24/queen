@@ -96,8 +96,21 @@ def min_bars_for_indicator(indicator: str, timeframe: str) -> int:
 
 
 # ------------------------------------------------------------
-# ✅ Self-Test
+# Per-indicator min bars overrides (merged with DEFAULTS)
 # ------------------------------------------------------------
+_BASE_MIN_BARS = dict(S.DEFAULTS.get("INDICATOR_MIN_BARS", {}) or {})
+
+INDICATOR_MIN_BARS = {
+    **_BASE_MIN_BARS,
+    # light opinionated defaults; tweak freely
+    "ema": 60,
+    "ema_slope": 60,
+    "ema_cross": 120,  # slow=50 → ~100–150 bars is reasonable
+    "vwap": 40,
+    "price_minus_vwap": 40,
+}
+
 if __name__ == "__main__":
-    print(params_for("RSI", "1d"))
-    print(min_bars_for_indicator("RSI", "1d"))
+    print("params_for(RSI, 1d) →", params_for("RSI", "1d"))
+    print("min_bars_for_indicator(RSI, 1d) →", min_bars_for_indicator("RSI", "1d"))
+    print("INDICATOR_MIN_BARS →", INDICATOR_MIN_BARS)

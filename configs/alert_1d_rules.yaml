@@ -1,29 +1,42 @@
-# queen/configs/alert_1d_rules.yaml
-# Daily rules so they work regardless of market session.
+- name: BSE — price > 1 (1d)
+  symbol: BSE
+  kind: price
+  timeframe: "1d"
+  op: gt
+  value: 1
 
-rules:
-  # 1) Simple daily price threshold (fires instantly since price > 1)
-  - name: "BSE — price > 1 (1d)"
-    symbol: "BSE"
-    kind: "price"
-    timeframe: "1d"
-    op: "gt"
-    value: 1
+- name: BSE — RSI crosses 70 down (1d)
+  symbol: BSE
+  kind: indicator
+  timeframe: "1d"
+  indicator: rsi
+  op: crosses_below
+  value: 70
+  params: { length: 14 }
 
-  # 2) Daily RSI cross below 70 (debug will show last2 vs level)
-  - name: "BSE — RSI crosses 70 down (1d)"
-    symbol: "BSE"
-    kind: "indicator"
-    indicator: "rsi"
-    timeframe: "1d"
-    op: "crosses_below"
-    value: 70
-    params:
-      length: 14
+- name: GODFRYPHLP — Bullish Engulfing (1d)
+  symbol: GODFRYPHLP
+  kind: pattern
+  timeframe: "1d"
+  pattern: bullish_engulfing
 
-  # 3) Daily pattern (purple card)
-  - name: "GODFRYPHLP — Bullish Engulfing (1d)"
-    symbol: "GODFRYPHLP"
-    kind: "pattern"
-    pattern: "bullish_engulfing"
-    timeframe: "1d"
+# (optional) EMA check on daily too
+- name: BSE — EMA21 rising (1d)
+  symbol: BSE
+  kind: indicator
+  timeframe: "1d"
+  indicator: ema
+  op: gt
+  value: 0
+  params: { length: 21 } # your overlays.ema can emit slope or level; if slope, compare to 0
+
+- name: BSE — EMA21 rising (slope>0, 1d)
+  symbol: BSE
+  kind: indicator
+  timeframe: "1d"
+  indicator: ema_slope
+  op: gt
+  value: 0
+  params:
+    length: 21
+    periods: 1

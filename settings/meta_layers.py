@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/meta_layers.py — Market State Meta-Layer Config (v9.1)
+# queen/settings/meta_layers.py — Market State Meta-Layer Config (v9.2)
 # Forward-only, TF-owned parsing/validation, DRY window math
 # ============================================================
 from __future__ import annotations
@@ -160,6 +160,22 @@ META_LAYERS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Allowed keys sanity-check (helps catch typos in contexts)
+_ALLOWED_COMMON = {
+    "timeframe",
+    "lookback",
+    "min_cpr_compressions",
+    "volume_factor",
+    "min_wrbs",
+    "rsi_window",
+    "obv_window",
+    "pattern_count_window",
+    "min_repeat_patterns",
+    "divergence_window",
+    "rsi_threshold",
+    "volume_spike_factor",
+}
+
 
 # ------------------------------------------------------------
 # 🧠 Helpers
@@ -167,6 +183,10 @@ META_LAYERS: Dict[str, Dict[str, Any]] = {
 def get_meta_layer(name: str) -> Dict[str, Any]:
     """Return a meta-layer block (case-insensitive by key)."""
     return META_LAYERS.get((name or "").upper(), {})
+
+
+def list_meta_layers() -> list[str]:
+    return list(META_LAYERS.keys())
 
 
 def required_bars_for_days(name: str, days: int, timeframe_token: str) -> int:
@@ -177,10 +197,6 @@ def required_bars_for_days(name: str, days: int, timeframe_token: str) -> int:
     return TF.bars_for_days(timeframe_token, days)
 
 
-def list_meta_layers() -> list[str]:
-    return list(META_LAYERS.keys())
-
-
 def required_lookback(name: str, timeframe_token: str) -> int:
     """Return lookback bars required for (meta-layer, timeframe_token)."""
     ml = get_meta_layer(name)
@@ -189,7 +205,11 @@ def required_lookback(name: str, timeframe_token: str) -> int:
     for _, ctx in ctxs.items():
         if TF.normalize_tf(ctx.get("timeframe", "")) == tf:
             lb = ctx.get("lookback", 0)
-            return int(lb) if isinstance(lb, int) and lb > 0 else 0
+            try:
+                lb = int(lb)
+            except Exception:
+                lb = 0
+            return lb if lb > 0 else 0
     return 0
 
 
@@ -197,6 +217,19 @@ def window_days_for_context(name: str, bars: int, timeframe_token: str) -> int:
     """Days of data needed for `bars` @ `timeframe_token` (meta-layer aware)."""
     TF.validate_token(timeframe_token)
     return TF.window_days_for_tf(timeframe_token, bars)
+
+
+def params_for_meta(name: str, timeframe_token: str) -> Dict[str, Any]:
+    """Return the context dict for (meta-layer, timeframe_token).
+    Copies the dict to avoid callers mutating settings in-place.
+    """
+    block = get_meta_layer(name)
+    ctxs = block.get("contexts", {}) if block else {}
+    tf = TF.normalize_tf(timeframe_token)
+    for _, ctx in ctxs.items():
+        if TF.normalize_tf(ctx.get("timeframe", "")) == tf:
+            return dict(ctx)
+    return {}
 
 
 def validate() -> dict:
@@ -218,9 +251,18 @@ def validate() -> dict:
                 TF.validate_token(tf)
             except Exception as e:
                 errs.append(f"{lname}.{ctx_key}: bad timeframe '{tf}' → {e}")
+            # lookback present and positive int
             lb = ctx.get("lookback", 0)
-            if not isinstance(lb, int) or lb <= 0:
+            try:
+                lb = int(lb)
+            except Exception:
+                lb = 0
+            if lb <= 0:
                 errs.append(f"{lname}.{ctx_key}: 'lookback' must be positive int")
+            # unknown keys check (soft guard)
+            extra = set(ctx.keys()) - __ALLOWED_COMMON
+            if extra:
+                errs.append(f"{lname}.{ctx_key}: unknown keys {sorted(extra)}")
     return {"ok": len(errs) == 0, "errors": errs, "count": len(META_LAYERS)}
 
 
@@ -232,6 +274,10 @@ if __name__ == "__main__":
 
     print("🧩 Queen Meta-Layer Configuration")
     pprint(list_meta_layers())
-    print("SPS 15m lookback →", required_lookback("SPS", "15m"))
-    print("RPS weekly 12 bars ≈ days →", window_days_for_context("RPS", 12, "1w"))
-    pprint(validate())
+    # quick sanity checks
+    assert required_lookback("SPS", "15m") > 0, "SPS 15m lookback must be > 0"
+    mcs_1d = params_for_meta("MCS", "1d")
+    assert mcs_1d.get("rsi_window") == 14, "MCS 1d must define rsi_window=14"
+    v = validate()
+    assert v["ok"], v
+    print("✅ meta_layers self-check OK")

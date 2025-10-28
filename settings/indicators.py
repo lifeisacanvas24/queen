@@ -219,6 +219,47 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
         },
         "_note": "MACD histogram slope drives SPS/MCS crossover anticipation.",
     },
+    # --- overlays / moving averages / vwap ---
+    "EMA": {
+        "default": {"length": 21},
+        "contexts": {
+            "intraday_5m": {"length": 20},
+            "intraday_15m": {"length": 20},
+            "daily": {"length": 21},
+            "weekly": {"length": 21},
+        },
+        "_note": "Exponential moving average",
+    },
+    "EMA_SLOPE": {
+        "default": {"length": 21, "periods": 1},
+        "contexts": {
+            "intraday_5m": {"length": 20, "periods": 1},
+            "daily": {"length": 21, "periods": 1},
+        },
+        "_note": "Slope of EMA(length) over N periods, compare to 0 for rising/falling",
+    },
+    "EMA_CROSS": {
+        # choose sensible defaults (fast over slow)
+        "default": {"fast": 20, "slow": 50},
+        "contexts": {
+            "intraday_5m": {"fast": 20, "slow": 50},
+            "daily": {"fast": 20, "slow": 50},
+        },
+        "_note": "EMA fast/slow spread (use crosses_* 0)",
+    },
+    "VWAP": {
+        "default": {},  # VWAP is path-independent in a single session
+        "contexts": {
+            "intraday_5m": {},
+            "intraday_15m": {},
+        },
+        "_note": "Session VWAP",
+    },
+    "PRICE_MINUS_VWAP": {
+        "default": {},
+        "contexts": {"intraday_5m": {}},
+        "_note": "Close - VWAP (use crosses_* 0 for reclaim/loss)",
+    },
     # ========================================================
     # Ichimoku
     # ========================================================

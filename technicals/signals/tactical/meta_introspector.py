@@ -1,5 +1,5 @@
 # ============================================================
-# quant/signals/tactical/tactical_meta_introspector.py
+# queen/technicals/signals/tactical/tactical_meta_introspector.py
 # ------------------------------------------------------------
 # 🧠 Phase 6.3 — Tactical Meta Introspector
 # The self-analysis engine that replays memory snapshots,
@@ -23,6 +23,7 @@ META_MEMORY_LOG = "quant/logs/meta_memory_log.csv"
 DRIFT_LOG_PATH = "quant/logs/meta_drift_log.csv"
 WEIGHTS_PATH = "quant/config/indicator_weights.json"
 
+
 # ============================================================
 # 📦 Load Data
 # ============================================================
@@ -39,6 +40,7 @@ def load_drift_data():
         return pl.DataFrame()
     return pl.read_csv(DRIFT_LOG_PATH)
 
+
 # ============================================================
 # 📈 Correlate Drift vs Retraining Impact
 # ============================================================
@@ -53,22 +55,26 @@ def analyze_drift_vs_retrain(memory_df: pl.DataFrame, drift_df: pl.DataFrame):
     drift_df = drift_df.with_columns(pl.col("timestamp").str.strptime(pl.Datetime))
 
     # Merge nearest drift per memory snapshot
-    joined = memory_df.join_asof(
-        drift_df, on="timestamp", strategy="backward"
-    ).rename({"drift": "drift_before_retrain"})
+    joined = memory_df.join_asof(drift_df, on="timestamp", strategy="backward").rename(
+        {"drift": "drift_before_retrain"}
+    )
 
     joined = joined.with_columns(
         [
-            (pl.col("top_weight").cast(float) * pl.col("drift_before_retrain")).alias("adaptive_response"),
+            (pl.col("top_weight").cast(float) * pl.col("drift_before_retrain")).alias(
+                "adaptive_response"
+            ),
             pl.when(pl.col("drift_before_retrain") > 0.1)
-              .then("High Drift")
-              .otherwise("Stable")
-              .alias("drift_state"),
+            .then("High Drift")
+            .otherwise("Stable")
+            .alias("drift_state"),
         ]
     )
 
     corr = joined["adaptive_response"].corr(joined["top_weight"])
-    console.print(f"📊 Correlation between drift and weight adaptation: [cyan]{corr:.3f}[/cyan]")
+    console.print(
+        f"📊 Correlation between drift and weight adaptation: [cyan]{corr:.3f}[/cyan]"
+    )
 
     # Visualization
     fig = go.Figure()
@@ -78,7 +84,7 @@ def analyze_drift_vs_retrain(memory_df: pl.DataFrame, drift_df: pl.DataFrame):
             y=joined["drift_before_retrain"].to_list(),
             name="Drift Magnitude",
             mode="lines+markers",
-            line=dict(color="orange", width=2)
+            line=dict(color="orange", width=2),
         )
     )
     fig.add_trace(
@@ -87,7 +93,7 @@ def analyze_drift_vs_retrain(memory_df: pl.DataFrame, drift_df: pl.DataFrame):
             y=joined["top_weight"].to_list(),
             name="Top Indicator Weight",
             mode="lines+markers",
-            line=dict(color="green", width=2, dash="dot")
+            line=dict(color="green", width=2, dash="dot"),
         )
     )
     fig.update_layout(
@@ -110,14 +116,18 @@ def analyze_memory_evolution(memory_df: pl.DataFrame):
         return
 
     # Compute time deltas
-    df = memory_df.with_columns([
-        pl.col("timestamp").str.strptime(pl.Datetime).alias("ts"),
-    ])
+    df = memory_df.with_columns(
+        [
+            pl.col("timestamp").str.strptime(pl.Datetime).alias("ts"),
+        ]
+    )
     df = df.sort("ts")
 
     if "top_weight" in df.columns:
         avg_weight_change = float(df["top_weight"].diff().abs().mean())
-        console.print(f"📈 Avg top-weight change per retrain: [green]{avg_weight_change:.3f}[/green]")
+        console.print(
+            f"📈 Avg top-weight change per retrain: [green]{avg_weight_change:.3f}[/green]"
+        )
 
     # Table summary
     table = Table(
