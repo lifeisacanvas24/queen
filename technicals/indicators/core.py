@@ -15,6 +15,25 @@ def ema(df: pl.DataFrame, period: int = 20, column: str = "close") -> pl.Series:
     return df[column].ewm_mean(span=period, adjust=False)
 
 
+def _slope(s: pl.Series, periods: int = 1) -> pl.Series:
+    periods = max(int(periods or 1), 1)
+    return (s - s.shift(periods)).alias(f"{s.name}_slope{periods}")
+
+
+def ema_slope(
+    df: pl.DataFrame,
+    length: int = 21,
+    periods: int = 1,
+    column: str = "close",
+) -> pl.Series:
+    """Slope of EMA(length) over `periods` bars."""
+    e = ema(df, period=length, column=column)
+    # ensure a stable name for the slope label
+    if not getattr(e, "name", None):
+        e = e.alias(f"ema_{int(length)}")
+    return _slope(e, periods=periods)
+
+
 # ---------------- RSI ----------------
 def rsi(df: pl.DataFrame, period: int = 14, column: str = "close") -> pl.Series:
     delta = df[column].diff()
