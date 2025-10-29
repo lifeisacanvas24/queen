@@ -78,6 +78,7 @@ PATHS = {
     "CONFIGS": ROOT.parent / "configs",
     "SERVER": SERVER,
     "TEMPLATES": SERVER / "templates",
+    "DEV_SNAPSHOTS": DATA / "dev_snapshots",
     "RUNTIME": get_env_paths()["data_runtime"],
     "LOGS": get_env_paths()["logs"],
     "CACHE": get_env_paths()["cache"],
@@ -302,6 +303,13 @@ def alert_path_rules() -> Path:
 
 def alert_path_state() -> Path:
     p = ALERT_SINKS["STATE"]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def dev_snapshot_path(name: str) -> Path:
+    """Return Path to a diagnostic JSON snapshot (auto-mkdir)."""
+    p = PATHS["DEV_SNAPSHOTS"] / f"{name}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 

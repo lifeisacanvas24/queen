@@ -5,13 +5,13 @@
 # Config-driven, NaN-safe, headless for Quant-Core 4.x
 # ============================================================
 
-import json
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from quant.config import get_indicator_params
-from quant.signals.utils_indicator_health import _log_indicator_warning
-from quant.utils.path_manager import get_dev_snapshot_path
+from queen.helpers.io import write_json_atomic  # optional
+from queen.settings.indicator_policy import params_for as _params_for
+from queen.settings.settings import dev_snapshot_path
 
 
 # ============================================================
@@ -32,12 +32,11 @@ def ema(series: np.ndarray, span: int) -> np.ndarray:
 # ============================================================
 # 🧠 Core MACD Computation
 # ============================================================
-def compute_macd(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
-    """Compute MACD and normalized momentum metrics."""
-    params = get_indicator_params("MACD", context)
-    fast_period = params.get("fast_period", 12)
-    slow_period = params.get("slow_period", 26)
-    signal_period = params.get("signal_period", 9)
+def compute_macd(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.DataFrame:
+    p = _params_for("MACD", timeframe) or {}
+    fast_period = int(p.get("fast_period", 12))
+    slow_period = int(p.get("slow_period", 26))
+    signal_period = int(p.get("signal_period", 9))
 
     df = df.clone()
     if "close" not in df.columns:
@@ -146,8 +145,5 @@ if __name__ == "__main__":
     summary = summarize_macd(df)
 
     # ✅ Write headless diagnostic snapshot via config path
-    snapshot_path = get_dev_snapshot_path("macd")
-    with open(snapshot_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    print(f"📊 [Headless] MACD snapshot written → {snapshot_path}")
+    write_json_atomic(dev_snapshot_path("macd"), summary)
+    print("📊 [Headless] MACD snapshot written → queen/data/dev_snapshots/macd.json")

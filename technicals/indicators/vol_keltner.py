@@ -6,13 +6,13 @@
 # Measures volatility compression & expansion zones
 # ============================================================
 
-import json
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from quant.config import get_indicator_params
-from quant.signals.utils_indicator_health import _log_indicator_warning
-from quant.utils.path_manager import get_dev_snapshot_path
+from queen.helpers.io import write_json_atomic  # used in __main__ snapshot (optional)
+from queen.settings.indicator_policy import params_for as _params_for
+from queen.settings.settings import dev_snapshot_path
 
 
 # ============================================================
@@ -52,15 +52,15 @@ def compute_atr(high, low, close, period=14):
 # ============================================================
 # 🧠 Core Keltner Channel Computation (Config + Diagnostics)
 # ============================================================
-def compute_keltner(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
-    """Compute Keltner Channel and volatility metrics (headless)."""
-    params = get_indicator_params("KELTNER", context)
-    ema_period = params.get("ema_period", 20)
-    atr_mult = params.get("atr_mult", 2.0)
-    atr_period = params.get("atr_period", 14)
-    squeeze_window = params.get("squeeze_window", 10)
-    squeeze_thresh = params.get("squeeze_threshold", 0.8)
-    expansion_thresh = params.get("expansion_threshold", 1.2)
+def compute_keltner(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.DataFrame:
+    """Compute Keltner Channel and volatility metrics (headless, settings-driven)."""
+    p = _params_for("KELTNER", timeframe) or {}
+    ema_period = int(p.get("ema_period", 20))
+    atr_mult = float(p.get("atr_mult", 2.0))
+    atr_period = int(p.get("atr_period", 14))
+    squeeze_window = int(p.get("squeeze_window", 10))
+    squeeze_thresh = float(p.get("squeeze_threshold", 0.8))
+    expansion_thresh = float(p.get("expansion_threshold", 1.2))
 
     df = df.clone()
 
@@ -199,10 +199,7 @@ if __name__ == "__main__":
     df = pl.DataFrame({"high": high, "low": low, "close": close})
     df = compute_keltner(df, context="intraday_15m")
     summary = summarize_keltner(df)
-
-    # ✅ Headless diagnostic snapshot
-    snapshot_path = get_dev_snapshot_path("keltner")
-    with open(snapshot_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    print(f"📊 [Headless] Keltner snapshot written → {snapshot_path}")
+    write_json_atomic(dev_snapshot_path("keltner"), summary)
+    print(
+        "📊 [Headless] Keltner snapshot written →queen/data/dev_snapshots/keltner.json"
+    )

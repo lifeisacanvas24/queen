@@ -234,6 +234,68 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
         "_note": "Heikin-Ashi smoothing for CPS.",
     },
 }
+INDICATORS.update(
+    {
+        "VOLUME_CHAIKIN": {
+            "default": {"short_period": 3, "long_period": 10},
+            "contexts": {
+                "intraday_5m": {"short_period": 3, "long_period": 10},
+                "intraday_15m": {"short_period": 3, "long_period": 10},
+                "hourly_1h": {"short_period": 3, "long_period": 12},
+                "daily": {"short_period": 3, "long_period": 20},
+            },
+            "_note": "Chaikin Oscillator from ADL EMAs; bullish_flow/bearish_flow bias.",
+        }
+    }
+)
+
+INDICATORS.update(
+    {
+        "MFI": {
+            "default": {"period": 14, "overbought": 70, "oversold": 30},
+            "contexts": {
+                "intraday_5m": {"period": 12, "overbought": 75, "oversold": 25},
+                "intraday_15m": {"period": 14, "overbought": 70, "oversold": 30},
+                "hourly_1h": {"period": 14, "overbought": 70, "oversold": 30},
+                "daily": {"period": 14, "overbought": 70, "oversold": 30},
+                "weekly": {"period": 14, "overbought": 70, "oversold": 30},
+            },
+            "_note": "Volume-weighted momentum; confirmation with OBV/Chaikin.",
+        },
+        "CHAIKIN": {
+            "default": {"short_period": 3, "long_period": 10},
+            "contexts": {
+                "intraday_5m": {"short_period": 3, "long_period": 10},
+                "intraday_15m": {"short_period": 3, "long_period": 10},
+                "hourly_1h": {"short_period": 4, "long_period": 12},
+                "daily": {"short_period": 5, "long_period": 20},
+                "weekly": {"short_period": 5, "long_period": 20},
+            },
+            "_note": "EMA(short-long) of ADL for flow bias.",
+        },
+    }
+)
+
+INDICATORS.update(
+    {
+        "VOL_FUSION": {
+            "default": {
+                "normalize_window": 50,
+                "weight_keltner": 0.7,
+                "weight_atr": 0.3,
+                "bias_threshold": 0.6,
+            },
+            "contexts": {
+                "intraday_5m": {"normalize_window": 40, "bias_threshold": 0.65},
+                "intraday_15m": {"normalize_window": 50, "bias_threshold": 0.6},
+                "hourly_1h": {"normalize_window": 60, "bias_threshold": 0.6},
+                "daily": {"normalize_window": 80, "bias_threshold": 0.55},
+                "weekly": {"normalize_window": 100, "bias_threshold": 0.55},
+            },
+            "_note": "Fused volatility index; Keltner required, ATR proxy optional.",
+        },
+    }
+)
 
 
 # ------------------------------------------------------------------
