@@ -1,111 +1,85 @@
 # ============================================================
-# queen/technicals/signals/tactical/templates/indicator_template.py
+# queen/technicals/signals/templates/indicator_template.py
 # ------------------------------------------------------------
-# 🧱 Headless Indicator Template — Quant-Core v4.x Standard
-# ------------------------------------------------------------
-# All indicators should follow this design pattern.
-# ------------------------------------------------------------
-# ✅ Config-driven (via indicators.json)
-# ✅ NaN-safe computations
-# ✅ Diagnostics through _log_indicator_warning()
-# ✅ summarize() returns structured dicts
-# ✅ Headless by default — optional visual debug block
+# 🧱 Headless Indicator Template — v2 (settings-driven, 100% Polars)
+# - Pulls defaults/contexts from queen.settings.indicators
+# - Uses common.timeframe_key + indicator_kwargs
+# - Pure Polars (no numpy math needed for baseline)
+# - Exports into registry via EXPORTS
 # ============================================================
 
-import numpy as np
+from __future__ import annotations
+
+from typing import Any, Dict
+
 import polars as pl
-from quant.config import get_indicator_params
-from quant.signals.utils_indicator_health import _log_indicator_warning
+from queen.helpers.common import indicator_kwargs, timeframe_key
+from queen.helpers.logger import log
+from queen.settings import indicators as IND  # data-only registry
+from queen.settings import settings as SETTINGS
+
+IND_NAME = "TEMPLATE_INDICATOR"  # <— rename when copying
 
 
-# ============================================================
-# 🧠 Core Compute Function (Template)
-# ============================================================
-def compute_indicator(df: pl.DataFrame, context: str = "default") -> pl.DataFrame:
-    """Generic compute pattern for headless indicators.
+# ---------- params resolver (settings-owned) ----------
+def _params_for(tf_token: str | None) -> Dict[str, Any]:
+    block = IND.get_block(IND_NAME) or {}
+    base = dict(block.get("default", {}))
+    if tf_token:
+        ctx_key = timeframe_key(tf_token)
+        override = (block.get("contexts", {}) or {}).get(ctx_key, {})
+        base.update(override or {})
+    return indicator_kwargs(base)
 
-    Steps:
-        1. Fetch parameters from indicators.json.
-        2. Validate required columns.
-        3. Compute core metrics (NaN-safe).
-        4. Return df with appended result columns.
+
+# ---------- core compute ----------
+def compute_indicator(
+    df: pl.DataFrame,
+    *,
+    timeframe: str | None = None,
+    column: str = "close",
+) -> pl.DataFrame:
+    """Minimal headless pattern:
+    • validates required columns
+    • reads params from settings.indicators
+    • appends result columns
     """
-    # Load config section dynamically by name
-    params = get_indicator_params("TEMPLATE_INDICATOR", context)
-    lookback = params.get("lookback", 14)
+    if not isinstance(df, pl.DataFrame) or df.is_empty():
+        return df
 
-    df = df.clone()
+    if column not in df.columns:
+        log.warning(f"[{IND_NAME}] missing '{column}' — skipped.")
+        return df
 
-    # Example column requirement
-    required_cols = ["close"]
-    for col in required_cols:
-        if col not in df.columns:
-            _log_indicator_warning(
-                "TEMPLATE_INDICATOR",
-                context,
-                f"Missing '{col}' column — skipping computation.",
-            )
-            return df
+    p = _params_for(timeframe)
+    lookback = int(p.get("lookback", 14))
 
-    # Example numeric conversion
-    close = df["close"].to_numpy().astype(float, copy=False)
-    if len(close) < lookback:
-        _log_indicator_warning(
-            "TEMPLATE_INDICATOR",
-            context,
-            f"Insufficient data (<{lookback}) for computation.",
-        )
-        return df.with_columns([pl.Series("template_value", np.zeros_like(close))])
-
-    # --------------------------------------------------------
-    # 🧩 Replace this section with your actual computation
-    # --------------------------------------------------------
-    # Example: rolling mean normalized output
-    values = np.convolve(close, np.ones(lookback) / lookback, mode="same")
-    values = np.nan_to_num(values, nan=0.0)
-    norm = (values - np.min(values)) / (np.ptp(values) if np.ptp(values) != 0 else 1.0)
-
-    return df.with_columns(
-        [
-            pl.Series("template_value", values),
-            pl.Series("template_norm", norm),
-        ]
+    # rolling mean (same-length output) + normalized [0,1]
+    rm = pl.col(column).rolling_mean(lookback).alias("template_value")
+    # min/max over window to avoid global squeeze; fall back to global if needed
+    minw = pl.col(column).rolling_min(lookback)
+    maxw = pl.col(column).rolling_max(lookback)
+    norm = ((rm - minw) / (pl.max_horizontal(pl.lit(1e-12), (maxw - minw)))).alias(
+        "template_norm"
     )
 
+    return df.with_columns([rm, norm])
 
-# ============================================================
-# 📊 Summarizer
-# ============================================================
-def summarize_indicator(df: pl.DataFrame) -> dict:
-    """Return lightweight summary stats (headless)."""
-    if df.height == 0 or "template_value" not in df.columns:
+
+# ---------- summarizer ----------
+def summarize_indicator(df: pl.DataFrame) -> Dict[str, Any]:
+    if df.is_empty() or "template_value" not in df.columns:
         return {"status": "empty"}
-    last_val = float(df["template_value"][-1])
-    bias = "bullish" if last_val > 0 else "bearish"
-    return {"value": last_val, "bias": bias}
+    last = df.select(pl.col("template_value").tail(1)).item()
+    bias = "bullish" if float(last) > 0 else "bearish"
+    return {"value": float(last), "bias": bias}
 
 
-# ============================================================
-# 🧪 Local Dev Diagnostic (Headless by Default)
-# ============================================================
+# ---------- registry export ----------
+EXPORTS = {"template_indicator": compute_indicator}
+
 if __name__ == "__main__":
-    VISUAL_DEBUG = False
-
     n = 200
-    np.random.seed(42)
-    close = 100 + np.sin(np.linspace(0, 6 * np.pi, n)) * 5 + np.random.normal(0, 0.3, n)
-    df = pl.DataFrame({"close": close})
-    df = compute_indicator(df, context="default")
-
-    summary = summarize_indicator(df)
-    print("✅ Template Diagnostic →", summary)
-
-    if VISUAL_DEBUG:
-        import matplotlib.pyplot as plt
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(df["close"], label="Close", alpha=0.4)
-        plt.plot(df["template_value"], label="Template Value", color="gold")
-        plt.title("Indicator Template Diagnostic")
-        plt.legend()
-        plt.show()
+    df = pl.DataFrame({"close": pl.Series([100 + i * 0.05 for i in range(n)])})
+    out = compute_indicator(df, timeframe="15m")
+    print("✅ template summary:", summarize_indicator(out))

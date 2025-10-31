@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/technicals/indicators/__init__.py — package marker
+# queen/technicals/__init__.py — package marker
 # ============================================================
 
 """Indicators package.

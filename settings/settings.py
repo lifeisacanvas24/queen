@@ -41,6 +41,13 @@ def colorize(text: str, color_key: str, palette: Dict[str, str], enabled: bool) 
     return text
 
 
+def log_file(name: str) -> Path:
+    """Return resolved path for a named log stream (e.g., 'CORE')."""
+    files = (LOGGING or {}).get("FILES", {})
+    fname = files.get(name.upper(), f"{name.lower()}.log")
+    return Path(PATHS["LOGS"]) / fname
+
+
 # ---- timeframe token normalizer ----
 _ALIASES = {
     "d": "daily",
