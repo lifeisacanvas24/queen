@@ -17,93 +17,29 @@ from queen.settings.indicator_policy import params_for as _params_for
 # ------------------------------------------------------------
 # 🧠 Core computation
 # ------------------------------------------------------------
-def compute_breadth_momentum(df: pl.DataFrame, timeframe: str = "1d") -> pl.DataFrame:
-    """Compute breadth momentum & bias.
-
-    Preferred inputs:
-      • CMV, SPS  (continuous breadth drivers)
-    Optional fallback:
-      • advancers, decliners
-
-    Outputs:
-      • Breadth_Momentum       ∈ [-1, 1] (float)
-      • Breadth_Momentum_Bias  one of {🟢 Bullish, ⚪ Neutral, 🔴 Bearish}
-    """
-    if not isinstance(df, pl.DataFrame) or df.is_empty():
+def compute_breadth_momentum(
+    df: pl.DataFrame,
+    context: str | None = None,  # kept for API uniformity
+    lookback: int = 20,
+    **kwargs,
+) -> pl.DataFrame:
+    if df.is_empty():
         return df
 
-    # Params from settings (indicator_policy INDICATORS / contexts)
-    p = _params_for("BREADTH_MOMENTUM", timeframe) or {}
-    fast = int(p.get("fast_window", 5))
-    slow = int(p.get("slow_window", 20))
-    thr_expand = float(p.get("threshold_expand", 0.15))
-    thr_contract = float(p.get("threshold_contract", -0.15))
-    clip_abs = float(p.get("clip_abs", 1.0))
+    cols = df.columns
+    src = "SPS" if "SPS" in cols else ("CMV" if "CMV" in cols else None)
+    if src is None:
+        return df
 
-    out = df.clone()
-    cols = set(out.columns)
-    has_cmv_sps = {"CMV", "SPS"}.issubset(cols)
-    has_adv_dec = {"advancers", "decliners"}.issubset(cols)
+    s = df[src].cast(pl.Float64)
+    mom = (s - s.shift(int(lookback))).alias("breadth_momentum")
 
-    if has_cmv_sps:
-        out = out.with_columns(
-            [
-                pl.col("CMV").cast(pl.Float64).fill_null(0).fill_nan(0).alias("CMV"),
-                pl.col("SPS").cast(pl.Float64).fill_null(0).fill_nan(0).alias("SPS"),
-            ]
-        )
-        out = out.with_columns(
-            [
-                (
-                    (pl.col("CMV") - pl.col("CMV").rolling_mean(slow))
-                    / (pl.col("CMV").rolling_std(slow).fill_null(1e-9))
-                ).alias("_cmv_z"),
-                (
-                    (pl.col("SPS") - pl.col("SPS").rolling_mean(slow))
-                    / (pl.col("SPS").rolling_std(slow).fill_null(1e-9))
-                ).alias("_sps_z"),
-            ]
-        )
-        out = out.with_columns(
-            ((pl.col("_cmv_z") + pl.col("_sps_z")) / 2.0)
-            .rolling_mean(fast)
-            .clip(-clip_abs, clip_abs)
-            .alias("Breadth_Momentum")
-        ).drop(["_cmv_z", "_sps_z"])
+    # Normalize to [-1, 1] using scalar abs max from the Series
+    absmax = float(mom.abs().max() or 0.0)
+    denom = absmax if absmax > 1e-9 else 1.0
+    mom_norm = (mom / denom).alias("breadth_mom_norm")
 
-    elif has_adv_dec:
-        out = out.with_columns(
-            [
-                pl.col("advancers").cast(pl.Float64).fill_null(0).fill_nan(0),
-                pl.col("decliners").cast(pl.Float64).fill_null(0).fill_nan(0),
-            ]
-        )
-        out = out.with_columns(
-            (pl.col("advancers") / (pl.col("advancers") + pl.col("decliners") + 1e-9))
-            .clip(0.0, 1.0)
-            .alias("_ratio")
-        )
-        out = out.with_columns(
-            ((pl.col("_ratio") * 2.0) - 1.0)
-            .rolling_mean(fast)
-            .clip(-1.0, 1.0)
-            .alias("Breadth_Momentum")
-        ).drop(["_ratio"])
-
-    else:
-        # Nothing to compute
-        return out
-
-    # Bias buckets
-    out = out.with_columns(
-        pl.when(pl.col("Breadth_Momentum") > thr_expand)
-        .then(pl.lit("🟢 Bullish"))
-        .when(pl.col("Breadth_Momentum") < thr_contract)
-        .then(pl.lit("🔴 Bearish"))
-        .otherwise(pl.lit("⚪ Neutral"))
-        .alias("Breadth_Momentum_Bias")
-    )
-    return out
+    return df.with_columns([mom, mom_norm])
 
 
 # ------------------------------------------------------------

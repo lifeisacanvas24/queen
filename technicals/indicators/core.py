@@ -36,14 +36,22 @@ def ema_slope(
 
 # ---------------- RSI ----------------
 def rsi(df: pl.DataFrame, period: int = 14, column: str = "close") -> pl.Series:
-    delta = df[column].diff()
-    # Pure Series path (compatible across Polars versions)
-    gain = delta.fill_null(0).apply(lambda x: x if x > 0 else 0.0)
-    loss = delta.fill_null(0).apply(lambda x: -x if x < 0 else 0.0)
+    """Polars-safe RSI (Series path only)."""
+    delta = df[column].cast(pl.Float64).diff()
+
+    # Avoid Expr ops; stick to Series APIs for broad compatibility
+    dz = delta.fill_null(0.0)
+
+    # Positive/negative legs using map_elements (works on older Polars too)
+    gain = dz.map_elements(lambda x: x if x > 0 else 0.0)
+    loss = dz.map_elements(lambda x: -x if x < 0 else 0.0)
+
     avg_gain = gain.ewm_mean(span=period, adjust=False)
     avg_loss = loss.ewm_mean(span=period, adjust=False)
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+
+    rs = avg_gain / (avg_loss + 1e-12)
+    out = 100.0 - (100.0 / (1.0 + rs))
+    return out.alias(f"rsi_{period}")
 
 
 # ---------------- MACD ----------------

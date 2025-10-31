@@ -18,61 +18,38 @@ from queen.settings.indicator_policy import params_for as _params_for
 # ------------------------------------------------------------
 # 🧠 Core Breadth Computation
 # ------------------------------------------------------------
-def compute_breadth(df: pl.DataFrame, timeframe: str = "1d") -> pl.DataFrame:
-    """Compute cumulative breadth from CMV/SPS columns:
-    - CMV_Breadth (rolling mean)
-    - SPS_Breadth (rolling mean)
-    - Breadth_Persistence (avg bias strength in [-1,1])
-    - Breadth_Bias (🟢/⚪/🔴)
 
-    Params are pulled from settings.indicator_policy via:
-      params_for("BREADTH_CUMULATIVE", timeframe)
-    with safe defaults if not present.
-    """
-    if not isinstance(df, pl.DataFrame):
-        raise TypeError("compute_breadth: expected a Polars DataFrame")
 
-    required = {"CMV", "SPS"}
-    if not required.issubset(set(df.columns)):
-        # Return passthrough DF (no exception) so callers can chain safely
+def compute_breadth(
+    df: pl.DataFrame,
+    context: str | None = None,  # kept for API uniformity
+    **kwargs,
+) -> pl.DataFrame:
+    if df.is_empty():
         return df
 
-    # Resolve params from settings (falls back to sane defaults)
-    p = _params_for("BREADTH_CUMULATIVE", timeframe) or {}
-    window = int(p.get("window", 10))
-    thr_bull = float(p.get("threshold_bullish", 0.2))
-    thr_bear = float(p.get("threshold_bearish", -0.2))
+    cols = df.columns
+    src = "CMV" if "CMV" in cols else ("cmv" if "cmv" in cols else None)
+    if src is None:
+        return df  # no breadth source → passthrough
 
-    # Null-safe rolling means
-    out = (
-        df.with_columns(
-            [
-                pl.col("CMV").cast(pl.Float64).fill_null(0).fill_nan(0).alias("CMV"),
-                pl.col("SPS").cast(pl.Float64).fill_null(0).fill_nan(0).alias("SPS"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.col("CMV").rolling_mean(window).alias("CMV_Breadth"),
-                pl.col("SPS").rolling_mean(window).alias("SPS_Breadth"),
-            ]
-        )
-        .with_columns(
-            ((pl.col("CMV_Breadth") + pl.col("SPS_Breadth")) / 2.0)
-            .clip(-1.0, 1.0)
-            .alias("Breadth_Persistence")
-        )
-        .with_columns(
-            pl.when(pl.col("Breadth_Persistence") > thr_bull)
-            .then(pl.lit("🟢 Bullish"))
-            .when(pl.col("Breadth_Persistence") < thr_bear)
-            .then(pl.lit("🔴 Bearish"))
-            .otherwise(pl.lit("⚪ Neutral"))
-            .alias("Breadth_Bias")
-        )
-    )
+    s = df[src].cast(pl.Float64)
+    cum = s.cum_sum()
 
-    return out
+    # scalar min/max on Series
+    mn = float(cum.min() or 0.0)
+    mx = float(cum.max() or 0.0)
+    rng = mx - mn
+
+    if abs(rng) < 1e-12:
+        # flat → zeros
+        cum_01 = pl.Series("breadth_cum_norm", [0.0] * df.height, dtype=pl.Float64)
+        cum_pm1 = pl.Series("breadth_cum", [0.0] * df.height, dtype=pl.Float64)
+    else:
+        cum_01 = ((cum - mn) / rng).alias("breadth_cum_norm")  # [0, 1]
+        cum_pm1 = (cum_01 * 2.0 - 1.0).alias("breadth_cum")  # [-1, 1]
+
+    return df.with_columns([cum_pm1, cum_01])
 
 
 # ------------------------------------------------------------

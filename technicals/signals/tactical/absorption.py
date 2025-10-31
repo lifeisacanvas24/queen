@@ -1,113 +1,132 @@
 # ============================================================
 # queen/technicals/signals/tactical/absorption.py
 # ------------------------------------------------------------
-# ⚙️ Smart Money Absorption Engine
-# Detects accumulation/distribution via volume absorption behavior
+# ⚙️ Smart Money Absorption (Polars-native, DRY)
+# Outputs:
+#   • Absorption_Score  ∈ [-1, +1]
+#   • Absorption_Flag   ("🟩 Accumulation" | "🟥 Distribution" | "➡️ Stable")
+#   • Absorption_Zone   (same as flag; friendly alias for dashboards)
 # ============================================================
 
-import numpy as np
+from __future__ import annotations
 import polars as pl
+from typing import Literal, Dict, Any
 
 
-# ============================================================
-# 🧠 Core Absorption Detection
-# ============================================================
+# -----------------------------
+# Core
+# -----------------------------
 def detect_absorption_zones(
     df: pl.DataFrame,
+    *,
     cmv_col: str = "CMV",
     volume_col: str = "volume",
     mfi_col: str = "MFI",
     chaikin_col: str = "Chaikin_Osc",
-    lookback: int = 5,
-    absorption_threshold: float = 0.85,
+    flat_eps: float = 0.05,  # “flat CMV” tolerance
+    v_trend_lb: int = 2,  # lookback for vol trend
+    score_weights: Dict[str, float] | None = None,  # weights for components
 ) -> pl.DataFrame:
-    """Detect potential absorption candles (smart money defending levels).
-    Uses CMV, volume, MFI, and Chaikin oscillator relationships.
+    """Polars-native absorption detector. No Python loops.
+
+    Heuristic:
+      • Hidden accumulation  : CMV ~ flat, Volume ↑,  MFI ↑,  Chaikin > 0  → +score
+      • Hidden distribution : CMV ~ flat, Volume ↑,  MFI ↓,  Chaikin < 0  → -score
     """
-    if cmv_col not in df.columns or volume_col not in df.columns:
-        print("⚠️ [Absorption] Skipped: Missing CMV or volume columns.")
-        return df.with_columns(pl.lit("➡️ Skipped").alias("Absorption_Zone"))
+    if df.is_empty():
+        return df
 
-    cmv = np.array(df[cmv_col])
-    volume = np.array(df[volume_col])
-    mfi = np.array(df[mfi_col]) if mfi_col in df.columns else np.zeros_like(cmv)
-    chaikin = (
-        np.array(df[chaikin_col]) if chaikin_col in df.columns else np.zeros_like(cmv)
+    # ensure columns exist (fill zeros if missing)
+    need = {cmv_col, volume_col, mfi_col, chaikin_col}
+    patch_cols = [c for c in need if c not in df.columns]
+    if patch_cols:
+        df = df.with_columns([pl.lit(0.0).alias(c) for c in patch_cols])
+
+    w = {"cmv": 1.0, "vol": 1.0, "mfi": 1.0, "chaikin": 1.0}
+    if score_weights:
+        w.update({k: float(v) for k, v in score_weights.items() if k in w})
+
+    # diffs / trends
+    cmv_diff = (pl.col(cmv_col) - pl.col(cmv_col).shift(1)).abs()
+    vol_up = pl.col(volume_col) > pl.col(volume_col).shift(v_trend_lb)
+    mfi_up = pl.col(mfi_col) > pl.col(mfi_col).shift(1)
+    mfi_dn = pl.col(mfi_col) < pl.col(mfi_col).shift(1)
+    ch_pos = pl.col(chaikin_col) > 0
+    ch_neg = pl.col(chaikin_col) < 0
+
+    cmv_flat = cmv_diff <= flat_eps
+
+    # component scores in [-1, +1]
+    s_vol = pl.when(vol_up).then(1.0).otherwise(0.0)
+    s_mfi_acc = pl.when(mfi_up).then(1.0).otherwise(-1.0)
+    s_mfi_dis = pl.when(mfi_dn).then(1.0).otherwise(-1.0)
+    s_ch_pos = pl.when(ch_pos).then(1.0).otherwise(-1.0)
+    s_ch_neg = pl.when(ch_neg).then(1.0).otherwise(-1.0)
+
+    # accumulation and distribution raw scores
+    acc_raw = (
+        (pl.when(cmv_flat).then(1.0).otherwise(0.0) * w["cmv"])
+        + (s_vol * w["vol"])
+        + (s_mfi_acc * w["mfi"])
+        + (s_ch_pos * w["chaikin"])
+    ) / (w["cmv"] + w["vol"] + w["mfi"] + w["chaikin"])
+
+    dis_raw = (
+        (pl.when(cmv_flat).then(1.0).otherwise(0.0) * w["cmv"])
+        + (s_vol * w["vol"])
+        + (s_mfi_dis * w["mfi"])
+        + (s_ch_neg * w["chaikin"])
+    ) / (w["cmv"] + w["vol"] + w["mfi"] + w["chaikin"])
+
+    # final signed score ∈ [-1, +1]
+    score = (acc_raw - dis_raw).clip(-1.0, 1.0).alias("Absorption_Score")
+
+    flag = (
+        pl.when(score > 0.15)
+        .then(pl.lit("🟩 Accumulation"))
+        .when(score < -0.15)
+        .then(pl.lit("🟥 Distribution"))
+        .otherwise(pl.lit("➡️ Stable"))
+        .alias("Absorption_Flag")
     )
 
-    absorption = np.full(len(cmv), "➡️ Stable", dtype=object)
+    zone = flag.alias("Absorption_Zone")
 
-    for i in range(lookback, len(cmv)):
-        # Hidden accumulation: CMV flat, volume rising, MFI improving, Chaikin positive
-        hidden_buy = (
-            abs(cmv[i] - cmv[i - 1]) < 0.05
-            and volume[i] > volume[i - 1]
-            and mfi[i] > mfi[i - 1]
-            and chaikin[i] > 0
-        )
-        # Hidden distribution: CMV flat, volume rising, MFI dropping, Chaikin negative
-        hidden_sell = (
-            abs(cmv[i] - cmv[i - 1]) < 0.05
-            and volume[i] > volume[i - 1]
-            and mfi[i] < mfi[i - 1]
-            and chaikin[i] < 0
-        )
-
-        if hidden_buy:
-            absorption[i] = "🟩 Accumulation Zone (Smart Money Buy Defense)"
-        elif hidden_sell:
-            absorption[i] = "🟥 Distribution Zone (Smart Money Sell Defense)"
-
-    df = df.with_columns(pl.Series("Absorption_Zone", absorption))
-    return df
+    return df.with_columns([score, flag, zone])
 
 
-# ============================================================
-# 🔍 Diagnostic Summary
-# ============================================================
+# -----------------------------
+# Summary helper (optional)
+# -----------------------------
 def summarize_absorption(df: pl.DataFrame) -> str:
-    """Generate quick summary for absorption detection."""
-    acc_count = (df["Absorption_Score"] > 0).sum()
-    dist_count = (df["Absorption_Score"] < 0).sum()
-    last_flag = str(df["Absorption_Flag"].drop_nulls()[-1])
-    return (
-        f"Accumulations: {acc_count} | Distributions: {dist_count} | Last: {last_flag}"
-    )
+    if (
+        not isinstance(df, pl.DataFrame)
+        or df.is_empty()
+        or "Absorption_Score" not in df.columns
+    ):
+        return "No absorption data."
+
+    # eager aggregation (no Expr.collect())
+    agg = df.select(
+        (pl.col("Absorption_Score") > 0).sum().alias("acc"),
+        (pl.col("Absorption_Score") < 0).sum().alias("dis"),
+    ).to_dicts()[0]
+
+    acc = int(agg.get("acc", 0) or 0)
+    dis = int(agg.get("dis", 0) or 0)
+
+    last_flag = "—"
+    if "Absorption_Flag" in df.columns and df["Absorption_Flag"].len() > 0:
+        s = df["Absorption_Flag"].drop_nulls()
+        if s.len() > 0:
+            last_flag = s[-1]
+
+    return f"Accumulations: {acc} | Distributions: {dis} | Last: {last_flag}"
 
 
-# ============================================================
-# 🧪 Standalone Test
-# ============================================================
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    np.random.seed(42)
-    n = 200
-    cmv = np.sin(np.linspace(0, 6, n)) * 0.1  # mostly flat
-    volume = np.random.randint(1000, 5000, n)
-    volume[100:110] *= 2  # spike region
-    chaikin = np.random.normal(0, 500, n)
-    chaikin[100:110] += 1500  # surge during accumulation
-    mfi = np.linspace(40, 80, n) + np.random.normal(0, 5, n)
-
-    df = pl.DataFrame(
-        {"CMV": cmv, "volume": volume, "Chaikin_Osc": chaikin, "MFI": mfi}
-    )
-
-    df = detect_absorption_zones(df)
-    print("✅ Absorption Diagnostic →", summarize_absorption(df))
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(df["volume"], label="Volume", alpha=0.4)
-    plt.plot(df["MFI"], label="MFI", color="orange")
-    plt.title("Smart Money Absorption Zones")
-    acc_idx = np.where(df["Absorption_Score"] > 0)[0]
-    dist_idx = np.where(df["Absorption_Score"] < 0)[0]
-    plt.scatter(
-        acc_idx, df["volume"][acc_idx], color="green", label="Accumulation", zorder=5
-    )
-    plt.scatter(
-        dist_idx, df["volume"][dist_idx], color="red", label="Distribution", zorder=5
-    )
-    plt.legend()
-    plt.show()
+# -----------------------------
+# Registry export for discovery
+# -----------------------------
+EXPORTS: Dict[str, Any] = {
+    "detect_absorption_zones": detect_absorption_zones,
+}

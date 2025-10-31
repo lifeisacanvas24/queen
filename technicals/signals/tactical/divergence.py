@@ -1,92 +1,91 @@
 # ============================================================
 # queen/technicals/signals/tactical/divergence.py
 # ------------------------------------------------------------
-# ⚙️ Volume–Momentum Divergence Engine
-# Detects bullish/bearish divergences between price, CMV, and volume
+# ⚙️ Volume–Momentum Divergence Engine (v2.0)
+# Vectorized Polars: emits Divergence_Signal, Divergence_Score, Divergence_Flag
 # ============================================================
 
-import numpy as np
+from __future__ import annotations
+
 import polars as pl
 
 
-# ============================================================
-# 🧠 Core Divergence Detector
-# ============================================================
 def detect_divergence(
     df: pl.DataFrame,
+    *,
     price_col: str = "close",
     cmv_col: str = "CMV",
     lookback: int = 5,
     threshold: float = 0.02,
 ) -> pl.DataFrame:
-    """Detects CMV–Price divergences (momentum disagreement zones).
-    Flags potential reversal signals:
-      🟥 Bearish Divergence (Price up, CMV down)
-      🟩 Bullish Divergence (Price down, CMV up)
-    """
+    """Detect CMV–Price divergences (momentum disagreement zones)."""
     if price_col not in df.columns or cmv_col not in df.columns:
-        print("⚠️ [Divergence] Skipped: Missing price or CMV columns.")
-        return df.with_columns(pl.lit("➡️ Skipped").alias("Divergence_Signal"))
+        # graceful skip with explicit columns (keeps downstream code happy)
+        return df.with_columns(
+            [
+                pl.lit("➡️ Skipped").alias("Divergence_Signal"),
+                pl.lit(0).alias("Divergence_Score"),
+                pl.lit("➡️ Skipped").alias("Divergence_Flag"),
+            ]
+        )
 
-    price = np.array(df[price_col])
-    cmv = np.array(df[cmv_col])
-    div_signal = np.full(len(price), "➡️ Stable", dtype=object)
+    lb = max(int(lookback), 1)
+    thr = float(threshold)
 
-    for i in range(lookback, len(price)):
-        price_slope = price[i] - price[i - lookback]
-        cmv_slope = cmv[i] - cmv[i - lookback]
+    price_slope = pl.col(price_col) - pl.col(price_col).shift(lb)
+    cmv_slope = pl.col(cmv_col) - pl.col(cmv_col).shift(lb)
 
-        # Price up but CMV down → Bearish Divergence
-        if price_slope > threshold and cmv_slope < -threshold:
-            div_signal[i] = "🟥 Bearish Divergence (Momentum Weakening)"
-        # Price down but CMV up → Bullish Divergence
-        elif price_slope < -threshold and cmv_slope > threshold:
-            div_signal[i] = "🟩 Bullish Divergence (Momentum Building)"
+    bear = (price_slope > thr) & (cmv_slope < -thr)
+    bull = (price_slope < -thr) & (cmv_slope > thr)
 
-    df = df.with_columns(pl.Series("Divergence_Signal", div_signal))
-    return df
+    signal = (
+        pl.when(bear)
+        .then(pl.lit("🟥 Bearish Divergence (Momentum Weakening)"))
+        .when(bull)
+        .then(pl.lit("🟩 Bullish Divergence (Momentum Building)"))
+        .otherwise(pl.lit("➡️ Stable"))
+        .alias("Divergence_Signal")
+    )
+
+    score = (
+        pl.when(bear)
+        .then(pl.lit(-1))
+        .when(bull)
+        .then(pl.lit(1))
+        .otherwise(pl.lit(0))
+        .alias("Divergence_Score")
+    )
+
+    flag = (
+        pl.when(bear)
+        .then(pl.lit("SELL"))
+        .when(bull)
+        .then(pl.lit("BUY"))
+        .otherwise(pl.lit("NEUTRAL"))
+        .alias("Divergence_Flag")
+    )
+
+    return df.with_columns([signal, score, flag])
 
 
-# ============================================================
-# 🔍 Summary Utility
-# ============================================================
 def summarize_divergence(df: pl.DataFrame) -> str:
-    bull = (df["Divergence_Score"] > 0).sum()
-    bear = (df["Divergence_Score"] < 0).sum()
-    last_flag = str(df["Divergence_Flag"].drop_nulls()[-1])
+    """Quick summary string; safe if columns missing/empty."""
+    if (
+        df.is_empty()
+        or "Divergence_Score" not in df.columns
+        or "Divergence_Flag" not in df.columns
+    ):
+        return "Bullish: 0 | Bearish: 0 | Last: —"
+
+    bull = int((pl.Series(df["Divergence_Score"]) > 0).sum())
+    bear = int((pl.Series(df["Divergence_Score"]) < 0).sum())
+    last_flag = (
+        str(pl.Series(df["Divergence_Flag"]).drop_nulls().tail(1).to_list()[0])
+        if df.height
+        else "—"
+    )
     return f"Bullish: {bull} | Bearish: {bear} | Last: {last_flag}"
 
 
-# ============================================================
-# 🧪 Standalone Test
-# ============================================================
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    np.random.seed(42)
-    n = 200
-    x = np.linspace(0, 6, n)
-    price = np.sin(x) + 0.1 * np.random.randn(n)
-    cmv = np.sin(x + 0.3) * 0.8 + 0.05 * np.random.randn(n)
-    mfi = 50 + 10 * np.cos(x)
-    chaikin = np.sin(x * 1.2) * 1000
-
-    df = pl.DataFrame({"close": price, "CMV": cmv, "MFI": mfi, "Chaikin_Osc": chaikin})
-
-    df = detect_divergence(df)
-    print("✅ Divergence Diagnostic →", summarize_divergence(df))
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(df["close"], label="Price", color="white")
-    plt.plot(df["CMV"], label="CMV", color="cyan")
-    plt.title("Volume–Momentum Divergence Detection")
-    bull_idx = np.where(df["Divergence_Score"] > 0)[0]
-    bear_idx = np.where(df["Divergence_Score"] < 0)[0]
-    plt.scatter(
-        bull_idx, df["close"][bull_idx], color="green", label="Bullish Div", zorder=5
-    )
-    plt.scatter(
-        bear_idx, df["close"][bear_idx], color="red", label="Bearish Div", zorder=5
-    )
-    plt.legend()
-    plt.show()
+# Registry export (for queen.cli.list_signals)
+EXPORTS = {"divergence": detect_divergence}

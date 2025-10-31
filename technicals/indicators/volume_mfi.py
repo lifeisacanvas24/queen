@@ -1,7 +1,7 @@
 # ============================================================
-# queen/technicals/indicators/volume_mfi.py — v1.0 (forward-only)
+# queen/technicals/indicators/volume_mfi.py — v1.1 (forward-only)
 # Money Flow Index (MFI) — settings-driven, NaN-safe, Polars/NumPy
-# Outputs: ['mfi','mfi_norm','mfi_bias','mfi_flow']
+# Outputs: ['MFI','MFI_norm','MFI_Bias','MFI_Flow']
 # ============================================================
 from __future__ import annotations
 
@@ -9,6 +9,19 @@ import numpy as np
 import polars as pl
 from queen.helpers.pl_compat import _s2np
 from queen.settings.indicator_policy import params_for as _params_for
+
+
+def _tf_from_context(context: str) -> str:
+    c = (context or "").lower()
+    if c.startswith("intraday_"):
+        return c.split("_", 1)[-1]  # '15m'
+    if c.startswith("hourly_"):
+        return c.split("_", 1)[-1]  # '1h'
+    if c in {"daily", "1d", "d"}:
+        return "1d"
+    if c in {"weekly", "1w", "w"}:
+        return "1w"
+    return c or "15m"
 
 
 def mfi(
@@ -40,10 +53,10 @@ def mfi(
         zeros = np.zeros(len(close), dtype=float)
         return pl.DataFrame(
             {
-                "mfi": zeros,
-                "mfi_norm": zeros,
-                "mfi_bias": np.array(["neutral"] * len(close), dtype=object),
-                "mfi_flow": np.array(["flat"] * len(close), dtype=object),
+                "MFI": zeros,
+                "MFI_norm": zeros,
+                "MFI_Bias": np.array(["⬜ Neutral"] * len(close), dtype=object),
+                "MFI_Flow": np.array(["➡️ Flat"] * len(close), dtype=object),
             }
         )
 
@@ -67,37 +80,45 @@ def mfi(
     mfi_full = np.concatenate([np.full(n - 1, np.nan), mfi_vals])
     mfi_norm = np.clip(np.nan_to_num(mfi_full / 100.0), 0.0, 1.0)
 
-    bias = np.full(len(mfi_full), "neutral", dtype=object)
-    bias[mfi_full > ob] = "distribution"
-    bias[mfi_full < os] = "accumulation"
+    bias = np.full(len(mfi_full), "⬜ Neutral", dtype=object)
+    bias[mfi_full > ob] = "🟥 Distribution"
+    bias[mfi_full < os] = "🟩 Accumulation"
 
     delta = np.diff(np.nan_to_num(mfi_full, nan=0.0), prepend=0.0)
-    flow = np.full(len(delta), "flat", dtype=object)
-    flow[delta > 0] = "inflow"
-    flow[delta < 0] = "outflow"
+    flow = np.full(len(delta), "➡️ Flat", dtype=object)
+    flow[delta > 0] = "⬆️ Inflow"
+    flow[delta < 0] = "⬇️ Outflow"
 
     return pl.DataFrame(
-        {"mfi": mfi_full, "mfi_norm": mfi_norm, "mfi_bias": bias, "mfi_flow": flow}
+        {"MFI": mfi_full, "MFI_norm": mfi_norm, "MFI_Bias": bias, "MFI_Flow": flow}
     )
 
 
+def compute_mfi(df: pl.DataFrame, context: str = "intraday_15m") -> pl.DataFrame:
+    """Compatibility wrapper for orchestrators/tests that pass 'context'."""
+    tf = _tf_from_context(context)
+    return mfi(df, timeframe=tf)
+
+
 def summarize_mfi(df: pl.DataFrame) -> dict:
-    if df.is_empty() or "mfi" not in df.columns:
+    if df.is_empty() or "MFI" not in df.columns:
         return {"status": "empty"}
-    m = df["mfi"].drop_nans().drop_nulls()
+    m = df["MFI"].drop_nans().drop_nulls()
     if m.is_empty():
         return {"status": "empty"}
     last = float(m[-1])
     bias = (
-        str(df["mfi_bias"].drop_nulls()[-1]) if "mfi_bias" in df.columns else "neutral"
+        str(df["MFI_Bias"].drop_nulls()[-1])
+        if "MFI_Bias" in df.columns
+        else "⬜ Neutral"
     )
-    flow = str(df["mfi_flow"].drop_nulls()[-1]) if "mfi_flow" in df.columns else "flat"
+    flow = (
+        str(df["MFI_Flow"].drop_nulls()[-1]) if "MFI_Flow" in df.columns else "➡️ Flat"
+    )
     state = (
         "🟩 Accumulation"
-        if bias == "accumulation"
-        else "🟥 Distribution"
-        if bias == "distribution"
-        else "⬜ Neutral"
+        if "Accumulation" in bias
+        else ("🟥 Distribution" if "Distribution" in bias else "⬜ Neutral")
     )
     return {"MFI": round(last, 2), "Bias": bias, "Flow": flow, "State": state}
 

@@ -104,6 +104,16 @@ BROKERS = {
     },
 }
 
+# in settings.py (example)
+DAEMON = {"interval_sec": 6 * 60 * 60, "max_retries": 3, "retry_delay_sec": 5 * 60}
+SUPERVISOR = {
+    "symbols": ["AAPL", "NVDA", "BTCUSD", "ETHUSD"],
+    "timeframes": ["5m", "15m", "1h"],
+    "max_concurrent": 3,
+    "interval_sec": 6 * 60 * 60,
+    "healthcheck_interval": 10 * 60,
+}
+
 # ------------------------------------------------------------
 # 💹 Exchange & Market Hours
 # ------------------------------------------------------------

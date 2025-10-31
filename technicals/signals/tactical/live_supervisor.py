@@ -1,178 +1,125 @@
+#!/usr/bin/env python3
 # ============================================================
 # queen/technicals/signals/tactical/live_supervisor.py
 # ------------------------------------------------------------
-# 🛰️ Phase 7.2 — Tactical Live Supervisor
-# Manages multiple Tactical Live Daemons concurrently with
-# health checks, scheduling, metrics, and alert routing.
+# 🧭 Tactical Live Supervisor — concurrent single-cycle runner
+# Launches multiple cognition cycles concurrently and writes
+# a health snapshot to settings-driven logs.
 # ============================================================
+
+from __future__ import annotations
 
 import asyncio
 import json
 import os
-import signal
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
 
-from quant.signals.tactical.tactical_live_daemon import (
-    run_daemon,
-    save_checkpoint,
-    send_alert,
+import polars as pl
+
+from queen.helpers.logger import log
+
+try:
+    from queen.settings import settings as SETTINGS
+except Exception:
+    SETTINGS = None
+
+# --- Settings & paths --------------------------------------------------------
+LOG_DIR = (
+    SETTINGS.PATHS["LOGS"]
+    if SETTINGS
+    else os.path.join("queen", "data", "runtime", "logs")
 )
-from rich.console import Console
-from rich.table import Table
+os.makedirs(LOG_DIR, exist_ok=True)
+HEALTH_FILE = os.path.join(LOG_DIR, "supervisor_health.json")
 
-console = Console()
-
-# ============================================================
-# 🧩 Config (to later move into config.py)
-# ============================================================
-SUPERVISOR_CONFIG = "quant/config/supervisor_config.json"
-HEALTHCHECK_LOG = "quant/logs/supervisor_health.json"
-
-DEFAULT_CONFIG = {
+SUP_CFG = (getattr(SETTINGS, "SUPERVISOR", {}) if SETTINGS else {}) or {}
+DEFAULTS = {
     "symbols": ["AAPL", "NVDA", "BTCUSD", "ETHUSD"],
     "timeframes": ["5m", "15m", "1h"],
     "max_concurrent": 3,
-    "interval_sec": 60 * 60 * 6,  # every 6 hours
-    "healthcheck_interval": 60 * 10,  # 10 minutes
-    "prometheus_enabled": False,
-    "alert_enabled": True,
+    "interval_sec": 6 * 60 * 60,  # 6h run cadence for reference
+    "healthcheck_interval": 10 * 60,  # 10m between supervision cycles
 }
+CFG = {**DEFAULTS, **SUP_CFG}
+
+# Reuse the daemon's single-cycle entry (no nested sleep loops)
+from queen.technicals.signals.tactical.live_daemon import run_daemon_once
 
 
-# ============================================================
-# 🧩 Load / Save Config
-# ============================================================
-def load_supervisor_config():
-    if os.path.exists(SUPERVISOR_CONFIG):
-        with open(SUPERVISOR_CONFIG) as f:
-            return json.load(f)
-    return DEFAULT_CONFIG
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-def save_health_status(status: dict):
-    os.makedirs(os.path.dirname(HEALTHCHECK_LOG), exist_ok=True)
-    with open(HEALTHCHECK_LOG, "w") as f:
-        json.dump(status, f, indent=2)
-
-
-# ============================================================
-# 🧠 Supervisor Tasks
-# ============================================================
-async def run_daemon_task(symbol: str, tf: str, interval: int):
-    """Wrap the daemon runner in an async task with supervision."""
-    ts = datetime.now(timezone.utc).isoformat()
-    console.print(
-        f"🚀 Launching daemon for [yellow]{symbol}[/yellow] @ [cyan]{tf}[/cyan]"
-    )
+def _save_health(status: Dict[str, Any]) -> None:
     try:
-        run_daemon(interval=interval)
-        save_checkpoint("success", f"{symbol}:{tf} run completed at {ts}")
-        return {"symbol": symbol, "tf": tf, "status": "success", "timestamp": ts}
-    except Exception as e:
-        err = str(e)
-        console.print(f"⚠️ [red]{symbol}:{tf}[/red] failed — {err}")
-        send_alert(f"Daemon failure: {symbol}:{tf} — {err}")
-        save_checkpoint("failed", err)
-        return {
-            "symbol": symbol,
-            "tf": tf,
-            "status": "failed",
-            "timestamp": ts,
-            "error": err,
-        }
-
-
-# ============================================================
-# 🧭 Supervisor Loop
-# ============================================================
-async def run_supervisor():
-    cfg = load_supervisor_config()
-    symbols = cfg["symbols"]
-    tfs = cfg["timeframes"]
-    interval = cfg["interval_sec"]
-    max_workers = cfg["max_concurrent"]
-
-    console.rule("[bold magenta]🛰️ Tactical Live Supervisor — Launching Fleet")
-
-    executor = ThreadPoolExecutor(max_workers=max_workers)
-    running = True
-    cycle = 0
-
-    def handle_sigint(sig, frame):
-        nonlocal running
-        console.print("\n🛑 SIGINT received — halting supervisor gracefully.")
-        running = False
-
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    while running:
-        cycle += 1
-        console.rule(
-            f"[bold cyan]Cycle #{cycle} — {datetime.now(timezone.utc).isoformat()}[/bold cyan]"
+        with open(HEALTH_FILE, "w", encoding="utf-8") as f:
+            json.dump(status, f, indent=2)
+        log.info(
+            f"[Supervisor] 🩺 Health snapshot → {HEALTH_FILE}", extra={"extra": status}
         )
+    except Exception as e:
+        log.warning(f"[Supervisor] Failed to write health snapshot → {e}")
 
-        tasks = []
-        start_time = time.time()
 
-        # Schedule each daemon run concurrently
-        for symbol in symbols:
-            for tf in tfs:
-                tasks.append(run_daemon_task(symbol, tf, interval))
+async def _run_single(symbol: str, tf: str) -> Dict[str, Any]:
+    """Wrap a single cognition cycle for a (symbol, timeframe)."""
+    ts = _utc_now()
+    # In future you can build df map keyed by tf/symbol here:
+    global_health: Dict[str, pl.DataFrame] | None = None
+    ok = await asyncio.to_thread(run_daemon_once, global_health)
+    return {
+        "symbol": symbol,
+        "timeframe": tf,
+        "status": "success" if ok else "failed",
+        "timestamp": ts,
+    }
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Record health
-        healthy = [
-            r for r in results if isinstance(r, dict) and r.get("status") == "success"
-        ]
-        failed = [
-            r for r in results if isinstance(r, dict) and r.get("status") != "success"
-        ]
+async def run_supervisor() -> None:
+    log.info("[Supervisor] 🛰️ Launching fleet (single-cycle concurrent runs)")
+    symbols: List[str] = list(CFG["symbols"])
+    tfs: List[str] = list(CFG["timeframes"])
+    max_conc: int = int(CFG["max_concurrent"])
+    health_iv: int = int(CFG["healthcheck_interval"])
 
-        health_summary = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+    sem = asyncio.Semaphore(max_conc)
+
+    async def _guarded(symbol: str, tf: str) -> Dict[str, Any]:
+        async with sem:
+            return await _run_single(symbol, tf)
+
+    cycle = 0
+    while True:
+        cycle += 1
+        start = time.time()
+        tasks = [asyncio.create_task(_guarded(s, tf)) for s in symbols for tf in tfs]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+
+        healthy = [r for r in results if r.get("status") == "success"]
+        failed = [r for r in results if r.get("status") != "success"]
+        summary = {
+            "timestamp": _utc_now(),
             "cycle": cycle,
             "healthy": len(healthy),
             "failed": len(failed),
             "symbols": len(symbols),
             "timeframes": len(tfs),
-            "duration_min": round((time.time() - start_time) / 60, 2),
+            "duration_sec": round(time.time() - start, 3),
+            "results": results,
         }
-        save_health_status(health_summary)
+        _save_health(summary)
 
-        # Display Rich table
-        table = Table(
-            title="🧩 Supervisor Health Summary", header_style="bold cyan", expand=True
+        log.info(
+            f"[Supervisor] ✅ cycle #{cycle} — ok={len(healthy)} fail={len(failed)} "
+            f"dur={summary['duration_sec']}s"
         )
-        table.add_column("Symbol")
-        table.add_column("TF")
-        table.add_column("Status")
-        table.add_column("Timestamp")
-        for res in results:
-            if isinstance(res, dict):
-                table.add_row(
-                    res.get("symbol", "—"),
-                    res.get("tf", "—"),
-                    res.get("status", "—"),
-                    res.get("timestamp", "—"),
-                )
-        console.print(table)
-
-        console.print(
-            f"💤 Sleeping for {cfg['healthcheck_interval']/60:.1f} min before next supervision check...\n"
-        )
-        await asyncio.sleep(cfg["healthcheck_interval"])
-
-    console.print("[green]✅ Supervisor stopped gracefully.[/green]")
+        await asyncio.sleep(health_iv)
 
 
-# ============================================================
-# 🧪 Stand-alone Entry
-# ============================================================
 if __name__ == "__main__":
     try:
         asyncio.run(run_supervisor())
     except KeyboardInterrupt:
-        console.print("🛑 Interrupted manually.")
+        log.info("[Supervisor] 🛑 Stopped by user")

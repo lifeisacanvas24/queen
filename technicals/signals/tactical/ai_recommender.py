@@ -1,155 +1,118 @@
 # ============================================================
 # queen/technicals/signals/tactical/ai_recommender.py
 # ------------------------------------------------------------
-# 🧠 Phase 5.0 — Tactical AI Recommender (Learning Engine Base)
-# Learns from historical tactical events to forecast
-# next likely bias and confidence for each timeframe.
+# 🧠 Tactical AI Recommender (Stats-Only, Settings-Driven Paths)
+# - 100% Polars
+# - No ML deps
+# - Paths resolved via queen.settings.settings.PATHS with safe fallback
 # ============================================================
 
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import numpy as np
 import polars as pl
-from rich.console import Console
-from rich.table import Table
+from queen.helpers.logger import log
 
-console = Console()
-
-
-# ============================================================
-# ⚙️ Utility — Safe Normalization
-# ============================================================
-def normalize_series(series: np.ndarray) -> np.ndarray:
-    """Normalize a series between 0 and 1."""
-    if len(series) == 0:
-        return np.array([])
-    s_min, s_max = np.nanmin(series), np.nanmax(series)
-    if s_max - s_min == 0:
-        return np.zeros_like(series)
-    return (series - s_min) / (s_max - s_min)
+# ── Settings-aware default paths ─────────────────────────────
+try:
+    from queen.settings import settings as SETTINGS  # has PATHS
+except Exception:
+    SETTINGS = None
 
 
-# ============================================================
-# 🧩 Core Learner — Historical Context Stats
-# ============================================================
-def analyze_event_log(
-    log_path: str = "quant/logs/tactical_event_log.csv",
-) -> pl.DataFrame:
-    """Compute historical statistics per timeframe."""
-    if not os.path.exists(log_path):
-        console.print(f"⚠️ No event log found at {log_path}")
+def _default_event_log_path() -> Path:
+    """Prefer SETTINGS.PATHS['LOGS']/tactical_event_log.csv; fallback to runtime/logs."""
+    if SETTINGS:
+        return SETTINGS.PATHS["LOGS"] / "tactical_event_log.csv"
+    return Path("queen/data/runtime/logs") / "tactical_event_log.csv"
+
+
+# ── Utils ───────────────────────────────────────────────────
+def _norm01(arr: np.ndarray) -> np.ndarray:
+    if arr.size == 0:
+        return arr
+    a_min, a_max = np.nanmin(arr), np.nanmax(arr)
+    if not np.isfinite(a_min) or not np.isfinite(a_max) or a_max == a_min:
+        return np.zeros_like(arr)
+    out = (arr - a_min) / (a_max - a_min)
+    return np.nan_to_num(out, nan=0.0, posinf=1.0, neginf=0.0)
+
+
+# ── Core ────────────────────────────────────────────────────
+def analyze_event_log(log_path: str | os.PathLike | None = None) -> pl.DataFrame:
+    """Compute historical stats per timeframe from settings-driven log path."""
+    path = Path(log_path) if log_path else _default_event_log_path()
+    if not path.exists():
+        log.info(f"[AI-Reco] No event log at {path} — returning empty.")
         return pl.DataFrame()
 
-    df = pl.read_csv(log_path)
-
-    # Ensure required columns exist
-    if "timeframe" not in df.columns or "Reversal_Alert" not in df.columns:
-        console.print("⚠️ Log missing critical columns — cannot proceed.")
+    df = pl.read_csv(path, ignore_errors=True)
+    if (
+        df.is_empty()
+        or "timeframe" not in df.columns
+        or "Reversal_Alert" not in df.columns
+    ):
+        log.warning(
+            "[AI-Reco] Log missing required columns (timeframe/Reversal_Alert)."
+        )
         return pl.DataFrame()
 
-    # Clean + prepare
-    df = df.drop_nulls(["Reversal_Alert"])
-    df = df.filter(pl.col("Reversal_Alert") != "")
+    df = df.drop_nulls(["Reversal_Alert"]).filter(pl.col("Reversal_Alert") != "")
 
-    # Aggregate signals by timeframe
     agg = (
         df.group_by("timeframe")
         .agg(
             [
                 pl.count().alias("Event_Count"),
-                pl.col("Reversal_Alert")
-                .filter(pl.col("Reversal_Alert").str.contains("BUY"))
-                .count()
-                .alias("BUY_Count"),
-                pl.col("Reversal_Alert")
-                .filter(pl.col("Reversal_Alert").str.contains("SELL"))
-                .count()
-                .alias("SELL_Count"),
-                pl.col("Reversal_Score").fill_null(0).mean().alias("Avg_Score"),
+                pl.col("Reversal_Alert").str.contains("BUY").sum().alias("BUY_Count"),
+                pl.col("Reversal_Alert").str.contains("SELL").sum().alias("SELL_Count"),
+                pl.col("Reversal_Score")
+                .cast(pl.Float64, strict=False)
+                .fill_null(0)
+                .mean()
+                .alias("Avg_Score"),
             ]
         )
         .with_columns(
             [
                 (pl.col("BUY_Count") / pl.col("Event_Count")).alias("BUY_Ratio"),
                 (pl.col("SELL_Count") / pl.col("Event_Count")).alias("SELL_Ratio"),
-            ]
-        )
-        .with_columns(
-            [
                 (pl.col("BUY_Ratio") - pl.col("SELL_Ratio")).alias("Bias_Skew"),
             ]
         )
     )
 
-    # Compute confidence score based on magnitude of skew and event volume
-    skew_norm = normalize_series(agg["Bias_Skew"].to_numpy())
-    count_norm = normalize_series(agg["Event_Count"].to_numpy())
+    if agg.is_empty():
+        return agg
 
-    agg = agg.with_columns(
-        [pl.Series("Confidence", np.round((0.6 * skew_norm + 0.4 * count_norm), 2))]
-    )
+    skew_norm = _norm01(agg["Bias_Skew"].to_numpy())
+    count_norm = _norm01(agg["Event_Count"].to_numpy())
+    conf = np.round(0.6 * skew_norm + 0.4 * count_norm, 2)
 
-    return agg
+    return agg.with_columns(pl.Series("Confidence", conf))
 
 
-# ============================================================
-# 🧭 Forecast — Predict Next Likely Bias
-# ============================================================
-def compute_forecast(df_stats: pl.DataFrame) -> pl.DataFrame:
-    """Classify next likely move (BUY / SELL / NEUTRAL) based on ratios."""
+def compute_forecast(df_stats: pl.DataFrame, *, margin: float = 0.10) -> pl.DataFrame:
     if df_stats.is_empty():
         return df_stats
-
-    forecast = []
-    for i in range(len(df_stats)):
-        buy_r, sell_r = df_stats["BUY_Ratio"][i], df_stats["SELL_Ratio"][i]
-        if buy_r > sell_r + 0.1:
-            forecast.append("🟢 BUY Likely")
-        elif sell_r > buy_r + 0.1:
-            forecast.append("🔴 SELL Likely")
-        else:
-            forecast.append("⚪ Neutral")
-
-    return df_stats.with_columns(pl.Series("Forecast", forecast))
-
-
-# ============================================================
-# 📊 Render Summary — AI Recommender Dashboard
-# ============================================================
-def render_ai_recommender(log_path: str = "quant/logs/tactical_event_log.csv"):
-    """Reads event log, analyzes bias distribution, and prints forecast summary."""
-    df_stats = analyze_event_log(log_path)
-    if df_stats.is_empty():
-        console.print("⚠️ No data available for AI Recommender summary.")
-        return None
-
-    df_forecast = compute_forecast(df_stats)
-
-    table = Table(
-        title="🤖 Tactical AI Recommender — Bias Forecast (Phase 5.0)",
-        header_style="bold green",
-        expand=True,
+    buy_dominant = pl.col("BUY_Ratio") > (pl.col("SELL_Ratio") + margin)
+    sell_dominant = pl.col("SELL_Ratio") > (pl.col("BUY_Ratio") + margin)
+    return df_stats.with_columns(
+        pl.when(buy_dominant)
+        .then(pl.lit("🟢 BUY Likely"))
+        .when(sell_dominant)
+        .then(pl.lit("🔴 SELL Likely"))
+        .otherwise(pl.lit("⚪ Neutral"))
+        .alias("Forecast")
     )
-    for col in [
-        "timeframe",
-        "Event_Count",
-        "BUY_Ratio",
-        "SELL_Ratio",
-        "Bias_Skew",
-        "Confidence",
-        "Forecast",
-    ]:
-        table.add_column(col, justify="center")
-
-    for row in df_forecast.iter_rows(named=True):
-        table.add_row(*[str(v) for v in row.values()])
-
-    console.print(table)
-    return df_forecast
 
 
-# ============================================================
-# 🧪 Example Usage
-# ============================================================
-if __name__ == "__main__":
-    render_ai_recommender()
+# Public entrypoint (settings-driven by default)
+def recommend_from_log(log_path: str | os.PathLike | None = None) -> pl.DataFrame:
+    stats = analyze_event_log(log_path)
+    if stats.is_empty():
+        return stats
+    return compute_forecast(stats)

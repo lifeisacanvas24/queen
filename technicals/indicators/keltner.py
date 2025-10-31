@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/indicators/vol_keltner.py
+# queen/technicals/indicators/keltner.py
 # ------------------------------------------------------------
 # ⚙️ Keltner Channel — Volatility Envelope Engine
 # Config-driven, NaN-safe, headless for Quant-Core v4.x

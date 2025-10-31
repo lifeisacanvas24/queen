@@ -1,65 +1,91 @@
 # ============================================================
 # queen/technicals/signals/tactical/ai_trainer.py
 # ------------------------------------------------------------
-# 🤖 Phase 5.1 — Tactical AI Trainer
-# Learns from historical tactical_event_log.csv
-# and builds a lightweight predictive model
+# 🤖 Tactical AI Trainer (Settings-Driven Paths, Optional Deps)
+# - sklearn/joblib imported inside funcs only
+# - paths from SETTINGS.PATHS with safe fallbacks
 # ============================================================
 
+from __future__ import annotations
 import os
-
-import joblib
+from pathlib import Path
 import numpy as np
+import pl as _ignore  # avoid name shadowing if user aliases polars as pl elsewhere
 import polars as pl
+from queen.helpers.logger import log
 from rich.console import Console
-from rich.table import Table
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+
+try:
+    from queen.settings import settings as SETTINGS
+except Exception:
+    SETTINGS = None
 
 console = Console()
 
 
-# ============================================================
-# ⚙️ Load & Prepare Data
-# ============================================================
-def load_event_log(path: str = "quant/logs/tactical_event_log.csv") -> pl.DataFrame:
-    if not os.path.exists(path):
-        console.print(f"⚠️ No event log found at {path}")
+def _default_event_log_path() -> Path:
+    if SETTINGS:
+        return SETTINGS.PATHS["LOGS"] / "tactical_event_log.csv"
+    return Path("queen/data/runtime/logs") / "tactical_event_log.csv"
+
+
+def _default_model_path() -> Path:
+    # Choose CACHE/models as durable cross-env location
+    if SETTINGS:
+        base = SETTINGS.PATHS.get("CACHE", SETTINGS.PATHS["RUNTIME"])
+        return base / "models" / "tactical_ai_model.pkl"
+    return Path("queen/data/runtime/cache/models/tactical_ai_model.pkl")
+
+
+# ── Data IO ─────────────────────────────────────────────────
+def load_event_log(path: str | os.PathLike | None = None) -> pl.DataFrame:
+    p = Path(path) if path else _default_event_log_path()
+    if not p.exists():
+        log.info(f"[AI-Trainer] No event log at {p}")
         return pl.DataFrame()
-    df = pl.read_csv(path)
-    # Drop obviously empty rows
-    df = df.drop_nulls(["Reversal_Alert"])
-    return df
+    df = pl.read_csv(p, ignore_errors=True)
+    return (
+        df.drop_nulls(["Reversal_Alert"])
+        if "Reversal_Alert" in df.columns
+        else pl.DataFrame()
+    )
+
+
+# change load_model signature & default:
+def load_model(model_path: str | os.PathLike | None = None):
+    path = Path(model_path) if model_path else _default_model_path()
+    if not path.exists():
+        console.print(f"⚠️ No AI model found at [red]{path}[/red]")
+        return None, None
+    try:
+        import joblib
+    except Exception:
+        console.print("⚠️ joblib not available; skipping model load.")
+        return None, None
+    data = joblib.load(path)
+    return data.get("model"), data.get("scaler")
 
 
 def preprocess(df: pl.DataFrame):
-    """Extract numeric features + encoded label."""
     if df.is_empty():
         return None, None
-
-    # Feature engineering (choose any subset that exists)
     cols = [
         c
-        for c in [
+        for c in (
             "CMV",
             "Reversal_Score",
             "Confidence",
             "ATR_Ratio",
             "BUY_Ratio",
             "SELL_Ratio",
-        ]
+        )
         if c in df.columns
     ]
-
     if not cols:
-        console.print("⚠️ No numeric columns found to train on.")
+        log.warning("[AI-Trainer] No numeric feature columns found.")
         return None, None
-
     X = np.nan_to_num(df.select(cols).to_numpy(), nan=0.0)
 
-    # Label encoding
     labels = []
     for v in df["Reversal_Alert"]:
         if isinstance(v, str) and "BUY" in v:
@@ -68,80 +94,64 @@ def preprocess(df: pl.DataFrame):
             labels.append(-1)
         else:
             labels.append(0)
-    y = np.array(labels, dtype=int)
-
+    y = np.asarray(labels, dtype=int)
     return X, y
 
 
-# ============================================================
-# 🧠 Train Model
-# ============================================================
-def train_model(X: np.ndarray, y: np.ndarray):
-    """Train logistic regression classifier."""
-    if X is None or len(X) == 0:
-        console.print("⚠️ No training data available.")
+# ── Training (optional deps inside) ─────────────────────────
+def train_model(X, y):
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import accuracy_score
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
+    except Exception as e:
+        log.warning(f"[AI-Trainer] sklearn not available → {e}")
         return None
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y if len(set(y)) > 1 else None
+    if X is None or len(X) == 0:
+        log.warning("[AI-Trainer] No training data.")
+        return None
+
+    strat = y if len(set(y)) > 1 else None
+    Xtr, Xte, ytr, yte = train_test_split(
+        X, y, test_size=0.25, random_state=42, stratify=strat
     )
 
     scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    Xtr = scaler.fit_transform(Xtr)
+    Xte = scaler.transform(Xte)
 
     model = LogisticRegression(max_iter=1000)
-    model.fit(X_train, y_train)
+    model.fit(Xtr, ytr)
+    from numpy import round as npround
 
-    y_pred = model.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-
-    console.print(f"✅ Model trained | Accuracy: [bold green]{acc:.3f}[/bold green]")
-    console.print(classification_report(y_test, y_pred, digits=3))
-
-    return model, scaler
+    acc = float(npround(((model.predict(Xte) == yte).sum() / max(len(yte), 1)), 3))
+    log.info(f"[AI-Trainer] Model trained. Accuracy={acc:.3f}")
+    return {"model": model, "scaler": scaler, "accuracy": acc}
 
 
-# ============================================================
-# 💾 Save Model
-# ============================================================
-def save_model(model, scaler, path: str = "quant/models/tactical_ai_model.pkl"):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    joblib.dump({"model": model, "scaler": scaler}, path)
-    console.print(f"💾 Model saved to [cyan]{path}[/cyan]")
-
-
-# ============================================================
-# 📊 Render Summary
-# ============================================================
-def render_training_summary(model, acc: float):
-    table = Table(
-        title="🤖 Tactical AI Trainer — Summary", header_style="bold blue", expand=True
-    )
-    table.add_column("Model")
-    table.add_column("Accuracy")
-    table.add_column("Notes")
-    table.add_row(
-        "LogisticRegression", f"{acc:.3f}", "Baseline classifier for reversals"
-    )
-    console.print(table)
-
-
-# ============================================================
-# 🧪 Entry
-# ============================================================
-def main():
-    df = load_event_log()
-    X, y = preprocess(df)
-    model_data = train_model(X, y)
-    if model_data is None:
+def save_model(bundle, path: str | os.PathLike | None = None):
+    if bundle is None:
         return
-    model, scaler = model_data
-    save_model(model, scaler)
-    render_training_summary(
-        model, acc=model.score(StandardScaler().fit_transform(X), y)
-    )
+    try:
+        import joblib
+    except Exception as e:
+        log.warning(f"[AI-Trainer] joblib not available → {e}")
+        return
+    p = Path(path) if path else _default_model_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump({"model": bundle["model"], "scaler": bundle["scaler"]}, p)
+    log.info(f"[AI-Trainer] Model saved → {p}")
 
 
-if __name__ == "__main__":
-    main()
+# ── One-shot entry ──────────────────────────────────────────
+def run_training(
+    log_path: str | os.PathLike | None = None,
+    model_path: str | os.PathLike | None = None,
+):
+    df = load_event_log(log_path)
+    X, y = preprocess(df)
+    bundle = train_model(X, y)
+    save_model(bundle, model_path)
+    return bundle
