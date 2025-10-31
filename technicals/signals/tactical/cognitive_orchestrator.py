@@ -69,31 +69,26 @@ def _safe_run(label: str, f, *args, **kwargs):
 
 
 # ── One cycle ───────────────────────────────────────────────
-def run_cognitive_cycle(
-    df_live: dict[str, pl.DataFrame] | None = None, *, do_train: bool = True
-):
-    """Run a lightweight cognition pass:
-    1) (optional) Train model from event log
-    2) Run AI inference on provided live frames (per timeframe)
-    3) Compute stats-based recommender from log
+
+
+def run_cognitive_cycle(global_health_dfs: dict[str, pl.DataFrame] | None = None):
     """
-    ts = datetime.now(timezone.utc).isoformat()
+    Contract: single-cycle runner (no loops/sleeps).
+    Accepts optional global_health_dfs mapping (timeframe -> DataFrame).
+    """
     console.rule("[bold yellow]🧠 Tactical Cognitive Cycle")
+    # ---- Phase: AI Recommender (stats) ----
+    try:
+        from queen.technicals.signals.tactical.ai_recommender import (
+            render_ai_recommender,
+        )
 
-    if do_train:
-        run_training = _maybe(_import_trainer)
-        if run_training:
-            _safe_run("AI Trainer", run_training)
+        # Always settings-driven path resolution happens inside recommender now.
+        render_ai_recommender()
+    except Exception as e:
+        console.print(f"⚠️ [AI Recommender (stats)] Skipped: {e}")
 
-    run_ai_inference = _maybe(_import_inference)
-    if run_ai_inference and df_live:
-        _safe_run("AI Inference", run_ai_inference, df_live)
-
-    recommend_from_log = _maybe(_import_recommender)
-    if recommend_from_log:
-        _safe_run("AI Recommender (stats)", recommend_from_log)
-
-    console.print(f"🧭 Completed cycle at [cyan]{ts}[/cyan]")
+    console.print("🧭 Completed cycle.")
 
 
 # ── Loop mode (optional) ────────────────────────────────────

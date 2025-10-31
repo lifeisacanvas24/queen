@@ -128,6 +128,11 @@ GLOBAL_NOTES: Dict[str, str] = {
     "3": "Pattern scores feed through CPS/RPS; indicators affect SPS/MCS.",
 }
 
+INDICATOR_WEIGHTS = {
+    "RScore": 1.0,
+    "VolX": 0.9,
+    "LBX": 1.1,
+}
 # ------------------------------------------------------------
 # ⚖️ Validation / Normalization
 # ------------------------------------------------------------

@@ -19,6 +19,7 @@ from typing import Any, Dict
 
 import numpy as np
 import polars as pl
+from queen.helpers.common import timeframe_key
 from queen.helpers.logger import log
 
 try:
@@ -93,13 +94,7 @@ def compute_tactical_index(
     weights_cfg = _safe_read_json(w_cfg_path, fallback={})
 
     # 3) Timeframe key → adaptive weights (optional)
-    tf_key = (
-        f"intraday_{interval}"
-        if interval.endswith("m")
-        else f"hourly_{interval}"
-        if "h" in interval.lower()
-        else interval.lower()
-    )
+    tf_key = timeframe_key(interval)  # e.g., "intraday_15m", "hourly_1h", "daily"
     adaptive_weights = (
         weights_cfg.get("timeframes", {}).get(tf_key, {}).get("meta_layers", {}) or {}
     )

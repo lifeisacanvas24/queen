@@ -1,162 +1,224 @@
-# ============================================================
 # queen/technicals/signals/tactical/meta_controller.py
-# ------------------------------------------------------------
-# 🧠 Phase 6.0 — Tactical Meta Controller
-# The adaptive orchestration layer that supervises the AI engine
-# and automatically retrains, reweights, or recalibrates as needed.
-# ============================================================
+from __future__ import annotations
 
 import json
-import os
-from datetime import datetime
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Tuple, Dict, Any
 
-from rich.console import Console
-from rich.table import Table
+import polars as pl
+from queen.helpers.common import utc_now_iso
+from queen.helpers.logger import log
 
-console = Console()
+try:
+    from queen.settings import settings as SETTINGS
+except Exception:
+    SETTINGS = None
 
-# ============================================================
-# 📦 Configuration
-# ============================================================
-CONFIG_PATH = "quant/config/meta_controller.json"
-DEFAULT_CONFIG = {
-    "model_path": "quant/models/tactical_ai_model.pkl",
-    "log_path": "quant/logs/tactical_event_log.csv",
-    "weights_path": "quant/config/indicator_weights.json",
+
+# Optional weights module (code-based, not JSON)
+def _load_weights_dict() -> dict:
+    try:
+        from queen.settings import weights as W
+
+        # support either INDICATOR_WEIGHTS or WEIGHTS
+        return getattr(W, "INDICATOR_WEIGHTS", getattr(W, "WEIGHTS", {})) or {}
+    except Exception:
+        return {}
+
+
+# ------- effective paths (settings-driven + state file) -------
+def _P() -> Dict[str, Path]:
+    if SETTINGS:
+        paths = SETTINGS.PATHS
+        logs = Path(paths["LOGS"])
+        models_root = Path(paths.get("MODELS", paths.get("CACHE", paths["RUNTIME"])))
+    else:
+        root = Path("queen/data/runtime")
+        logs = root / "logs"
+        models_root = root / "cache"
+    models = models_root / "models"
+    logs.mkdir(parents=True, exist_ok=True)
+    models.mkdir(parents=True, exist_ok=True)
+    return {
+        "logs": logs,
+        "models": models,
+        "event_log": logs / "tactical_event_log.csv",
+        "meta_memory": logs / "meta_memory_log.csv",
+        "drift_log": logs / "meta_drift_log.csv",
+        "state_json": logs / "meta_controller_state.json",  # ← replaces meta_cfg_json
+        "model_pkl": models / "tactical_ai_model.pkl",
+    }
+
+
+# ------- defaults kept in-code (no external config file) -------
+DEFAULTS = {
     "retrain_interval_hours": 24,
-    "drift_threshold": 0.1,
+    "drift_threshold": 0.10,
     "last_retrain_ts": None,
 }
 
 
-# ============================================================
-# 🧩 Helpers
-# ============================================================
-def load_config():
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    if not os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "w") as f:
-            json.dump(DEFAULT_CONFIG, f, indent=2)
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
-
-
-def save_config(cfg: dict):
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(cfg, f, indent=2)
-
-
-def hours_since(timestamp_str):
-    if not timestamp_str:
-        return 999
+def _load_state() -> Dict[str, Any]:
+    P = _P()
+    if not P["state_json"].exists():
+        P["state_json"].write_text(json.dumps(DEFAULTS, indent=2))
+        return DEFAULTS.copy()
     try:
-        ts = datetime.fromisoformat(timestamp_str)
-        delta = datetime.utcnow() - ts
-        return delta.total_seconds() / 3600
+        base = json.loads(P["state_json"].read_text() or "{}")
     except Exception:
-        return 999
+        base = {}
+    merged = {**DEFAULTS, **base}
+    if merged != base:
+        P["state_json"].write_text(json.dumps(merged, indent=2))
+    return merged
 
 
-# ============================================================
-# 📊 Performance Drift Detection
-# ============================================================
-def detect_performance_drift(
-    model_path: str, event_log_path: str, drift_threshold: float
-):
-    """Evaluates model drift by comparing current vs historical accuracy."""
-    if not os.path.exists(event_log_path) or not os.path.exists(model_path):
-        console.print("⚠️ Missing log or model for drift detection.")
+def _save_state(st: Dict[str, Any]) -> None:
+    _P()["state_json"].write_text(json.dumps(st, indent=2))
+
+
+def _hours_since(ts: str | None) -> float:
+    if not ts:
+        return 10_000.0
+    try:
+        t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return (
+            datetime.now(timezone.utc) - t.astimezone(timezone.utc)
+        ).total_seconds() / 3600.0
+    except Exception:
+        return 10_000.0
+
+
+# ------- drift check (skips if model/log missing) -------
+def _detect_drift(
+    model_path: Path, event_log_path: Path, drift_threshold: float
+) -> Tuple[bool, float]:
+    if not (model_path.exists() and event_log_path.exists()):
+        log.info("[Meta] Drift check skipped (missing model/log).")
+        return False, 0.0
+    df = pl.read_csv(event_log_path)
+    if df.height < 50 or "Reversal_Alert" not in df.columns:
         return False, 0.0
 
-    from quant.signals.tactical.tactical_ai_trainer import (
-        load_event_log,
-        preprocess,
-    )
-
-    df = load_event_log(event_log_path)
-    X, y = preprocess(df)
-    if X is None or len(X) < 50:
+    cols = [
+        c
+        for c in (
+            "CMV",
+            "Reversal_Score",
+            "Confidence",
+            "ATR_Ratio",
+            "BUY_Ratio",
+            "SELL_Ratio",
+        )
+        if c in df.columns
+    ]
+    if not cols:
         return False, 0.0
 
-    from joblib import load
-
-    data = load(model_path)
-    model = data["model"]
-    scaler = data["scaler"]
-
-    from sklearn.metrics import accuracy_score
-
-    y_pred = model.predict(scaler.transform(X))
-    acc_current = accuracy_score(y, y_pred)
-    acc_historical = model.score(scaler.transform(X), y)
-
-    drift = abs(acc_historical - acc_current)
-    return drift > drift_threshold, drift
-
-
-# ============================================================
-# 🤖 Meta-Control Routine
-# ============================================================
-def meta_controller_run():
-    """Main orchestration logic for adaptive retraining & reweighting."""
-    cfg = load_config()
-
-    console.rule("[bold magenta]🧠 Phase 6.0 — Tactical Meta Controller")
-    console.print("📅 Checking model lifecycle...")
-
-    hours_elapsed = hours_since(cfg["last_retrain_ts"])
-    retrain_due = hours_elapsed > cfg["retrain_interval_hours"]
-
-    drift_flag, drift_value = detect_performance_drift(
-        cfg["model_path"], cfg["log_path"], cfg["drift_threshold"]
+    X = df.select(cols).fill_null(0.0).to_numpy()
+    y = (
+        df["Reversal_Alert"]
+        .fill_null("")
+        .map_elements(lambda s: 1 if "BUY" in s else (-1 if "SELL" in s else 0))
+        .to_numpy()
     )
 
-    decisions = []
+    try:
+        import joblib
+        from sklearn.metrics import accuracy_score
 
-    if retrain_due:
-        decisions.append("⏳ Retraining due (interval exceeded)")
+        data = joblib.load(model_path)
+        model, scaler = data.get("model"), data.get("scaler")
+        y_pred = model.predict(scaler.transform(X))
+        acc_current = float(accuracy_score(y, y_pred))
+        acc_ref = float(getattr(model, "acc_ref_", acc_current))
+        drift = abs(acc_ref - acc_current)
+        return (drift > float(drift_threshold)), drift
+    except Exception as e:
+        log.warning(f"[Meta] Drift check failed: {e}")
+        return False, 0.0
+
+
+# ------- merged meta-memory snapshot (uses settings/weights.py) -------
+def _append_meta_memory_row(state: Dict[str, Any]) -> None:
+    P = _P()
+    weights = _load_weights_dict()
+    top_feat, top_w = (None, None)
+    if weights:
+        top_feat = max(weights, key=weights.get)
+        top_w = float(weights[top_feat])
+
+    row = {
+        "timestamp": utc_now_iso(),  # Z-UTC; tests can parse
+        "model_version": P["model_pkl"].name,
+        "last_retrain": state.get("last_retrain_ts"),
+        "drift_threshold": state.get("drift_threshold"),
+        "retrain_interval_hours": state.get("retrain_interval_hours"),
+        "total_indicators": len(weights),
+        "top_feature": top_feat,
+        "top_weight": top_w,
+    }
+    df_new = pl.DataFrame([row])
+    if P["meta_memory"].exists():
+        df_old = pl.read_csv(P["meta_memory"])
+        df_all = pl.concat([df_old, df_new], how="vertical_relaxed")
+    else:
+        df_all = df_new
+    df_all.write_csv(P["meta_memory"])
+    log.info(f"[Meta] memory snapshot appended → {P['meta_memory']}")
+
+
+# ------- training trigger -------
+def _maybe_retrain(state: Dict[str, Any], drift_flag: bool) -> bool:
+    P = _P()
+    elapsed = _hours_since(state.get("last_retrain_ts"))
+    due = elapsed > float(state["retrain_interval_hours"])
+    actions = []
+    if due:
+        actions.append("interval_due")
     if drift_flag:
-        decisions.append(f"📉 Performance drift detected ({drift_value:.3f})")
+        actions.append("drift")
 
-    if not decisions:
-        decisions.append("✅ Model stable and up-to-date")
+    if not actions:
+        log.info("[Meta] model stable; no action.")
+        return False
 
-    # --- Render decision table ---
-    table = Table(
-        title="🧠 Meta Controller — Decisions", header_style="bold cyan", expand=True
+    log.info(f"[Meta] actions={actions}")
+    try:
+        from queen.technicals.signals.tactical.ai_trainer import run_training
+
+        bundle = run_training(model_path=P["model_pkl"])
+        if bundle:
+            state["last_retrain_ts"] = utc_now_iso()
+            _save_state(state)
+            try:
+                from queen.technicals.signals.tactical.ai_optimizer import (
+                    optimize_indicator_weights,
+                )
+
+                optimize_indicator_weights(P["model_pkl"])
+            except Exception as e:
+                log.warning(f"[Meta] weight optimization skipped: {e}")
+            _append_meta_memory_row(state)  # ← merged memory write here
+        return True
+    except Exception as e:
+        log.warning(f"[Meta] retrain failed: {e}")
+        return False
+
+
+# ------- public API -------
+def meta_controller_run() -> Dict[str, Any]:
+    log.info("[Meta] cycle begin")
+    P = _P()
+    st = _load_state()
+    drift_flag, drift_val = _detect_drift(
+        P["model_pkl"], P["event_log"], st["drift_threshold"]
     )
-    table.add_column("Condition")
-    table.add_column("Action")
-    for d in decisions:
-        action = "Re-train Model" if "Retraining" in d or "drift" in d else "None"
-        table.add_row(d, action)
-    console.print(table)
-
-    # --- Execute actions ---
-    if any("Re-train" in a or "drift" in a for a in decisions):
-        try:
-            from quant.signals.tactical.tactical_ai_trainer import main as train_model
-
-            console.print("🚀 Triggering model retraining...")
-            train_model()
-            cfg["last_retrain_ts"] = datetime.utcnow().isoformat()
-            save_config(cfg)
-
-            # Re-run optimizer after retraining
-            from quant.signals.tactical.tactical_ai_optimizer import (
-                optimize_indicator_weights,
-            )
-
-            optimize_indicator_weights(cfg["model_path"])
-        except Exception as e:
-            console.print(f"⚠️ [Meta Controller] Retraining failed: {e}")
-
-    console.print("🏁 Meta-controller cycle complete.")
-    return cfg
+    _maybe_retrain(st, drift_flag)
+    log.info("[Meta] cycle complete")
+    return st
 
 
-# ============================================================
-# 🧪 Standalone Entry
-# ============================================================
 if __name__ == "__main__":
     meta_controller_run()

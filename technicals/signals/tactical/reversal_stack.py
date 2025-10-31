@@ -1,113 +1,102 @@
 # ============================================================
 # queen/technicals/signals/tactical/reversal_stack.py
 # ------------------------------------------------------------
-# 🔥 Tactical Reversal Stack Engine (Phase 4.8)
-# Combines Bias Regime, Divergence, Squeeze, Liquidity Trap,
-# and Exhaustion to issue Confluence Reversal Alerts.
+# 🔥 Tactical Reversal Stack Engine (Phase 4.9)
+# Vectorized Polars implementation (no Python loops)
 # ============================================================
 
-import numpy as np
+from __future__ import annotations
+
 import polars as pl
 
 
 def compute_reversal_stack(
     df: pl.DataFrame,
+    *,
     bias_col: str = "Regime_State",
     div_col: str = "Divergence_Signal",
     squeeze_col: str = "Squeeze_Signal",
     trap_col: str = "Liquidity_Trap",
     exhaust_col: str = "Exhaustion_Signal",
+    out_score: str = "Reversal_Score",
+    out_alert: str = "Reversal_Stack_Alert",
 ) -> pl.DataFrame:
-    """Generates a unified Reversal_Stack_Alert and confidence score.
+    """Confluence score (BUY/SELL/Stable) using vectorized rules."""
+    if not isinstance(df, pl.DataFrame) or df.is_empty():
+        return df
 
-    Scoring weights:
-        Bias Reversal ........  +2
-        Divergence ............  +2
-        Squeeze Release .......  +1
-        Liquidity Trap ........  +2
-        Exhaustion ............  +2
-    """
-    df = df.clone()
+    # Ensure the columns exist (as empty strings if missing)
+    need = [bias_col, div_col, squeeze_col, trap_col, exhaust_col]
+    add = [pl.lit("").alias(c) for c in need if c not in df.columns]
+    if add:
+        df = df.with_columns(add)
 
-    # Ensure columns exist
-    required = [bias_col, div_col, squeeze_col, trap_col, exhaust_col]
-    for col in required:
-        if col not in df.columns:
-            df = df.with_columns(pl.lit("").alias(col))
-
-    n = len(df)
-    score = np.zeros(n, dtype=float)
-    alert = np.full(n, "➡️ Stable", dtype=object)
-
-    bias = df[bias_col].to_list()
-    div = df[div_col].to_list()
-    squeeze = df[squeeze_col].to_list()
-    trap = df[trap_col].to_list()
-    exhaust = df[exhaust_col].to_list()
-
-    for i in range(n):
-        s = 0
-        # Bias Regime reversal context
-        if isinstance(bias[i], str):
-            if "TREND" in bias[i] or "RANGE" in bias[i]:
-                s += 2
-
-        # Divergence bullish/bearish
-        if isinstance(div[i], str):
-            if "Bullish" in div[i]:
-                s += 2
-            elif "Bearish" in div[i]:
-                s -= 2
-
-        # Squeeze breakout
-        if isinstance(squeeze[i], str) and "Release" in squeeze[i]:
-            s += 1
-
-        # Liquidity traps
-        if isinstance(trap[i], str):
-            if "Bear" in trap[i]:
-                s += 2
-            elif "Bull" in trap[i]:
-                s -= 2
-
-        # Exhaustion signals
-        if isinstance(exhaust[i], str):
-            if "Bullish" in exhaust[i]:
-                s += 2
-            elif "Bearish" in exhaust[i]:
-                s -= 2
-
-        score[i] = s
-
-        # --- Alert synthesis ---
-        if s >= 5:
-            alert[i] = "🟢 Confluence BUY"
-        elif s <= -5:
-            alert[i] = "🔴 Confluence SELL"
-        elif abs(s) >= 3:
-            alert[i] = "🟡 Potential Reversal"
-        else:
-            alert[i] = "➡️ Stable"
-
-    df = df.with_columns(
-        [
-            pl.Series("Reversal_Score", score),
-            pl.Series("Reversal_Stack_Alert", alert),
-        ]
+    # Build vectorized component scores
+    bias_pts = (
+        pl.when(pl.col(bias_col).str.contains("TREND|RANGE", literal=True))
+        .then(pl.lit(2))
+        .otherwise(pl.lit(0))
     )
 
-    return df
+    div_pts = (
+        pl.when(pl.col(div_col).str.contains("Bullish", literal=True))
+        .then(pl.lit(2))
+        .when(pl.col(div_col).str.contains("Bearish", literal=True))
+        .then(pl.lit(-2))
+        .otherwise(pl.lit(0))
+    )
+
+    sqz_pts = (
+        pl.when(pl.col(squeeze_col).str.contains("Release", literal=True))
+        .then(1)
+        .otherwise(0)
+    )
+
+    trap_pts = (
+        pl.when(pl.col(trap_col).str.contains("Bear", literal=True))
+        .then(pl.lit(2))
+        .when(pl.col(trap_col).str.contains("Bull", literal=True))
+        .then(pl.lit(-2))
+        .otherwise(pl.lit(0))
+    )
+
+    exh_pts = (
+        pl.when(pl.col(exhaust_col).str.contains("Bullish", literal=True))
+        .then(pl.lit(2))
+        .when(pl.col(exhaust_col).str.contains("Bearish", literal=True))
+        .then(pl.lit(-2))
+        .otherwise(pl.lit(0))
+    )
+
+    score = (bias_pts + div_pts + sqz_pts + trap_pts + exh_pts).alias(out_score)
+
+    alert = (
+        pl.when(score >= 5)
+        .then(pl.lit("🟢 Confluence BUY"))
+        .when(score <= -5)
+        .then(pl.lit("🔴 Confluence SELL"))
+        .when(score.abs() >= 3)
+        .then(pl.lit("🟡 Potential Reversal"))
+        .otherwise(pl.lit("➡️ Stable"))
+        .alias(out_alert)
+    )
+
+    return df.with_columns([score, alert])
 
 
-# ----------------------------------------------------------------------
-# 🧪 Stand-alone test
-# ----------------------------------------------------------------------
+# Registry export
+EXPORTS = {"reversal_stack": compute_reversal_stack}
+
+# Local smoke
 if __name__ == "__main__":
+    import numpy as np
+
     n = 60
-    np.random.seed(42)
     df = pl.DataFrame(
         {
-            "Regime_State": np.random.choice(["TREND", "RANGE", "VOLATILE"], n),
+            "Regime_State": np.random.choice(
+                ["TREND", "RANGE", "VOLATILE", "NEUTRAL"], n
+            ),
             "Divergence_Signal": np.random.choice(
                 ["Bullish Divergence", "Bearish Divergence", ""], n
             ),
@@ -116,20 +105,9 @@ if __name__ == "__main__":
             ),
             "Liquidity_Trap": np.random.choice(["Bull Trap", "Bear Trap", ""], n),
             "Exhaustion_Signal": np.random.choice(
-                ["🟩 Bullish Exhaustion", "🟥 Bearish Exhaustion", "➡️ Stable"], n
+                ["🟩 Bullish Exhaustion", "🟥 Bearish Exhaustion", "➡️ Stable", ""], n
             ),
         }
     )
-
     out = compute_reversal_stack(df)
-    print(
-        out.select(
-            [
-                "Regime_State",
-                "Divergence_Signal",
-                "Exhaustion_Signal",
-                "Reversal_Score",
-                "Reversal_Stack_Alert",
-            ]
-        ).tail(10)
-    )
+    print(out.select(["Reversal_Score", "Reversal_Stack_Alert"]).tail(8))

@@ -1,174 +1,57 @@
-# ============================================================
 # queen/technicals/signals/tactical/meta_introspector.py
-# ------------------------------------------------------------
-# 🧠 Phase 6.3 — Tactical Meta Introspector
-# The self-analysis engine that replays memory snapshots,
-# evaluates drift-impact relationships, and learns from its
-# own performance evolution across time.
-# ============================================================
+from __future__ import annotations
 
 import os
 
-import plotly.graph_objects as go
 import polars as pl
+from queen.helpers.common import parse_utc_expr
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
 
-# ============================================================
-# 🧩 Configuration (to later move into config.py)
-# ============================================================
-META_MEMORY_LOG = "quant/logs/meta_memory_log.csv"
-DRIFT_LOG_PATH = "quant/logs/meta_drift_log.csv"
-WEIGHTS_PATH = "quant/config/indicator_weights.json"
+MEMORY_LOG = "queen/data/runtime/logs/meta_memory_log.csv"
+DRIFT_LOG = "queen/data/runtime/logs/meta_drift_log.csv"
 
 
-# ============================================================
-# 📦 Load Data
-# ============================================================
-def load_memory_data():
-    if not os.path.exists(META_MEMORY_LOG):
-        console.print(f"⚠️ No meta memory log found at {META_MEMORY_LOG}")
-        return pl.DataFrame()
-    return pl.read_csv(META_MEMORY_LOG)
+def _load_csv(path: str) -> pl.DataFrame:
+    return pl.read_csv(path) if os.path.exists(path) else pl.DataFrame()
 
 
-def load_drift_data():
-    if not os.path.exists(DRIFT_LOG_PATH):
-        console.print(f"⚠️ No drift log found at {DRIFT_LOG_PATH}")
-        return pl.DataFrame()
-    return pl.read_csv(DRIFT_LOG_PATH)
+def _parse_ts(df: pl.DataFrame, col: str = "timestamp") -> pl.DataFrame:
+    if col not in df.columns or df.is_empty():
+        return df
+    return df.with_columns(parse_utc_expr(pl.col(col)).alias(col))
 
 
-# ============================================================
-# 📈 Correlate Drift vs Retraining Impact
-# ============================================================
-def analyze_drift_vs_retrain(memory_df: pl.DataFrame, drift_df: pl.DataFrame):
-    """Correlate drift magnitude to retraining improvements."""
-    if memory_df.is_empty() or drift_df.is_empty():
-        console.print("⚪ Insufficient data for introspection.")
-        return None
-
-    # Convert timestamps
-    memory_df = memory_df.with_columns(pl.col("timestamp").str.strptime(pl.Datetime))
-    drift_df = drift_df.with_columns(pl.col("timestamp").str.strptime(pl.Datetime))
-
-    # Merge nearest drift per memory snapshot
-    joined = memory_df.join_asof(drift_df, on="timestamp", strategy="backward").rename(
-        {"drift": "drift_before_retrain"}
-    )
-
-    joined = joined.with_columns(
-        [
-            (pl.col("top_weight").cast(float) * pl.col("drift_before_retrain")).alias(
-                "adaptive_response"
-            ),
-            pl.when(pl.col("drift_before_retrain") > 0.1)
-            .then("High Drift")
-            .otherwise("Stable")
-            .alias("drift_state"),
-        ]
-    )
-
-    corr = joined["adaptive_response"].corr(joined["top_weight"])
-    console.print(
-        f"📊 Correlation between drift and weight adaptation: [cyan]{corr:.3f}[/cyan]"
-    )
-
-    # Visualization
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=joined["timestamp"].to_list(),
-            y=joined["drift_before_retrain"].to_list(),
-            name="Drift Magnitude",
-            mode="lines+markers",
-            line=dict(color="orange", width=2),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=joined["timestamp"].to_list(),
-            y=joined["top_weight"].to_list(),
-            name="Top Indicator Weight",
-            mode="lines+markers",
-            line=dict(color="green", width=2, dash="dot"),
-        )
-    )
-    fig.update_layout(
-        title="🧠 Drift vs Indicator Adaptation Timeline",
-        template="plotly_dark",
-        yaxis_title="Magnitude",
-        height=420,
-    )
-    fig.show()
-
-    return joined
-
-
-# ============================================================
-# 📊 Memory Evolution Analysis
-# ============================================================
-def analyze_memory_evolution(memory_df: pl.DataFrame):
-    if memory_df.is_empty():
-        console.print("⚪ No memory snapshots to analyze.")
-        return
-
-    # Compute time deltas
-    df = memory_df.with_columns(
-        [
-            pl.col("timestamp").str.strptime(pl.Datetime).alias("ts"),
-        ]
-    )
-    df = df.sort("ts")
-
-    if "top_weight" in df.columns:
-        avg_weight_change = float(df["top_weight"].diff().abs().mean())
-        console.print(
-            f"📈 Avg top-weight change per retrain: [green]{avg_weight_change:.3f}[/green]"
-        )
-
-    # Table summary
-    table = Table(
-        title="🧬 Meta-Introspective Summary",
-        header_style="bold cyan",
-        expand=True,
-    )
-    table.add_column("Timestamp")
-    table.add_column("Top Feature")
-    table.add_column("Top Weight")
-    table.add_column("Drift Threshold")
-
-    for row in df.tail(10).iter_rows(named=True):
-        table.add_row(
-            str(row.get("timestamp", "")),
-            str(row.get("top_feature", "")),
-            f"{row.get('top_weight', 0):.3f}" if row.get("top_weight") else "—",
-            str(row.get("drift_threshold", "")),
-        )
-
-    console.print(table)
-    console.print("[green]✅ Meta introspection analysis complete.[/green]")
-
-
-# ============================================================
-# 🚀 Main Entry
-# ============================================================
 def run_meta_introspector():
     console.rule("[bold cyan]🧠 Phase 6.3 — Tactical Meta Introspector")
+    mem = _parse_ts(_load_csv(MEMORY_LOG))
+    drift = _parse_ts(_load_csv(DRIFT_LOG))
+    if mem.is_empty():
+        console.print("[Introspect] no memory snapshots to analyze")
+        return None
 
-    memory_df = load_memory_data()
-    drift_df = load_drift_data()
+    tbl = Table(title="🧬 Meta Memory — Last 10", header_style="bold cyan")
+    for c in (
+        "timestamp",
+        "model_version",
+        "top_feature",
+        "top_weight",
+        "drift_threshold",
+    ):
+        if c in mem.columns:
+            tbl.add_column(c)
+    for row in mem.sort("timestamp").tail(10).iter_rows(named=True):
+        tbl.add_row(*[str(row.get(c, "")) for c in tbl.columns])
+    console.print(tbl)
 
-    if not memory_df.is_empty():
-        analyze_memory_evolution(memory_df)
-    joined = analyze_drift_vs_retrain(memory_df, drift_df)
-    return joined
+    if not drift.is_empty() and "timestamp" in drift.columns:
+        joined = mem.join_asof(drift, on="timestamp", strategy="backward")
+        console.print("[green]✅ Introspection join complete[/green]")
+        return joined
+    return mem
 
 
-# ============================================================
-# 🧪 Standalone Test
-# ============================================================
 if __name__ == "__main__":
     run_meta_introspector()

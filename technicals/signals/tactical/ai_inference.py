@@ -1,13 +1,4 @@
-#!/usr/bin/env python3
-# ============================================================
 # queen/technicals/signals/tactical/ai_inference.py
-# ------------------------------------------------------------
-# 🤖 Tactical AI Inference (optional)
-# Loads a trained model (e.g., logistic regression) and infers
-# BUY/SELL probabilities per timeframe.
-# - No hard dependency on joblib (safe fallback).
-# - Pure Polars feature extraction; numpy only for model I/O.
-# ============================================================
 from __future__ import annotations
 
 import os
@@ -15,43 +6,36 @@ from typing import Dict
 
 import numpy as np
 import polars as pl
+from quant import config
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
 
-# Optional import (kept lazy-safe)
-try:
-    import joblib  # type: ignore
-except Exception:  # pragma: no cover
-    joblib = None
+
+def _model_path_default() -> str:
+    models = config.get_path("paths.models", fallback=config.get_path("paths.cache"))
+    return str(models / "tactical_ai_model.pkl")
 
 
-# ------------------------------------------------------------
-# Model I/O
-# ------------------------------------------------------------
-def load_model(model_path: str = "quant/models/tactical_ai_model.pkl"):
-    """Return (model, scaler) if available; else (None, None)."""
-    if joblib is None:
+def load_model(model_path: str | None = None):
+    path = str(model_path) if model_path else _model_path_default()
+    try:
+        import joblib  # optional
+    except Exception:
         console.print("⚠️ joblib not available; skipping model load.")
         return None, None
-    if not os.path.exists(model_path):
-        console.print(f"⚠️ No AI model found at [red]{model_path}[/red]")
+    if not os.path.exists(path):
+        console.print(f"⚠️ No AI model found at [red]{path}[/red]")
         return None, None
     try:
-        data = joblib.load(model_path)
-        model = data.get("model")
-        scaler = data.get("scaler")
-        console.print(f"📦 Loaded AI model from [green]{model_path}[/green]")
-        return model, scaler
-    except Exception as e:  # pragma: no cover
+        data = joblib.load(path)
+        return data.get("model"), data.get("scaler")
+    except Exception as e:
         console.print(f"⚠️ Failed to load model: {e}")
         return None, None
 
 
-# ------------------------------------------------------------
-# Feature prep
-# ------------------------------------------------------------
 DEFAULT_FEATURES = [
     "CMV",
     "Reversal_Score",
@@ -69,14 +53,10 @@ def prepare_features(
     avail = [c for c in feats if c in df.columns]
     if not avail:
         return None
-    row = df.select(avail).tail(1)  # 1×k
-    arr = row.to_numpy()
+    arr = df.select(avail).tail(1).to_numpy()
     return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
 
 
-# ------------------------------------------------------------
-# Inference
-# ------------------------------------------------------------
 def predict_next_move(
     model,
     scaler,
@@ -86,49 +66,33 @@ def predict_next_move(
     buy_threshold: float = 0.60,
     sell_threshold: float = 0.60,
 ) -> pl.DataFrame:
-    """Return a Polars DF with BUY/SELL probabilities per timeframe."""
     results: list[tuple[str, float, float, str]] = []
-
     for tf, df in df_live.items():
         X = prepare_features(df, features)
-        if X is None:
-            results.append((tf, 0.0, 0.0, "⚪ No Data"))
+        if X is None or (model is None) or (scaler is None):
+            results.append((tf, 0.0, 0.0, "⚪ No Model/Data"))
             continue
-
-        if (model is None) or (scaler is None):
-            results.append((tf, 0.0, 0.0, "⚪ Model Missing"))
-            continue
-
         try:
             Xs = scaler.transform(X)
             probs = model.predict_proba(Xs)[0]
-            # Expecting classes like [-1, 0, 1] → (sell, neutral, buy)
-            # If different, adjust indices externally or train consistently.
-            prob_sell = float(probs[0])
-            prob_buy = float(probs[-1])
-        except Exception:  # pragma: no cover
+            prob_sell, prob_buy = (
+                float(probs[0]),
+                float(probs[-1]),
+            )  # assume classes [-1,0,1]
+        except Exception:
             results.append((tf, 0.0, 0.0, "⚪ Inference Error"))
             continue
-
         bias = (
             "🟢 BUY Likely"
             if prob_buy >= buy_threshold
-            else "🔴 SELL Likely"
-            if prob_sell >= sell_threshold
-            else "⚪ Neutral"
+            else ("🔴 SELL Likely" if prob_sell >= sell_threshold else "⚪ Neutral")
         )
         results.append((tf, prob_buy, prob_sell, bias))
-
     return pl.DataFrame(
-        results,
-        schema=["timeframe", "BUY_Prob", "SELL_Prob", "Forecast"],
-        orient="row",
+        results, schema=["timeframe", "BUY_Prob", "SELL_Prob", "Forecast"], orient="row"
     )
 
 
-# ------------------------------------------------------------
-# Render helper (optional)
-# ------------------------------------------------------------
 def render_ai_forecast(df_out: pl.DataFrame):
     if df_out.is_empty():
         console.print("⚪ No AI forecast data available.")
@@ -145,16 +109,13 @@ def render_ai_forecast(df_out: pl.DataFrame):
     console.print(t)
 
 
-# ------------------------------------------------------------
-# Entrypoint
-# ------------------------------------------------------------
 def run_ai_inference(
     df_live: Dict[str, pl.DataFrame],
     *,
-    model_path: str = "quant/models/tactical_ai_model.pkl",
+    model_path: str | None = None,
     features: list[str] | None = None,
 ) -> pl.DataFrame:
-    model, scaler = load_model(model_path)
-    df_out = predict_next_move(model, scaler, df_live, features=features)
-    render_ai_forecast(df_out)
-    return df_out
+    model, scaler = load_model(model_path or _model_path_default())
+    out = predict_next_move(model, scaler, df_live, features=features)
+    render_ai_forecast(out)
+    return out
