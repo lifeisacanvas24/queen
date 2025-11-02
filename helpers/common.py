@@ -1,4 +1,8 @@
-# queen/helpers/common.py  (slim, no settings or polars)
+#!/usr/bin/env python3
+# ============================================================
+# queen/helpers/common.py — v1.3 (settings-free, no Polars)
+# ============================================================
+
 from __future__ import annotations
 
 import logging
@@ -8,11 +12,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 
+# ---- time ----
 def utc_now_iso() -> str:
+    """UTC timestamp like 2025-10-27T06:41:12.323113Z."""
     return datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+# ---- terminal color support ----
 def logger_supports_color(logger: logging.Logger) -> bool:
+    """True iff output stream is a TTY and NO_COLOR is not set."""
     if os.environ.get("NO_COLOR"):
         return False
     for h in logger.handlers:
@@ -29,11 +37,13 @@ def logger_supports_color(logger: logging.Logger) -> bool:
 
 
 def colorize(text: str, color_key: str, palette: Dict[str, str], enabled: bool) -> str:
+    """Wrap `text` with ANSI codes from `palette` (expects keys: 'cyan','yellow','green','red','reset')."""
     if enabled and color_key in palette:
-        return f"{palette.get(color_key,'')}{text}{palette.get('reset','')}"
+        return f"{palette.get(color_key, '')}{text}{palette.get('reset', '')}"
     return text
 
 
+# ---- timeframe token normalizer ----
 _ALIASES = {
     "d": "daily",
     "day": "daily",
@@ -52,6 +62,7 @@ _ALIASES = {
 
 
 def timeframe_key(tf: str) -> str:
+    """Map raw tokens to policy context keys: '5m'→'intraday_5m', '1h'→'hourly_1h', '1d'→'daily', etc."""
     tf = (tf or "").strip().lower()
     if not tf:
         return "intraday_5m"
@@ -64,6 +75,7 @@ def timeframe_key(tf: str) -> str:
     return f"intraday_{tf}"
 
 
+# ---- indicator kwargs filter ----
 _META_INDICATOR_KEYS = {
     "min_bars",
     "need",
@@ -78,6 +90,7 @@ _META_INDICATOR_KEYS = {
 def indicator_kwargs(
     params: Dict[str, Any] | None, *, deny: set[str] | None = None
 ) -> Dict[str, Any]:
+    """Keep only indicator-native kwargs (e.g., length=14); drop policy/meta knobs."""
     if not params:
         return {}
     meta = _META_INDICATOR_KEYS if deny is None else (_META_INDICATOR_KEYS | set(deny))

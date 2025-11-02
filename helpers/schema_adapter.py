@@ -35,11 +35,14 @@ console = Console()
 BROKER = SETTINGS.DEFAULTS["BROKER"]
 BROKER_CFG = SETTINGS.broker_config(BROKER)
 
-API_SCHEMA_PATH = Path(BROKER_CFG["API_SCHEMA"]).expanduser().resolve()
+API_SCHEMA_PATH = Path(BROKER_CFG["api_schema"]).expanduser().resolve()
 DRIFT_LOG = SETTINGS.log_file("SCHEMA_DRIFT_LOG")
 DRIFT_LOG.parent.mkdir(parents=True, exist_ok=True)
-MARKET_TZ_NAME = SETTINGS.EXCHANGE["MARKET_TIMEZONE"]  # e.g., "Asia/Kolkata"
 DRIFT_LOG_MAX = 500  # keep last N drift records
+try:
+    MARKET_TZ_NAME = SETTINGS.market_timezone()
+except Exception:
+    MARKET_TZ_NAME = "Asia/Kolkata"
 
 
 # ============================================================

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/io.py — v2.1 (Atomic + Compressed + Polars-first)
+# queen/helpers/io.py — v3.1 (Universal I/O: JSON/NDJSON/CSV/Parquet + JSONL + safe dirs)
 # ============================================================
 from __future__ import annotations
 
@@ -8,59 +8,157 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 from queen.helpers.logger import log
 
 
-# -------- paths --------
-def _p(path) -> Path:
+# ---------- path helpers ----------
+def _p(path: str | Path) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def ensure_parent(path) -> None:
-    _p(path).parent.mkdir(parents=True, exist_ok=True)
+def ensure_dir(path: str | Path) -> Path:
+    p = _p(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-# -------- atomic write helpers --------
+# ---------- atomic byte write ----------
 def _atomic_write_bytes(path: Path, data: bytes) -> None:
-    ensure_parent(path)
-    dirpath = str(path.parent)
-    with tempfile.NamedTemporaryFile(dir=dirpath, delete=False) as tmp:
+    ensure_dir(path)
+    with tempfile.NamedTemporaryFile(dir=str(path.parent), delete=False) as tmp:
         tmp.write(data)
         tmp.flush()
         os.fsync(tmp.fileno())
         tmp_name = tmp.name
-    os.replace(tmp_name, path)  # atomic on same filesystem
+    os.replace(tmp_name, path)
 
 
-def write_text_atomic(path: str | Path, text: str) -> None:
-    path = _p(path)
-    _atomic_write_bytes(path, text.encode("utf-8"))
+# ---------- JSON / NDJSON ----------
+def read_json(path: str | Path) -> pl.DataFrame:
+    p = _p(path)
+    if not p.exists():
+        log.warning(f"[IO] JSON not found: {p}")
+        return pl.DataFrame()
+    try:
+        text = p.read_text(encoding="utf-8").strip()
+        if not text:
+            return pl.DataFrame()
+        if text.lstrip().startswith("["):
+            return pl.read_json(p)
+        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+        return pl.DataFrame(rows) if rows else pl.DataFrame()
+    except Exception as e:
+        log.error(f"[IO] Failed to read JSON {p.name} → {e}")
+        return pl.DataFrame()
 
 
-def write_json_atomic(path: str | Path, obj) -> None:
-    write_text_atomic(path, json.dumps(obj, ensure_ascii=False, indent=2))
+def write_json(
+    data: Any, path: str | Path, *, indent: int = 2, atomic: bool = True
+) -> bool:
+    p = _p(path)
+    try:
+        if isinstance(data, pl.DataFrame):
+            ensure_dir(p)
+            if atomic:
+                tmp = p.with_suffix(p.suffix + ".tmp")
+                data.write_json(tmp)
+                os.replace(tmp, p)
+            else:
+                data.write_json(p)
+        else:
+            payload = json.dumps(data, ensure_ascii=False, indent=indent).encode(
+                "utf-8"
+            )
+            if atomic:
+                _atomic_write_bytes(p, payload)
+            else:
+                ensure_dir(p)
+                p.write_bytes(payload)
+        log.info(f"[IO] JSON written → {p}")
+        return True
+    except Exception as e:
+        log.error(f"[IO] Failed to write JSON {p.name} → {e}")
+        return False
 
 
-# -------- JSONL (append-friendly) --------
+# ---------- CSV ----------
+def read_csv(path: str | Path) -> pl.DataFrame:
+    p = _p(path)
+    if not p.exists():
+        log.warning(f"[IO] CSV not found: {p}")
+        return pl.DataFrame()
+    try:
+        return pl.read_csv(p, ignore_errors=True)
+    except Exception as e:
+        log.error(f"[IO] Failed to read CSV {p.name} → {e}")
+        return pl.DataFrame()
+
+
+def write_csv(df: pl.DataFrame, path: str | Path, *, atomic: bool = True) -> bool:
+    p = _p(path)
+    try:
+        ensure_dir(p)
+        if atomic:
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            df.write_csv(tmp)
+            os.replace(tmp, p)
+        else:
+            df.write_csv(p)
+        log.info(f"[IO] CSV written → {p}")
+        return True
+    except Exception as e:
+        log.error(f"[IO] Failed to write CSV {p.name} → {e}")
+        return False
+
+
+# ---------- Parquet ----------
+def read_parquet(path: str | Path) -> pl.DataFrame:
+    p = _p(path)
+    if not p.exists():
+        log.warning(f"[IO] Parquet not found: {p}")
+        return pl.DataFrame()
+    try:
+        return pl.read_parquet(p)
+    except Exception as e:
+        log.error(f"[IO] Failed to read Parquet {p.name} → {e}")
+        return pl.DataFrame()
+
+
+def write_parquet(df: pl.DataFrame, path: str | Path, *, atomic: bool = True) -> bool:
+    p = _p(path)
+    try:
+        ensure_dir(p)
+        if atomic:
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            df.write_parquet(tmp, compression="zstd", statistics=True)
+            os.replace(tmp, p)
+        else:
+            df.write_parquet(p, compression="zstd", statistics=True)
+        log.info(f"[IO] Parquet written → {p}")
+        return True
+    except Exception as e:
+        log.error(f"[IO] Failed to write Parquet {p.name} → {e}")
+        return False
+
+
+# ---------- JSONL (append/tail) ----------
 def append_jsonl(path: str | Path, record: dict) -> None:
-    """Append one JSON object per line (creates file if missing)."""
-    path = _p(path)
-    ensure_parent(path)
+    p = _p(path)
+    ensure_dir(p)
     line = (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8")
-    # Best-effort append (line-level atomicity is OS-dependent)
-    with open(path, "ab") as f:
+    with open(p, "ab") as f:
         f.write(line)
 
 
 def read_jsonl(path: str | Path, limit: Optional[int] = None) -> list[dict]:
-    path = _p(path)
-    if not path.exists():
+    p = _p(path)
+    if not p.exists():
         return []
     out: list[dict] = []
-    with open(path, encoding="utf-8") as f:
+    with open(p, "rb") as f:
         for line in f:
             try:
                 out.append(json.loads(line))
@@ -72,128 +170,54 @@ def read_jsonl(path: str | Path, limit: Optional[int] = None) -> list[dict]:
 
 
 def tail_jsonl(path: str | Path, n: int = 200) -> list[dict]:
-    """Cheap tail: reads all if small; acceptable for alert UI."""
     items = read_jsonl(path)
     return items[-n:]
 
 
-# -------- Parquet --------
-_DEFAULT_COMPRESSION = "zstd"  # good ratio/speed
-_DEFAULT_STATS = True
-
-
-def write_parquet(
-    path: str | Path,
-    df: pl.DataFrame,
-    *,
-    compression: str = _DEFAULT_COMPRESSION,
-    statistics: bool = _DEFAULT_STATS,
-) -> None:
-    path = _p(path)
-    ensure_parent(path)
-    with tempfile.NamedTemporaryFile(
-        dir=str(path.parent), suffix=".parquet", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        df.write_parquet(tmp_path, compression=compression, statistics=statistics)
-        os.replace(tmp_path, path)
-    except Exception as e:
-        log.error(f"[IO] write_parquet failed → {e}")
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        raise
-
-
-def read_parquet(path: str | Path) -> pl.DataFrame:
-    path = _p(path)
-    if not path.exists():
-        return pl.DataFrame()
-    try:
-        return pl.read_parquet(path)
-    except Exception as e:
-        log.error(f"[IO] read_parquet failed → {e}")
-        return pl.DataFrame()
-
-
-# -------- CSV / JSON --------
-def write_csv(path: str | Path, df: pl.DataFrame) -> None:
-    path = _p(path)
-    ensure_parent(path)
-    with tempfile.NamedTemporaryFile(
-        dir=str(path.parent), suffix=".csv", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        df.write_csv(tmp_path)
-        os.replace(tmp_path, path)
-    except Exception as e:
-        log.error(f"[IO] write_csv failed → {e}")
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        raise
-
-
-def read_csv(path: str | Path) -> pl.DataFrame:
-    path = _p(path)
-    if not path.exists():
-        return pl.DataFrame()
-    try:
-        return pl.read_csv(path)
-    except Exception as e:
-        log.error(f"[IO] read_csv failed → {e}")
-        return pl.DataFrame()
-
-
-def write_json(path: str | Path, df: pl.DataFrame) -> None:
-    path = _p(path)
-    ensure_parent(path)
-    with tempfile.NamedTemporaryFile(
-        dir=str(path.parent), suffix=".json", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        df.write_json(tmp_path)
-        os.replace(tmp_path, path)
-    except Exception as e:
-        log.error(f"[IO] write_json failed → {e}")
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        raise
-
-
-def read_json(path: str | Path) -> pl.DataFrame:
-    """Reads JSON array or NDJSON automatically into Polars."""
-    path = _p(path)
-    if not path.exists():
-        return pl.DataFrame()
-    try:
-        # Try JSON array first, then NDJSON
-        try:
-            return pl.read_json(path)
-        except Exception:
-            return pl.read_ndjson(path)
-    except Exception as e:
-        log.error(f"[IO] read_json failed → {e}")
-        return pl.DataFrame()
-
-
-# -------- Convenience: read_any --------
+# ---------- convenience ----------
 def read_any(path: str | Path) -> pl.DataFrame:
-    """Read parquet/csv/json/ndjson by extension, else empty DF."""
-    path = _p(path)
-    suf = path.suffix.lower()
-    if suf == ".parquet":
-        return read_parquet(path)
+    p = _p(path)
+    suf = p.suffix.lower()
+    if suf in (".json", ".ndjson"):
+        return read_json(p)
     if suf == ".csv":
-        return read_csv(path)
-    if suf in {".json", ".ndjson"}:
-        return read_json(path)
-    log.warning(f"[IO] read_any: unsupported extension for {path.name}")
+        return read_csv(p)
+    if suf == ".parquet":
+        return read_parquet(p)
+    log.warning(f"[IO] Unsupported format for {p}")
     return pl.DataFrame()
+
+
+def read_text(path: str | Path, default: str = "") -> str:
+    try:
+        return _p(path).read_text(encoding="utf-8")
+    except Exception:
+        return default
+
+
+def write_text(path: str | Path, content: str, *, atomic: bool = True) -> bool:
+    p = _p(path)
+    try:
+        data = content.encode("utf-8")
+        if atomic:
+            _atomic_write_bytes(p, data)
+        else:
+            ensure_dir(p)
+            p.write_bytes(data)
+        return True
+    except Exception as e:
+        log.error(f"[IO] Text write failed for {p} → {e}")
+        return False
+
+
+# ---------- self-test ----------
+if __name__ == "__main__":
+    print("🧩 IO smoke test")
+    df = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
+    write_csv(df, "queen/data/runtime/test_helpers/io_test.csv")
+    print(read_csv("queen/data/runtime/test_helpers/io_test.csv").head(1))
+    write_json(df, "queen/data/runtime/test_helpers/io_test.json")
+    print(read_json("queen/data/runtime/test_helpers/io_test.json").shape)
+    append_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", {"ok": 1})
+    append_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", {"ok": 2})
+    print(tail_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", 1))

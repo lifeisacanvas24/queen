@@ -1,15 +1,4 @@
-#!/usr/bin/env python3
-# ============================================================
-# queen/helpers/market.py — v9.4 (Settings-Driven + Polars + DRY)
-# ============================================================
-"""Market calendar & timing utilities for NSE/BSE.
-
-✅ Settings-driven (no hardcoded constants)
-✅ Timezone-safe (Asia/Kolkata from settings)
-✅ Async-ready helpers for daemons/schedulers
-✅ Exposes market_gate(), MarketClock, sleep_until_next_candle()
-✅ Holiday loading via Polars (JSON/CSV), robust & cached
-"""
+# queen/helpers/market.py — v9.5 (single source of truth for time/calendar)
 
 from __future__ import annotations
 
@@ -26,23 +15,66 @@ from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 from zoneinfo import ZoneInfo
 
-# ------------------------------------------------------------
-# 🌍 Exchange / TZ from settings
-# ------------------------------------------------------------
-_ACTIVE_EX = SETTINGS.DEFAULTS["EXCHANGE"]
-_EX_INFO = SETTINGS.EXCHANGE["EXCHANGES"][_ACTIVE_EX]
+# -----------------------------
+# TZ & exchange info (helpers)
+# -----------------------------
+try:
+    MARKET_TZ = ZoneInfo(SETTINGS.market_timezone())
+except Exception:
+    MARKET_TZ = ZoneInfo("Asia/Kolkata")
 
-MARKET_TZ = ZoneInfo(SETTINGS.EXCHANGE["MARKET_TIMEZONE"])
-MARKET_HOURS = _EX_INFO["MARKET_HOURS"]  # PRE_MARKET / OPEN / CLOSE / POST_MARKET
+_EX_INFO = {}
+try:
+    _EX_INFO = SETTINGS.exchange_info(SETTINGS.active_exchange()) or {}
+except Exception:
+    _EX_INFO = {}
+
+
+def _hours() -> dict:
+    # normalize keys to upper for internal use
+    h = _EX_INFO.get("MARKET_HOURS") or {}
+    if not h:
+        # fallback
+        h = {
+            "PRE_MARKET": "09:00",
+            "OPEN": "09:15",
+            "CLOSE": "15:30",
+            "POST_MARKET": "23:59",
+        }
+    return {
+        "PRE_MARKET": h.get("PRE_MARKET") or h.get("pre_market") or "09:00",
+        "OPEN": h.get("OPEN") or h.get("open") or "09:15",
+        "CLOSE": h.get("CLOSE") or h.get("close") or "15:30",
+        "POST_MARKET": h.get("POST_MARKET") or h.get("post_market") or "23:59",
+    }
+
+
+MARKET_HOURS = _hours()
 TRADING_DAYS = _EX_INFO.get(
     "TRADING_DAYS", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 )
 EXPIRY_DAY = _EX_INFO.get("EXPIRY_DAY", "Thursday")
-HOLIDAY_FILE = Path(_EX_INFO["HOLIDAYS"]).expanduser().resolve()
 
-# ------------------------------------------------------------
-# 📅 Holidays (Polars loader + cache)
-# ------------------------------------------------------------
+
+# Holidays file: prefer exchange setting; else PATHS['HOLIDAYS']; else none.
+def _holidays_path() -> Path | None:
+    try:
+        p = _EX_INFO.get("HOLIDAYS")
+        if p:
+            return Path(p).expanduser().resolve()
+    except Exception:
+        pass
+    try:
+        return Path(SETTINGS.PATHS.get("HOLIDAYS")).expanduser().resolve()
+    except Exception:
+        return None
+
+
+HOLIDAY_FILE = _holidays_path()
+
+# -----------------------------
+# Holidays (Polars + cache)
+# -----------------------------
 _HOLIDAYS_CACHE: Dict[int, Set[str]] | None = None
 
 
@@ -58,40 +90,34 @@ def _normalize_holiday_df(df: pl.DataFrame) -> pl.DataFrame:
     if "date" not in df.columns:
         log.warning("[Market] Holiday file missing 'date' column.")
         return pl.DataFrame()
-    try:
-        df = df.with_columns(pl.col("date").cast(pl.Utf8))
-    except Exception:
-        pass
-    return df.select("date")
+    return df.select(pl.col("date").cast(pl.Utf8))
 
 
-def _read_holidays_polars(path: Path) -> pl.DataFrame:
-    if not path.exists():
-        log.warning(f"[Market] Holiday file not found: {path}")
+def _read_holidays(path: Path | None) -> pl.DataFrame:
+    if not path or not path.exists():
+        if path:
+            log.warning(f"[Market] Holiday file not found: {path}")
         return pl.DataFrame()
     try:
         if path.suffix.lower() == ".csv":
             return io.read_csv(path)
-        return io.read_json(path)  # reads JSON array or NDJSON via io
+        return io.read_json(path)
     except Exception as e:
         log.error(f"[Market] Holiday read failed for {path.name} → {e}")
         return pl.DataFrame()
 
 
 def _load_holidays() -> Dict[int, Set[str]]:
-    """Load holidays from HOLIDAY_FILE into {year: {YYYY-MM-DD,...}}."""
-    df = _read_holidays_polars(HOLIDAY_FILE)
-    df = _normalize_holiday_df(df)
+    df = _normalize_holiday_df(_read_holidays(HOLIDAY_FILE))
     out: Dict[int, Set[str]] = {}
-    if df.is_empty():
-        return out
-    for s in df.get_column("date").to_list():
+    for s in df.get_column("date").to_list() if not df.is_empty() else []:
         try:
             y = int(str(s)[:4])
             out.setdefault(y, set()).add(str(s))
         except Exception:
             continue
-    log.info(f"[Market] Holidays loaded: years={sorted(out.keys())}")
+    if out:
+        log.info(f"[Market] Holidays loaded: years={sorted(out.keys())}")
     return out
 
 
@@ -103,24 +129,22 @@ def _holidays() -> Dict[int, Set[str]]:
 
 
 def reload_holidays() -> None:
-    """Manually clear holiday cache (next call will reload from disk)."""
     global _HOLIDAYS_CACHE
     _HOLIDAYS_CACHE = None
 
 
-# ------------------------------------------------------------
-# 🧭 Time helpers
-# ------------------------------------------------------------
+# -----------------------------
+# Time helpers
+# -----------------------------
 def ensure_tz_aware(ts: dt.datetime) -> dt.datetime:
-    """Ensure datetime is timezone-aware in MARKET_TZ."""
-    if ts.tzinfo is None:
-        return ts.replace(tzinfo=MARKET_TZ)
-    return ts.astimezone(MARKET_TZ)
+    return (
+        ts.replace(tzinfo=MARKET_TZ) if ts.tzinfo is None else ts.astimezone(MARKET_TZ)
+    )
 
 
-# ------------------------------------------------------------
-# 📆 Day logic
-# ------------------------------------------------------------
+# -----------------------------
+# Day logic
+# -----------------------------
 def is_holiday(d: date | None = None) -> bool:
     d = d or dt.datetime.now(MARKET_TZ).date()
     return d.isoformat() in _holidays().get(d.year, set())
@@ -156,9 +180,9 @@ def offset_working_day(start: date, offset: int) -> date:
     return cur
 
 
-# ------------------------------------------------------------
-# 🕒 Sessions & state
-# ------------------------------------------------------------
+# -----------------------------
+# Sessions & gates
+# -----------------------------
 def _t(hhmm: str) -> dt.time:
     return dt.time.fromisoformat(hhmm)
 
@@ -181,22 +205,19 @@ def current_session(now: Optional[dt.datetime] = None) -> str:
 
 
 def is_market_open(now: Optional[dt.datetime] = None) -> bool:
-    """True only during REGULAR session on a working day."""
     now = ensure_tz_aware(now or dt.datetime.now(MARKET_TZ))
     if now.strftime("%A") not in TRADING_DAYS or is_holiday(now.date()):
         return False
-    start, end = _SESSIONS["REGULAR"]
-    s = dt.datetime.combine(now.date(), start, MARKET_TZ)
-    e = dt.datetime.combine(now.date(), end, MARKET_TZ)
-    return s <= now <= e
+    s, e = _SESSIONS["REGULAR"]
+    sdt = dt.datetime.combine(now.date(), s, MARKET_TZ)
+    edt = dt.datetime.combine(now.date(), e, MARKET_TZ)
+    return sdt <= now <= edt
 
 
 def _intraday_available(now: dt.datetime) -> bool:
-    """Intraday data commonly available during REGULAR and POST_MARKET on working days."""
     if now.strftime("%A") not in TRADING_DAYS or is_holiday(now.date()):
         return False
-    sess = current_session(now)
-    return sess in {"REGULAR", "POST_MARKET"}
+    return current_session(now) in {"REGULAR", "POST_MARKET"}
 
 
 def get_gate(now: Optional[dt.datetime] = None) -> str:
@@ -207,17 +228,12 @@ def get_gate(now: Optional[dt.datetime] = None) -> str:
     if is_holiday(d):
         return "HOLIDAY"
     sess = current_session(now)
-    if sess == "PRE_MARKET":
-        return "PRE"
-    if sess == "REGULAR":
-        return "LIVE"
-    if sess == "POST_MARKET":
-        return "POST"
-    return "CLOSED"
+    return {"PRE_MARKET": "PRE", "REGULAR": "LIVE", "POST_MARKET": "POST"}.get(
+        sess, "CLOSED"
+    )
 
 
 def current_historical_service_day(now: dt.datetime | None = None) -> date:
-    """Exchange date that the historical endpoint effectively exposes now."""
     now = ensure_tz_aware(now or dt.datetime.now(MARKET_TZ))
     sess = current_session(now)
     d = now.date()
@@ -236,35 +252,30 @@ def get_market_state() -> dict:
     working = is_working_day(now.date())
     return {
         "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "is_open": is_market_open(now),  # True only during REGULAR
+        "is_open": is_market_open(now),
         "is_holiday": is_holiday(now.date()),
         "is_working_day": working,
         "intraday_available": _intraday_available(now),
         "session": sess,
         "gate": get_gate(now),
         "next_open": next_working_day(now.date()).isoformat(),
-        "service_day": current_historical_service_day(now).isoformat(),  # NEW
+        "service_day": current_historical_service_day(now).isoformat(),
     }
 
 
-# ------------------------------------------------------------
-# ⏳ Async helpers
-# ------------------------------------------------------------
+# -----------------------------
+# Async helpers
+# -----------------------------
 async def sleep_until_next_candle(
     interval_minutes: int, jitter_ratio: float = 0.3, emit_log: bool = True
 ):
-    """Sleep until next aligned bar close for given minute interval."""
     now = dt.datetime.now(MARKET_TZ)
     seconds_today = now.hour * 3600 + now.minute * 60 + now.second
-    period = max(60, int(interval_minutes * 60))  # floor at 1m period
+    period = max(60, int(interval_minutes * 60))
     mod = seconds_today % period
-    # base wait until end of this bar
     delay = 1 if mod == 0 or mod >= (period - 2) else (period - mod)
-    # optional jitter around the boundary
     if jitter_ratio:
-        jitter = random.uniform(-jitter_ratio, jitter_ratio) * period
-        delay = delay + jitter
-    # 👇 snap to sane bounds
+        delay += random.uniform(-jitter_ratio, jitter_ratio) * period
     if delay < 1.0:
         delay = 1.0
     if emit_log:
@@ -274,7 +285,6 @@ async def sleep_until_next_candle(
 
 
 async def market_open_waiter(poll_seconds: int = 30, verbose: bool = True):
-    """Block until market open (REGULAR)."""
     while not is_market_open():
         if verbose:
             st = get_market_state()
@@ -284,73 +294,10 @@ async def market_open_waiter(poll_seconds: int = 30, verbose: bool = True):
         log.info("[Gate] Market OPEN — resuming.")
 
 
-# ------------------------------------------------------------
-# ⏱️ Ticking clock
-# ------------------------------------------------------------
-class MarketClock:
-    def __init__(
-        self,
-        interval: int = 5,
-        name: str = "MarketClock",
-        verbose: bool = True,
-        auto_pause: bool = True,
-    ):
-        self.interval = interval
-        self.name = name
-        self.verbose = verbose
-        self.auto_pause = auto_pause
-        self._subs: Dict[str, asyncio.Queue] = {}
-        self._running = False
-
-    def subscribe(self, name: str) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue()
-        self._subs[name] = q
-        if self.verbose:
-            log.info(f"[{self.name}] subscriber added → {name}")
-        return q
-
-    async def start(self):
-        if self._running:
-            return
-        self._running = True
-        if self.verbose:
-            log.info(f"[{self.name}] started @ {self.interval}m")
-        while self._running:
-            state = get_market_state()
-            if self.auto_pause and not state["intraday_available"]:
-                if self.verbose:
-                    log.info(f"[{self.name}] intraday unavailable — waiting")
-                await asyncio.sleep(30)
-                continue
-            tick = {
-                "timestamp": dt.datetime.now(MARKET_TZ),
-                "session": state["session"],
-                "is_open": state["is_open"],
-                "gate": state["gate"],
-            }
-            for nm, q in self._subs.items():
-                try:
-                    q.put_nowait(tick)
-                except asyncio.QueueFull:
-                    log.warning(f"[{self.name}] queue full for {nm}, skipping tick")
-            if self.verbose:
-                log.info(
-                    f"[{self.name}] tick | {tick['timestamp'].strftime('%H:%M:%S')} | sess={tick['session']} | subs={len(self._subs)}"
-                )
-            await sleep_until_next_candle(self.interval, emit_log=False)
-
-    async def stop(self):
-        self._running = False
-        if self.verbose:
-            log.info(f"[{self.name}] stopped")
-
-
-# ------------------------------------------------------------
-# 🔒 Async gate context
-# ------------------------------------------------------------
 class _MarketGate:
-    def __init__(self, mode: str = "intraday"):
-        # mode: "intraday" (REGULAR/POST), "regular" (REGULAR only), "any_working"
+    def __init__(
+        self, mode: str = "intraday"
+    ):  # "intraday" | "regular" | "any_working"
         self.mode = mode
 
     async def __aenter__(self):
@@ -375,7 +322,7 @@ class _MarketGate:
         log.info("[Gate] Market OPEN — resuming.")
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(self, *_):
         return False
 
 
@@ -384,49 +331,4 @@ def market_gate(mode: str = "intraday") -> _MarketGate:
 
 
 def historical_available() -> bool:
-    """Historical endpoint serves up to the last working day (always logically 'available')."""
     return True
-
-
-# ------------------------------------------------------------
-# ✅ Self-test
-# ------------------------------------------------------------
-if __name__ == "__main__":
-    import argparse
-    import asyncio as _asyncio
-    import json as _json
-    import time
-
-    parser = argparse.ArgumentParser(description="Market utilities CLI")
-    parser.add_argument(
-        "--state", action="store_true", help="Print current market state JSON"
-    )
-    parser.add_argument(
-        "--sleep-test",
-        action="store_true",
-        help="One-shot sleep_until_next_candle demo",
-    )
-    parser.add_argument(
-        "--interval-minutes",
-        type=int,
-        default=1,
-        help="Interval minutes for sleep-test",
-    )
-    parser.add_argument(
-        "--jitter", type=float, default=0.3, help="Jitter ratio for sleep-test"
-    )
-    args = parser.parse_args()
-
-    if args.state:
-        print(_json.dumps(get_market_state(), indent=2))
-    elif args.sleep_test:
-
-        async def _run():
-            t0 = time.monotonic()
-            await sleep_until_next_candle(args.interval_minutes, args.jitter, True)
-            dt_sec = time.monotonic() - t0
-            log.info(f"[SleepTest] Slept ~{dt_sec:.2f}s (>= 1.0s expected)")
-
-        _asyncio.run(_run())
-    else:
-        parser.print_help()
