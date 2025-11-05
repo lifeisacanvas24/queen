@@ -1,0 +1,14 @@
+{
+  "FORCEMOT": {
+    "last_alert": "2025-11-04",
+    "trigger": "Rebound + EMA Support"
+  },
+  "NETWEB": {
+    "last_alert": "2025-11-04",
+    "trigger": "Rebound + EMA Support"
+  },
+  "SMLISUZU": {
+    "last_alert": "2025-11-04",
+    "trigger": "Rebound + EMA Support"
+  }
+}

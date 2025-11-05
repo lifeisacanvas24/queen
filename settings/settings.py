@@ -65,6 +65,7 @@ PATHS: Dict[str, Path] = {
     "CONFIGS": _REPO_ROOT / "configs",
     # 🔑 NEW (needed by instruments/universe helpers)
     "UNIVERSE": _mk(BASE_RUNTIME / "universe"),
+    "TEMPLATES_DIR": _mk(_REPO_ROOT / "server" / "templates"),
 }
 
 # ------------------------------------------------------------

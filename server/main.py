@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from queen.server.routers import alerts, cockpit
 from queen.settings.settings import PATHS
 from starlette.requests import Request
+from queen.server.routers.routes_monitor import router as monitor_router
 
 # Single source of truth (from settings)
 TEMPLATES_DIR: Path = PATHS["TEMPLATES"]
@@ -43,7 +44,7 @@ def create_app() -> FastAPI:
     # IMPORTANT: cockpit.router already defines prefix="/cockpit" internally.
     # Do NOT add another prefix here, or paths will become /cockpit/cockpit/*.
     app.include_router(cockpit.router)
-
+    app.include_router(monitor_router)
     # ---- Templates ----
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.state.templates = templates
