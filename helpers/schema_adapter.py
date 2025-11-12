@@ -21,11 +21,12 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
 import polars as pl
-from queen.helpers.logger import log
-from queen.settings import settings as SETTINGS
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+from queen.helpers.logger import log
+from queen.settings import settings as SETTINGS
 
 console = Console()
 
@@ -36,7 +37,7 @@ BROKER = SETTINGS.DEFAULTS["BROKER"]
 BROKER_CFG = SETTINGS.broker_config(BROKER)
 
 API_SCHEMA_PATH = Path(BROKER_CFG["api_schema"]).expanduser().resolve()
-DRIFT_LOG = SETTINGS.log_file("SCHEMA_DRIFT_LOG")
+DRIFT_LOG = SETTINGS.log_file("SCHEMA")
 DRIFT_LOG.parent.mkdir(parents=True, exist_ok=True)
 DRIFT_LOG_MAX = 500  # keep last N drift records
 try:

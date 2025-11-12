@@ -7,6 +7,20 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+__all__ = [
+    "INDICATORS",
+    "PATTERNS",
+    "META_LAYERS",
+    "COMPOSITE_SCORE",
+    "indicator_names",
+    "pattern_names",
+    "meta_layer_names",
+    "get_indicator",
+    "get_pattern",
+    "get_meta_layer",
+    "validate",
+]
+
 # ------------------------------------------------------------
 # 🧩 Indicator Formulas
 # ------------------------------------------------------------
@@ -33,6 +47,7 @@ INDICATORS: Dict[str, Dict[str, Any]] = {
         "inputs": ["Close", "Volume"],
         "signal": "Tracks volume flow direction; rising OBV with price = accumulation.",
     },
+    # NOTE: registry uses ADX_DMI; this is the conceptual ADX bit
     "ADX": {
         "formula": "ADX = EMA(DI+, N) / (DI+ + DI−); DI± = 100 × EMA((+DM or -DM)/TR, N)",
         "inputs": ["High", "Low"],
@@ -133,33 +148,26 @@ NOTES: Dict[str, str] = {
     "4": "VDU/Volume spike states modulate SPS weighting adaptively.",
 }
 
-
 # ------------------------------------------------------------
 # 🧩 Helpers
 # ------------------------------------------------------------
 def indicator_names() -> list[str]:
     return list(INDICATORS.keys())
 
-
 def pattern_names() -> list[str]:
     return list(PATTERNS.keys())
-
 
 def meta_layer_names() -> list[str]:
     return list(META_LAYERS.keys())
 
-
 def get_indicator(name: str) -> Dict[str, Any]:
     return INDICATORS.get((name or "").upper(), {})
-
 
 def get_pattern(name: str) -> str:
     return PATTERNS.get((name or "").upper(), "")
 
-
 def get_meta_layer(name: str) -> Dict[str, Any]:
     return META_LAYERS.get((name or "").upper(), {})
-
 
 def validate() -> dict:
     """Light sanity checks: uppercase keys + basic shapes."""
@@ -174,17 +182,12 @@ def validate() -> dict:
     _check_upper(PATTERNS, "PATTERNS")
     _check_upper(META_LAYERS, "META_LAYERS")
 
-    # ensure indicators have a formula/signal field
     for k, v in INDICATORS.items():
         if not isinstance(v, dict) or ("formula" not in v and "VDU" not in v):
             errs.append(f"INDICATOR {k}: missing 'formula'/shape")
 
     return {"ok": len(errs) == 0, "errors": errs}
 
-
-# ------------------------------------------------------------
-# ✅ Self-Test
-# ------------------------------------------------------------
 if __name__ == "__main__":
     from pprint import pprint
 

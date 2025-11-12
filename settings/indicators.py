@@ -22,6 +22,12 @@ _VALID_CONTEXTS = {
     "monthly",
 }
 
+__all__ = [
+    "INDICATORS",
+    "list_indicator_names",
+    "get_block",
+    "validate_registry",
+]
 # ------------------------------------------------------------------
 # 📦 INDICATORS — add/extend here (names are case-insensitive later)
 # ------------------------------------------------------------------

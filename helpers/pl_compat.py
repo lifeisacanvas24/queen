@@ -29,13 +29,16 @@ def _s2np(s: pl.Series) -> np.ndarray:
 
 def ensure_float_series(s: pl.Series) -> pl.Series:
     """Guarantee float dtype (for math operations)."""
-    if s.dtype.is_numeric():
-        return s.cast(pl.Float64)
+    if s is None:
+        return pl.Series("value", [], dtype=pl.Float64)
     try:
+        if hasattr(s.dtype, "is_numeric") and s.dtype.is_numeric():
+            return s.cast(pl.Float64)
+        if pl.datatypes.is_numeric_dtype(s.dtype):
+            return s.cast(pl.Float64)
         return pl.Series(s.name, [float(x) for x in s])
     except Exception:
         return pl.Series(s.name, [np.nan] * len(s))
-
 
 def safe_fill_null(s: pl.Series, value: float = 0.0) -> pl.Series:
     """Fill nulls safely, forward/backward compatible."""

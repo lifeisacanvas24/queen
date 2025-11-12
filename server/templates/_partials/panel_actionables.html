@@ -1,0 +1,54 @@
+<!-- server/templates/_partials/panel_actionables.html -->
+<div class="q-box p-4">
+  <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+    <div>
+      <h2 class="title is-5 nowrap" style="margin-bottom:.25rem">Actionables (Universe)</h2>
+      <p class="q-muted is-size-7">Apple-style, pre-breakout aware</p>
+    </div>
+
+    <div class="controls-wrap">
+      <input id="symbols" class="input mono" style="width:320px"
+             placeholder="Symbols (comma) or leave blank/ALL for universe">
+
+      <div class="select"><select id="interval">
+        <option value="5">5m</option>
+        <option value="15" selected>15m</option>
+        <option value="30">30m</option>
+        <option value="60">60m</option>
+      </select></div>
+
+      <div class="select"><select id="book"></select></div>
+
+      <label class="ml-2">Sort by Early</label>
+      <label class="switch">
+        <input type="checkbox" id="sortEarlyToggle">
+        <span class="slider"></span>
+      </label>
+
+      <button id="startBtn" class="button q-primary ml-2">Start</button>
+      <button id="stopBtn" class="button is-light">Stop</button>
+    </div>
+  </div>
+
+  <table class="q-table table is-narrow is-fullwidth">
+    <thead>
+      <tr>
+        <th>SYMBOL</th>
+        <th>DECISION</th>
+        <th>SCORE</th>
+        <th>CMP</th>
+        <th>CPR</th>       <!-- badge: Above / At / Below -->
+        <th>EMA</th>       <!-- pill: Bullish / Bearish / Neutral -->
+        <th>RSI</th>       <!-- colored pill -->
+        <th>EARLY</th>
+        <th class="col-entry">ENTRY</th>
+        <th class="col-sl">SL</th>
+        <th class="col-targets">TARGETS</th>
+        <th>NOTES</th>
+      </tr>
+    </thead>
+    <tbody id="leftBody">
+      <tr><td colspan="12" class="q-muted has-text-centered">Waiting to start…</td></tr>
+    </tbody>
+  </table>
+</div>

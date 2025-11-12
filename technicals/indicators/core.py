@@ -1,9 +1,13 @@
 # ============================================================
-# queen/technicals/indicators/core.py (v1.1 — Polars-Optimized)
+# queen/technicals/indicators/core.py — v1.2 (Polars-Optimized + DRY helpers)
 # ============================================================
 from __future__ import annotations
 
+import datetime as dt
+from typing import Optional, Tuple
+
 import polars as pl
+from queen.helpers.market import MARKET_TZ  # for CPR prev-day calc
 
 
 # ---------------- SMA / EMA ----------------
@@ -26,33 +30,51 @@ def ema_slope(
     periods: int = 1,
     column: str = "close",
 ) -> pl.Series:
-    """Slope of EMA(length) over `periods` bars."""
     e = ema(df, period=length, column=column)
-    # ensure a stable name for the slope label
     if not getattr(e, "name", None):
         e = e.alias(f"ema_{int(length)}")
     return _slope(e, periods=periods)
 
 
-# ---------------- RSI ----------------
+# ---------------- RSI (series-safe) ----------------
 def rsi(df: pl.DataFrame, period: int = 14, column: str = "close") -> pl.Series:
-    """Polars-safe RSI (Series path only)."""
     delta = df[column].cast(pl.Float64).diff()
-
-    # Avoid Expr ops; stick to Series APIs for broad compatibility
     dz = delta.fill_null(0.0)
-
-    # Positive/negative legs using map_elements (works on older Polars too)
     gain = dz.map_elements(lambda x: x if x > 0 else 0.0)
     loss = dz.map_elements(lambda x: -x if x < 0 else 0.0)
-
     avg_gain = gain.ewm_mean(span=period, adjust=False)
     avg_loss = loss.ewm_mean(span=period, adjust=False)
-
     rs = avg_gain / (avg_loss + 1e-12)
     out = 100.0 - (100.0 / (1.0 + rs))
     return out.alias(f"rsi_{period}")
 
+
+def rsi_last(close: pl.Series, period: int = 14) -> Optional[float]:
+    """Return the latest RSI value; Series-only ops (Polars version friendly)."""
+    if close.len() <= period + 1:
+        return None
+    close = close.cast(pl.Float64, strict=False)
+    if close.null_count() > 0:
+        # forward-fill then zero as a last resort
+        try:
+            close = close.fill_null(strategy="forward")
+        except Exception:
+            close = close.fill_null(0.0)
+
+    diff = close.diff().fill_null(0.0)
+
+    # map_elements avoids clip_min dependence across polars versions
+    gain = diff.map_elements(lambda x: x if x > 0 else 0.0)
+    loss = (-diff).map_elements(lambda x: x if x > 0 else 0.0)
+
+    roll_up = gain.rolling_mean(window_size=period)
+    roll_dn = loss.rolling_mean(window_size=period)
+
+    # Avoid divide-by-zero without pl.when on Series
+    rs = roll_up / (roll_dn + 1e-12)
+    r = 100.0 - (100.0 / (1.0 + rs))
+    r = r.drop_nulls().tail(1)
+    return float(r.item()) if r.len() else None
 
 # ---------------- MACD ----------------
 def macd(
@@ -72,27 +94,32 @@ def macd(
 
 # ---------------- VWAP ----------------
 def vwap(df: pl.DataFrame) -> pl.Series:
-    """Compute intraday VWAP (Polars-safe)."""
     typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
     cum_vol = df["volume"].cum_sum()
     cum_tp_vol = (typical_price * df["volume"]).cum_sum()
     out = cum_tp_vol / cum_vol
-    # Ensure proper name
     try:
         return out.rename("vwap")
     except Exception:
-        # older Polars might require alias on Expr; wrap via select
         return pl.select(out.alias("vwap")).to_series()
 
 
-# ---------------- ATR (Series-safe) ----------------
+def vwap_last(df: pl.DataFrame) -> Optional[float]:
+    if df.is_empty():
+        return None
+    tp = (df["high"] + df["low"] + df["close"]) / 3.0
+    vol = df["volume"].cast(pl.Float64, strict=False).fill_null(0)
+    num = (tp * vol).sum()
+    den = vol.sum()
+    return float(num / den) if float(den) > 0 else None
+
+
+# ---------------- ATR ----------------
 def atr(df: pl.DataFrame, period: int = 14) -> pl.Series:
-    """Average True Range (volatility measure)."""
     prev_close = df["close"].shift(1)
     tr1 = (df["high"] - df["low"]).abs()
     tr2 = (df["high"] - prev_close).abs()
     tr3 = (df["low"] - prev_close).abs()
-    # Use max_horizontal in a select so we always get a materialized Series
     tr = pl.select(pl.max_horizontal(tr1, tr2, tr3).alias("tr")).to_series()
     atr_s = tr.ewm_mean(span=period, adjust=False)
     try:
@@ -101,7 +128,72 @@ def atr(df: pl.DataFrame, period: int = 14) -> pl.Series:
         return pl.select(atr_s.alias(f"atr_{period}")).to_series()
 
 
-# ---------------- Attach standard set ----------------
+def atr_last(df: pl.DataFrame, period: int = 14) -> Optional[float]:
+    """Latest ATR value (Series-safe; no Expr truthiness)."""
+    if df.height < period + 2:
+        return None
+
+    h, l, c = df["high"], df["low"], df["close"]
+    prev_c = c.shift(1)
+
+    # Make TR as a real Series (avoid Expr ops leaking through)
+    tr_series = pl.select(
+        pl.max_horizontal(
+            (h - l).abs(),
+            (h - prev_c).abs(),
+            (l - prev_c).abs(),
+        ).alias("tr")
+    ).to_series()
+
+    # Use rolling mean like your earlier logic (EMA version is fine too)
+    atr_series = tr_series.rolling_mean(window_size=period).drop_nulls()
+    if atr_series.len() == 0:
+        return None
+    return float(atr_series.tail(1).item())
+
+# ---------------- CPR (prev-day pivot proxy) ----------------
+def _prev_day_hlc(df: pl.DataFrame) -> Optional[Tuple[float, float, float]]:
+    if df.is_empty():
+        return None
+    ts_col = "timestamp"
+    d_ist = df.select(pl.col(ts_col).dt.convert_time_zone(str(MARKET_TZ)).dt.date()).to_series()
+    prev_day = d_ist.max() - dt.timedelta(days=1)
+    day_df = df.filter(pl.col(ts_col).dt.convert_time_zone(str(MARKET_TZ)).dt.date() == prev_day)
+    if day_df.is_empty():
+        return None
+    H = float(day_df["high"].max())
+    L = float(day_df["low"].min())
+    C = float(day_df["close"].tail(1).item())
+    return H, L, C
+
+
+def cpr_from_prev_day(df: pl.DataFrame) -> Optional[float]:
+    hlc = _prev_day_hlc(df)
+    if not hlc:
+        return None
+    H, L, C = hlc
+    return (H + L + C) / 3.0
+
+
+# ---------------- OBV trend (Rising/Falling/Flat) ----------------
+def obv_trend(df: pl.DataFrame) -> str:
+    if df.is_empty():
+        return "Flat"
+    close = df["close"].cast(pl.Float64, strict=False).fill_null(strategy="forward")
+    vol = df["volume"].cast(pl.Float64, strict=False).fill_null(0)
+    sign = (close.diff() > 0).cast(pl.Int8) - (close.diff() < 0).cast(pl.Int8)
+    obv = (sign * vol).cum_sum().fill_null(strategy="forward")
+    last = obv.tail(20)
+    if last.is_empty() or last.len() < 2:
+        return "Flat"
+    a, b = last.head(1).item(), last.tail(1).item()
+    if a is None or b is None:
+        return "Flat"
+    dif = float(b) - float(a)
+    return "Rising" if dif > 0 else ("Falling" if dif < 0 else "Flat")
+
+
+# ---------------- Attach a standard set ----------------
 def attach_indicators(
     df: pl.DataFrame,
     ema_periods=(20, 50),
@@ -117,3 +209,16 @@ def attach_indicators(
     )
     macd_df = macd(out, *macd_cfg)
     return out.hstack(macd_df)
+
+
+# tidy public API
+__all__ = [
+    "sma", "ema", "ema_slope",
+    "rsi", "rsi_last",
+    "macd",
+    "vwap", "vwap_last",
+    "atr", "atr_last",
+    "cpr_from_prev_day",
+    "obv_trend",
+    "attach_indicators",
+]

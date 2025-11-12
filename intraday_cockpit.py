@@ -112,6 +112,8 @@ from rich.table import Table
 from rich.live import Live
 from rich.console import Group
 from rich import box
+from urllib.parse import quote
+from urllib.parse import quote
 
 console = Console()
 
@@ -210,7 +212,7 @@ def last_trading_day(target: date | None = None) -> str:
 
 # ─────────────────────────────── SYMBOL MAP ────────────────────────────────
 TICKERS = {
-    "FORCEMOT": "NSE_EQ|INE451M01015",
+    "FORCEMOT": "NSE_EQ|INE451A01017",
     "SMLISUZU": "NSE_EQ|INE294B01019",
     "NETWEB": "NSE_EQ|INE0NT901020",
 }
@@ -403,9 +405,15 @@ def indicators(df: pl.DataFrame) -> dict:
 
 
 # ─────────────────────────────── DATA FETCH: INTRADAY ─────────────────────────
+
+
+from urllib.parse import quote
+
+
 def fetch_intraday(key: str) -> pl.DataFrame | None:
     """
-    Fetch authenticated Upstox intraday candles (v3), adaptive interval via REFRESH_MINUTES.
+    Fetch authenticated Upstox intraday candles (v3) with flexible parsing.
+    Automatically URL-encodes instrument key and adapts to variable-length candle arrays.
     """
     token = os.getenv("UPSTOX_ACCESS_TOKEN") or os.getenv("UPSTOX_TOKEN")
     if not token:
@@ -417,9 +425,10 @@ def fetch_intraday(key: str) -> pl.DataFrame | None:
     interval = str(REFRESH_MINUTES)
     if interval not in {"1", "3", "5", "10", "15"}:
         interval = "5"
-    url = (
-        f"https://api.upstox.com/v3/historical-candle/intraday/{key}/minutes/{interval}"
-    )
+
+    encoded_key = quote(key, safe="")
+    url = f"https://api.upstox.com/v3/historical-candle/intraday/{encoded_key}/minutes/{interval}"
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
@@ -427,43 +436,64 @@ def fetch_intraday(key: str) -> pl.DataFrame | None:
         "User-Agent": f"QueenCockpit/{interval}min",
     }
 
+    console.print(f"[blue]🔗 Fetching intraday for {key}[/blue]")
+    console.print(f"[dim]{url}[/dim]")
+
     try:
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200:
             raise ValueError(f"HTTP {r.status_code}: {r.text[:120]}")
+
         candles = r.json().get("data", {}).get("candles", [])
         if not candles:
             console.print(f"[yellow]⚠️ No intraday candles for {key}[/yellow]")
             return None
 
+        # ✅ Flexible unpacking (Upstox can return 6–8 columns)
         df = pl.DataFrame(
             [
-                (ts, float(o), float(h), float(l), float(c), float(v))
-                for ts, o, h, l, c, v in candles
+                (
+                    rec[0],
+                    float(rec[1]),
+                    float(rec[2]),
+                    float(rec[3]),
+                    float(rec[4]),
+                    float(rec[5]),
+                )
+                for rec in candles
+                if len(rec) >= 6
             ],
             schema=["time", "open", "high", "low", "close", "volume"],
         ).sort("time")
 
-        last_ts = df["time"][-1]
+        if len(df) == 0:
+            console.print(f"[yellow]⚠️ No valid intraday rows for {key}[/yellow]")
+            return None
+
         console.print(
-            f"[dim]{key}: {len(df)} rows @ {interval}-min | last {last_ts}[/dim]"
+            f"[dim]{key}: {len(df)} candles | Last {df['time'][-1]} | Close ₹{df['close'][-1]:.2f}[/dim]"
         )
         return df
+
     except Exception as e:
         console.print(f"[red]⚠️ Intraday fetch failed for {key}: {e}[/red]")
         return None
 
 
 # ─────────────────────────────── DATA FETCH: DAILY OHL ────────────────────────
+
+
 def fetch_daily_ohl(key: str) -> dict | None:
     """
     Smart, holiday-aware, cached, and auto-cleaned OHL fetch.
     Falls back to intraday OHL post-market if daily unavailable.
+    Includes flexible candle parsing and encoded instrument keys.
     """
     global CACHE_HITS, CACHE_REFRESHES, ACTIVE_SERVICE_DAY
     now = datetime.now(tz)
     today = now.date()
 
+    # Load cache
     try:
         cache = (
             json.loads(OHL_CACHE_FILE.read_text()) if OHL_CACHE_FILE.exists() else {}
@@ -471,7 +501,7 @@ def fetch_daily_ohl(key: str) -> dict | None:
     except Exception:
         cache = {}
 
-    # remove entries older than 5 days
+    # Clean old entries (10-day retention)
     cutoff = today - timedelta(days=10)
     cache = {
         k: v
@@ -490,6 +520,7 @@ def fetch_daily_ohl(key: str) -> dict | None:
         cache[k] = {"ohl": data, "timestamp": now.isoformat()}
         OHL_CACHE_FILE.write_text(json.dumps(cache, indent=2))
 
+    # Reuse cache if fresh
     if entry and (now - datetime.fromisoformat(entry["timestamp"])) < timedelta(
         hours=24
     ):
@@ -500,14 +531,27 @@ def fetch_daily_ohl(key: str) -> dict | None:
     if not token:
         console.print("[red]❌ Missing Upstox token for OHL fetch[/red]")
         return None
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    encoded_key = quote(key, safe="")
     url = (
-        f"https://api.upstox.com/v3/historical-candle/{key}/days/1/"
+        f"https://api.upstox.com/v3/historical-candle/{encoded_key}/days/1/"
         f"{trading_day}/{trading_day}"
     )
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    console.print(f"[blue]🔗 Fetching daily OHL for {key}[/blue]")
+    console.print(f"[dim]{url}[/dim]")
 
     try:
         r = requests.get(url, headers=headers, timeout=10)
+
+        # Handle invalid key case
+        if r.status_code == 400 and "Invalid Instrument key" in r.text:
+            console.print(
+                f"[red]❌ Skipping {key} — invalid instrument key (check TICKERS map)[/red]"
+            )
+            return entry["ohl"] if entry else None
+
         candles = r.json().get("data", {}).get("candles", [])
         if not candles:
             console.print(
@@ -516,6 +560,7 @@ def fetch_daily_ohl(key: str) -> dict | None:
             df = fetch_intraday(key)
             if df is None or df.is_empty():
                 return entry["ohl"] if entry else None
+
             ohl = {
                 "open": float(df["open"][0]),
                 "high": float(df["high"].max()),
@@ -523,7 +568,9 @@ def fetch_daily_ohl(key: str) -> dict | None:
                 "prev_close": float(df["close"][-1]),
             }
         else:
-            _, o, h, l, c, *_ = candles[-1]
+            # ✅ Safe unpacking for variable-length candle arrays
+            rec = candles[-1][:6]  # first 6 values only
+            _, o, h, l, c, *_ = rec
             ohl = {
                 "open": float(o),
                 "high": float(h),
@@ -533,10 +580,207 @@ def fetch_daily_ohl(key: str) -> dict | None:
 
         write_cache(key_name, ohl)
         CACHE_REFRESHES += 1
+        console.print(
+            f"[dim]{key}: OHL fetched | H {ohl['high']} L {ohl['low']} C {ohl['prev_close']}[/dim]"
+        )
         return ohl
+
     except Exception as e:
         console.print(f"[red]Daily OHL fetch failed for {key}: {e}[/red]")
         return entry["ohl"] if entry else None
+
+
+def run_forecast_mode(next_session_date: date):
+    """
+    Analyze recent market context and generate a tactical plan for the next trading session.
+    v7.2b — Offline-aware forecast:
+    Uses daily candles (cached or recent) if intraday data unavailable.
+    """
+    console.rule(
+        f"[bold cyan]🎯 NEXT SESSION STRATEGIC PLAN ({next_session_date:%a %d %b %Y})[/bold cyan]"
+    )
+    forecast_data = {}
+
+    lookback_days = 5
+    today = date.today()
+    token = os.getenv("UPSTOX_ACCESS_TOKEN") or os.getenv("UPSTOX_TOKEN")
+
+    for sym, key in TICKERS.items():
+        try:
+            encoded_key = quote(key, safe="")
+            console.print(f"[dim]🔍 Preparing forecast for [bold]{sym}[/bold][/dim]")
+
+            # ------------------ Step 1: Try Intraday ------------------
+            df = fetch_intraday(key)
+            if df is None or df.is_empty():
+                console.print(
+                    f"[yellow]⚠️ No intraday data for {sym} — using daily candles fallback[/yellow]"
+                )
+
+                # ------------------ Step 2: Daily fallback ------------------
+                if not token:
+                    console.print("[red]❌ Missing Upstox token for forecast[/red]")
+                    continue
+
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                }
+
+                # ✅ Build a proper 5-trading-day range
+                days = []
+                d = today - timedelta(days=1)
+                while len(days) < lookback_days:
+                    if is_trading_day(d):
+                        days.append(d)
+                    d -= timedelta(days=1)
+
+                start_date = min(days)
+                end_date = max(days)
+
+                # Upstox requires from_date ≤ to_date (both valid trading days)
+                url = (
+                    f"https://api.upstox.com/v3/historical-candle/{encoded_key}/days/1/"
+                    f"{start_date}/{end_date}"
+                )
+
+                console.print(
+                    f"[dim]📅 Using {start_date} → {end_date} ({len(days)} sessions)[/dim]"
+                )
+                console.print(f"[blue]{url}[/blue]")
+
+                console.print(f"[dim]🌐 Fetching daily history for {sym}[/dim]")
+                console.print(f"[blue]{url}[/blue]")
+
+                try:
+                    r = requests.get(url, headers=headers, timeout=10)
+                    if r.status_code != 200:
+                        raise ValueError(f"HTTP {r.status_code}: {r.text[:120]}")
+                    candles = r.json().get("data", {}).get("candles", [])
+                    if not candles:
+                        console.print(f"[red]❌ No daily candles for {sym}[/red]")
+                        continue
+
+                    df = pl.DataFrame(
+                        [
+                            (ts, float(o), float(h), float(l), float(c), float(v))
+                            for ts, o, h, l, c, v in candles
+                        ],
+                        schema=["time", "open", "high", "low", "close", "volume"],
+                    ).sort("time")
+                except Exception as e:
+                    console.print(f"[red]❌ Daily fallback failed for {sym}: {e}[/red]")
+                    continue
+
+            # ------------------ Step 3: Indicators ------------------
+            ind = indicators(df)
+            if not ind or "EMA_BIAS" not in ind:
+                console.print(
+                    f"[yellow]⚠️ Skipping {sym} — incomplete indicator data[/yellow]"
+                )
+                continue
+
+            cmp_ = float(df["close"][-1])
+            ema_bias = ind["EMA_BIAS"]
+            rsi = ind["RSI"]
+            supertrend = ind.get("SUPERTREND_BIAS", "Neutral")
+            vwap_zone = (
+                "Above VWAP"
+                if cmp_ > ind["VWAP"]
+                else "Below VWAP"
+                if cmp_ < ind["VWAP"]
+                else "Neutral"
+            )
+
+            # ------------------ Step 4: Tactical Logic ------------------
+            score = 0
+            score += 3 if ema_bias == "Bullish" else 0
+            score += 2 if supertrend == "Bullish" else 0
+            score += 2 if rsi > 55 else 0
+            score += 1 if cmp_ > ind["VWAP"] else 0
+            score += 2 if cmp_ > ind["EMA50"] else 0
+            score = min(score, 10)
+
+            if score >= 8:
+                plan = "📈 Bullish breakout forming"
+            elif score >= 5:
+                plan = "⚖️ Consolidation / Momentum setup"
+            else:
+                plan = "🔻 Weak momentum / Pullback"
+
+            forecast_data[sym] = {
+                "cmp": cmp_,
+                "bias": ema_bias,
+                "supertrend": supertrend,
+                "rsi": round(rsi, 1),
+                "vwap_zone": vwap_zone,
+                "plan": plan,
+                "score": score,
+            }
+
+            console.print(
+                f"[cyan]{sym}[/cyan]: {plan} | Score {score}/10 | Bias: {ema_bias}, RSI: {rsi:.1f}, VWAP Zone: {vwap_zone}"
+            )
+
+        except Exception as e:
+            console.print(f"[red]❌ Forecast failed for {sym}: {e}[/red]")
+            continue
+
+    # ------------------ Step 5: Save JSON ------------------
+    if forecast_data:
+        RUNTIME_DIR.mkdir(exist_ok=True)
+        forecast_path = RUNTIME_DIR / "next_session_plan.json"
+        forecast_path.write_text(json.dumps(forecast_data, indent=2))
+        console.print(f"[green]✅ Forecast saved → {forecast_path}[/green]")
+    else:
+        console.print("[yellow]⚠️ No valid forecasts generated[/yellow]")
+
+
+# ───────────────────────── FORECAST MODE TRIGGER ─────────────────────────
+def handle_market_holiday_or_closed_day():
+    """
+    Handles holiday / non-trading days by running Forecast Mode automatically.
+    Generates a next-session tactical plan and archives it.
+    """
+    today = datetime.now(tz).date()
+
+    if not is_trading_day(today):
+        next_day = today + timedelta(days=1)
+        # roll forward until next trading day
+        while not is_trading_day(next_day):
+            next_day += timedelta(days=1)
+
+        console.rule("[bold yellow]🎌 MARKET HOLIDAY — NSE CLOSED[/bold yellow]")
+        console.print(
+            f"{today:%A, %d %B %Y} → [bold cyan]{HOLIDAYS.get(today.strftime('%Y-%m-%d'), 'Unknown reason')}[/bold cyan]"
+        )
+        console.print(
+            f"📅 Next session resumes on [green]{next_day:%A, %d %B %Y}[/green]"
+        )
+        console.print("[dim]Running Strategic Forecast Mode...[/dim]\n")
+
+        try:
+            run_forecast_mode(next_day)
+
+            # Archive forecast result
+            forecast_file = Path("runtime/next_session_plan.json")
+            archive_dir = Path("archive")
+            archive_dir.mkdir(exist_ok=True)
+            archive_file = archive_dir / f"forecast_{next_day:%Y%m%d}.json"
+
+            if forecast_file.exists():
+                archive_file.write_text(forecast_file.read_text())
+                console.print(f"[dim]📦 Forecast archived → {archive_file.name}[/dim]")
+            else:
+                console.print("[yellow]⚠️ No forecast file found to archive.[/yellow]")
+
+        except Exception as e:
+            console.print(f"[red]❌ Forecast generation failed: {e}[/red]")
+
+        console.print(
+            "[dim]Cockpit will idle until next trading session. You can safely close now.[/dim]\n"
+        )
+        sys.exit(0)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1133,12 +1377,80 @@ def morning_system_banner(
         console.print(f"[yellow]⚠️ Unknown banner stage: {stage}[/yellow]\n")
 
 
+def view_last_forecast():
+    """
+    📜 View the most recent archived forecast plan (v7.2+).
+    Displays symbol-wise tactical summary and overall market bias.
+    """
+    archive_dir = Path("archive")
+    if not archive_dir.exists():
+        console.print("[yellow]⚠️ No archive folder found yet.[/yellow]")
+        return
+
+    # find the most recent forecast file
+    forecast_files = sorted(archive_dir.glob("forecast_*.json"), reverse=True)
+    if not forecast_files:
+        console.print("[yellow]⚠️ No archived forecast files found.[/yellow]")
+        return
+
+    latest = forecast_files[0]
+    try:
+        data = json.loads(latest.read_text())
+        console.rule(
+            f"[bold cyan]📜 LAST FORECAST PLAN ({latest.stem.replace('forecast_', '')})[/bold cyan]"
+        )
+        if not data:
+            console.print("[dim]No forecast entries available.[/dim]")
+            return
+
+        bullish = neutral = weak = 0
+        rsis = []
+        for row in data:
+            sym = row["symbol"]
+            bias = row["bias"]
+            rsi = row["rsi"]
+            rsis.append(rsi)
+            setup = row.get("setup", "N/A")
+            color = (
+                "green"
+                if "Bullish" in setup
+                else "red"
+                if "Weak" in setup
+                else "yellow"
+            )
+            console.print(
+                f"[{color}]{sym:<8}[/] → {bias:8} | RSI {rsi:>5.1f} | VWAP {row['vwap']:.2f} | CPR {row['cpr']:.2f} | {setup}"
+            )
+            if "Bullish" in setup:
+                bullish += 1
+            elif "Weak" in setup:
+                weak += 1
+            else:
+                neutral += 1
+
+        avg_rsi = sum(rsis) / len(rsis)
+        console.rule(
+            f"[bold white]Summary:[/bold white] {bullish} Bullish, {neutral} Neutral, {weak} Weak | "
+            f"Avg RSI {avg_rsi:.1f} | "
+            f"Bias → [cyan]{'Positive' if avg_rsi>55 else 'Negative' if avg_rsi<45 else 'Balanced'}[/cyan]"
+        )
+
+        console.print(
+            f"[dim]🧾 Source: {latest.name} | {len(data)} symbols reviewed[/dim]\n"
+        )
+
+    except Exception as e:
+        console.print(f"[red]⚠️ Failed to read forecast file: {e}[/red]")
+
+
 # ───────────────────────── STARTUP ─────────────────────────
 tz = ZoneInfo("Asia/Kolkata")
 
 morning_system_banner("startup")
 
 if __name__ == "__main__":
+    handle_market_holiday_or_closed_day()
+    view_last_forecast()
     morning_summary()
     analyze_archive_trend()
     weekly_strength_gauge()

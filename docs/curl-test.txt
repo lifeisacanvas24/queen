@@ -1,0 +1,111 @@
+Absolutely brother 🤝 — here’s your complete reference sheet of curl commands for all your key Queen Cockpit routes — grouped by category and formatted for easy copy-paste.
+They assume your backend runs on http://127.0.0.1:8000 (default FastAPI local dev).
+
+⸻
+
+🧭 Core Market / Instruments
+
+# List all instruments (default: INTRADAY)
+curl 'http://127.0.0.1:8000/instruments/list?mode=INTRADAY'
+
+# List only active instruments from the universe
+curl 'http://127.0.0.1:8000/instruments/active'
+
+# Verify instruments API routing (should return metadata)
+curl -v 'http://127.0.0.1:8000/instruments/instruments'
+
+
+⸻
+
+⚙️ Monitor & Live Cockpit
+
+# Quick snapshot for a few symbols (like NETWEB & MCX)
+curl 'http://127.0.0.1:8000/monitor/snapshot?interval=15&symbols=NETWEB&symbols=MCX'
+
+# Full actionable feed (same data used by live.html)
+curl 'http://127.0.0.1:8000/monitor/actionable?interval=15&book=all&limit=50'
+
+# Stream actionables (Server-Sent Events — keep open)
+curl -N 'http://127.0.0.1:8000/monitor/stream_actionable?interval=15&book=all&tick_sec=15'
+
+# Test alternate interval (e.g., 5m mode)
+curl 'http://127.0.0.1:8000/monitor/actionable?interval=5&book=all'
+
+# Test candle boundary timing helper
+curl 'http://127.0.0.1:8000/market/state?interval=15'
+
+
+⸻
+
+💼 Portfolio & Books
+
+# List available portfolio books
+curl 'http://127.0.0.1:8000/portfolio/books'
+
+# Get all positions from a given book (example: "all")
+curl 'http://127.0.0.1:8000/portfolio/positions?book=all'
+
+# Inspect a specific book (replace with your real book name)
+curl 'http://127.0.0.1:8000/portfolio/positions?book=papertrades'
+
+# Quick check PnL (held positions)
+curl 'http://127.0.0.1:8000/portfolio/pnl?book=all'
+
+
+⸻
+
+📊 Analytics & Summary Endpoints
+
+# Summary of active signals (for Live/Summary tabs)
+curl 'http://127.0.0.1:8000/monitor/summary?interval=15'
+
+# Upcoming or queued signals (for Upcoming tab)
+curl 'http://127.0.0.1:8000/monitor/upcoming?interval=15'
+
+# Historical (backtested or archived) signals
+curl 'http://127.0.0.1:8000/monitor/history?limit=20'
+
+
+⸻
+
+🔍 Utility / Debug Routes
+
+# Verify FastAPI root + healthcheck
+curl 'http://127.0.0.1:8000/health_full'
+
+# Verify that timezone alignment works (IST)
+curl 'http://127.0.0.1:8000/market/timezone_check'
+
+# Debug: fetch last tick timestamp (server internal state)
+curl 'http://127.0.0.1:8000/market/last_tick'
+
+
+⸻
+
+🧩 Extra Development Helpers (if you keep these endpoints active)
+
+# Force refresh of live cache
+curl -X POST 'http://127.0.0.1:8000/admin/refresh_cache'
+
+# View last computed universe size and symbol count
+curl 'http://127.0.0.1:8000/market/universe_summary'
+
+# Dump raw JSON of last snapshot for debugging
+curl -o snapshot.json 'http://127.0.0.1:8000/monitor/snapshot?interval=15'
+
+
+⸻
+
+🪶 Notes
+	•	-N keeps the stream open (use only for /stream_actionable).
+	•	-v adds verbose output (useful for header debugging).
+	•	You can use jq to pretty-print JSON:
+
+curl 'http://127.0.0.1:8000/monitor/snapshot?interval=15' | jq
+
+
+	•	Replace interval=15 or book=all with any valid combination for your testing.
+
+⸻
+
+Would you like me to create a ready-to-save file (e.g. queen_curl_reference.sh) with all of these formatted and executable (with chmod +x)? It’ll be a single portable script you can run anytime for quick checks.

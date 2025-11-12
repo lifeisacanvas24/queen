@@ -1,0 +1,28 @@
+<div class="q-box p-3" id="statusStrip" style="margin-top:1rem;">
+  <div class="q-status">
+    <!-- LINE 1 -->
+    <div class="line" id="statusLineTop">
+      <span class="dot idle" id="healthDot"></span>
+      <span class="key">Session</span><span class="val" id="healthText">idle</span>
+      <span class="key">Last tick</span><span class="val" id="qLastTick">—</span>
+      <span class="key">Next refresh</span><span class="val" id="qNextRefresh">—</span>
+      <span class="key">Candle close</span><span class="val" id="qCandleClose">—</span>
+    </div>
+
+    <!-- RIGHT-SIDE tiny cluster (cycle counter) -->
+    <div class="line" style="justify-content:flex-end;">
+      <span class="key">Cycle</span><span class="val" id="qCycle">0</span>
+    </div>
+
+    <!-- LINE 2 -->
+    <div class="line" id="statusLineBottom">
+      <span class="key">Top-3</span>
+      <span class="rank" id="qRank">—</span>
+    </div>
+
+    <!-- RIGHT-SIDE tiny cluster (interval badge) -->
+    <div class="line" style="justify-content:flex-end;">
+      <span class="key">Interval</span><span class="val" id="qIv">—</span>
+    </div>
+  </div>
+</div>

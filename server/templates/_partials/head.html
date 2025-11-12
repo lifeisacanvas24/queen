@@ -1,0 +1,240 @@
+<!-- Core CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+
+<style>
+  /* -------- Apple-ish minimal + dark-mode -------- */
+  :root{
+    --q-bg:#fafafa; --q-panel:#ffffff; --q-border:#e3e4e7; --q-border-light:#f1f1f3;
+    --q-text:#111111; --q-sub:#6e6e73; --q-accent:#007aff;
+    --q-green:#0eb15d; --q-red:#e15241; --q-amber:#f2b01c;
+    --q-radius:14px; --q-shadow:0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.04);
+    --q-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --q-bg:#0f1115; --q-panel:#14171f; --q-border:#262b36; --q-border-light:#202637;
+      --q-text:#eaeef7; --q-sub:#9aa4b2; --q-accent:#4da3ff;
+      --q-green:#26d07c; --q-red:#ff6b5a; --q-amber:#f7c446;
+      --q-shadow:none;
+    }
+  }
+
+  html,body{ background:var(--q-bg); color:var(--q-text); font-family:var(--q-font); -webkit-font-smoothing:antialiased; }
+  .container{ max-width:1440px; }
+  .q-body{ background:var(--q-bg); color:var(--q-text); }
+  .q-box{ background:var(--q-panel); border:1px solid var(--q-border); border-radius:var(--q-radius); box-shadow:var(--q-shadow); transition:all .25s ease; }
+  .q-box:hover{ border-color:var(--q-border-light); }
+  .q-muted{ color:var(--q-sub); }
+  .mono{ font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+
+  /* pills/badges */
+  .health-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .h-green{ background:var(--q-green); } .h-amber{ background:var(--q-amber);} .h-red{ background:var(--q-red); }
+  .pill{ display:inline-flex; align-items:center; padding:.25rem .6rem; border-radius:999px; font-size:.75rem; font-weight:600; border:1px solid var(--q-border); letter-spacing:.02em; text-transform:uppercase; }
+  .pill.green{ color:var(--q-green); border-color:var(--q-green); }
+  .pill.red{ color:var(--q-red); border-color:var(--q-red); }
+  .pill.amber{ color:var(--q-amber); border-color:var(--q-amber); }
+  .pill.blue{ color:var(--q-accent); border-color:var(--q-accent); }
+  .badge{ display:inline-block; padding:.25rem .45rem; border-radius:6px; font-size:.75rem; font-weight:600; border:1px solid transparent; background:rgba(0,0,0,.03); }
+  .badge.green{ background:color-mix(in srgb, var(--q-green) 16%, transparent); color:var(--q-green); }
+  .badge.red{ background:color-mix(in srgb, var(--q-red) 16%, transparent); color:var(--q-red); }
+  .badge.amber{ background:color-mix(in srgb, var(--q-amber) 16%, transparent); color:var(--q-amber); }
+  @media (prefers-color-scheme: dark){
+    .badge{ background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.06);}
+  }
+
+  /* table */
+  table.q-table{ width:100%; border-collapse:collapse; font-size:.9rem; }
+  table.q-table th{ background:var(--q-panel); color:var(--q-sub); text-transform:uppercase; font-size:.7rem; letter-spacing:.05em; border-bottom:1px solid var(--q-border); }
+  table.q-table td{ border-bottom:1px solid var(--q-border-light); padding:.6rem .8rem; vertical-align:middle; }
+  table.q-table tr:hover{ background:rgba(0,0,0,.03); }
+  @media (prefers-color-scheme: dark){
+    table.q-table tr:hover{ background: rgba(255,255,255,.025); }
+  }
+  tr.row-bull{ border-left:3px solid var(--q-green); }
+  tr.row-bear{ border-left:3px solid var(--q-red); }
+  tr.row-dim{ opacity:.7; }
+  /* responsive control wrap */
+  .controls-wrap { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+  @media (max-width: 1180px){
+    .controls-wrap > * { margin-right:.5rem !important; }
+  }
+  td.num, th.has-text-right{ text-align:right; font-variant-numeric:tabular-nums; }
+  .badge.held{ background:color-mix(in srgb, var(--q-amber) 16%, transparent); color:var(--q-amber); }
+  /* misc */
+  .bar-wrap{ position:relative; width:100%; height:6px; background:var(--q-border-light); border-radius:3px; overflow:hidden; }
+  .bar-fill{ position:absolute; top:0; left:0; bottom:0; }
+  .bar-fill.green{ background:var(--q-green); }
+  .bar-fill.red{ background:var(--q-red); }
+
+  .q-status-strip{
+    margin-top:.75rem; padding:.5rem .75rem;
+    border:1px dashed var(--q-border); border-radius:10px;
+    color:var(--q-sub); background:transparent;
+    font-size:.85rem; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .fade-in{ animation:fadeIn .4s ease forwards; }
+  @media (prefers-reduced-motion: reduce){
+    .fade-in{ animation:none !important; }
+  }
+
+  /* inline table spinner */
+  .q-spinner-wrap { display:flex; align-items:center; justify-content:center; padding:.5rem 0; }
+  .q-spinner {
+    width:16px; height:16px; border-radius:50%;
+    border:2px solid color-mix(in srgb, var(--q-sub) 30%, transparent);
+    border-top-color: var(--q-accent);
+    animation: qspin .8s linear infinite;
+    margin-right:.5rem;
+  }
+  @keyframes qspin { to { transform: rotate(360deg); } }
+
+  /* toggle */
+  .switch{ position:relative; display:inline-block; width:36px; height:20px; }
+  .switch input{ display:none; }
+  .slider{ position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:var(--q-border); transition:.2s; border-radius:999px; }
+  .slider:before{ position:absolute; content:""; height:16px; width:16px; left:2px; bottom:2px; background:white; border-radius:50%; transition:.2s; }
+  input:checked + .slider{ background:var(--q-accent); }
+  input:checked + .slider:before{ transform:translateX(16px); }
+
+  /* primary button */
+  .button.q-primary{ background:var(--q-accent); color:#fff; border:none; }
+  .button.q-primary:hover{ filter:brightness(.95); }
+  .button.q-primary:focus-visible{ outline:2px solid var(--q-accent); outline-offset:2px; }
+  .nowrap{white-space:nowrap}
+  td.num, th.has-text-right{ text-align:right; font-variant-numeric:tabular-nums; }
+  td.sym { white-space:nowrap }
+  td.tag { padding-left:.35rem }
+  .badge.held{ background:color-mix(in srgb, var(--q-amber) 16%, transparent); color:var(--q-amber) }
+  .upcoming-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:1rem; }
+  @media (max-width: 1100px){
+    .upcoming-grid{ grid-template-columns: 1fr; }
+  }
+  .table-panel .panel-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem;
+  }
+  .badge.bias-bull{ color:var(--q-green); border:1px solid var(--q-green); }
+  .badge.bias-bear{ color:var(--q-red); border:1px solid var(--q-red); }
+  .badge.bias-neu { color:var(--q-sub); border:1px solid var(--q-border); }
+</style>
+
+<script>
+// Put this once per page (or in _partials/head.html so all pages inherit it)
+function noStore(u){
+  const url = (u instanceof URL) ? u : new URL(u, window.location.origin);
+  url.searchParams.set('_', Date.now());   // cache buster
+  return fetch(url, { cache: 'no-store' });
+}
+  // Health dot
+  function qSetHealth(status){
+    const d=document.getElementById('healthDot'), t=document.getElementById('healthText');
+    if(!d||!t) return;
+    d.classList.remove('h-green','h-amber','h-red');
+    if(status==='ok'){ d.classList.add('h-green'); t.textContent='live'; }
+    else if(status==='idle'){ d.classList.add('h-amber'); t.textContent='idle'; }
+    else { d.classList.add('h-red'); t.textContent='down'; }
+  }
+
+  // Clock
+  function qTickClock(){
+    const el=document.getElementById('marketClock'); if(!el) return;
+    const n=new Date(), pad=x=>String(x).padStart(2,'0');
+    el.textContent=`${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())} IST`;
+  }
+  setInterval(qTickClock,1000); window.addEventListener('load',qTickClock);
+
+  // Session badge + staleness
+  async function updateSessionBadge(){
+    try{
+      const j=await (await fetch('/market/state', {cache:'no-store'})).json();
+      const el=document.getElementById('sessionBadge');
+      if(el){
+        el.textContent=(j.session||'UNKNOWN');
+        el.classList.remove('green','amber','red');
+        el.classList.add(j.session==='LIVE'?'green':(j.session==='PRE'?'amber':'red'));
+      }
+      if(j.is_stale) qSetHealth('idle'); else qSetHealth('ok');
+    }catch(e){ qSetHealth('down'); }
+  }
+  setInterval(updateSessionBadge,60_000); window.addEventListener('load',updateSessionBadge);
+
+  // Universe count  ✅ FINAL PATH
+  async function updateUniverseCount(){
+    try{
+      const r=await fetch('/market/instruments/active?mode=INTRADAY', {cache:'no-store'});
+      const j=await r.json();
+      const el=document.getElementById('universeChip');
+      if(el) el.textContent=`${j.count||0} syms`;
+    }catch(e){}
+  }
+  setInterval(updateUniverseCount,60_000); window.addEventListener('load',updateUniverseCount);
+
+  // Refresh button: soft refresh + custom hook for pages
+  function qBindRefresh(){
+    const btn=document.getElementById('refreshAll');
+    if(!btn) return;
+    btn.addEventListener('click', async ()=>{
+      qSetHealth('idle');
+      await Promise.allSettled([updateSessionBadge(), updateUniverseCount()]);
+      document.dispatchEvent(new CustomEvent('q:refresh'));
+    });
+  }
+  window.addEventListener('load', qBindRefresh);
+
+  // Optional: fill footer "now" client-side if server doesn't pass {{ now }}
+  function qFillFooterNow(){
+    const node=document.querySelector('footer .q-muted');
+    if(!node) return;
+    const raw=(node.textContent||'').trim();
+    if(raw) return; // server already provided `now`
+    const ts=new Date().toLocaleString('en-IN', { hour12:false });
+    node.textContent = `Queen Cockpit · minimal & actionable · ${ts} IST`;
+  }
+  window.addEventListener('load', qFillFooterNow);
+
+  function showSpinnerRow(tbodyId, colSpan){
+    const tb = document.getElementById(tbodyId);
+    if(!tb) return ()=>{};
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-spinner','1');
+    tr.innerHTML = `<td colspan="${colSpan}">
+      <div class="q-spinner-wrap"><span class="q-spinner"></span>
+      <span class="q-muted">Refreshing…</span></div></td>`;
+    Array.from(tb.querySelectorAll('tr[data-spinner]')).forEach(n=>n.remove());
+    tb.appendChild(tr);
+    return ()=>tr.remove();
+  }
+  const QStatus = { el:null, nextAt:null, msg:'', timer:null };
+
+  function qStatusInit(){
+    QStatus.el = document.getElementById('statusStrip');
+    if(!QStatus.el) return;
+    if(QStatus.timer) clearInterval(QStatus.timer);
+    QStatus.timer = setInterval(qStatusRender, 250);
+    qStatusRender();
+  }
+  function qStatusSet({msg,nextAt}){
+    QStatus.msg   = msg || '';
+    QStatus.nextAt = nextAt || null;
+    qStatusRender();
+  }
+  function qStatusRender(){
+    if(!QStatus.el) return;
+    let tail = '';
+    if(QStatus.nextAt){
+      const now = Date.now();
+      const ms  = Math.max(0, QStatus.nextAt - now);
+      const s   = ms/1000;
+      const m   = Math.floor(s/60);
+      const ss  = Math.floor(s % 60);
+      const hhmmss = new Date(QStatus.nextAt).toLocaleTimeString('en-IN',{hour12:false});
+      // show “(in 3.7 min)” with 1 decimal
+      const minsFloat = (s/60).toFixed(1);
+      tail = ` — Next refresh at ${hhmmss} (in ${minsFloat} min)`;
+    }
+    QStatus.el.textContent = (QStatus.msg || '—') + tail;
+  }
+  window.addEventListener('load', qStatusInit);
+</script>

@@ -1,0 +1,84 @@
+<script>
+let posMap = {}; // {SYM:{qty,avg_price}}
+let lastRows = [];
+
+function noStore(u){ const url=(u instanceof URL)?u:new URL(u,location.origin); url.searchParams.set('_',Date.now()); return fetch(url,{cache:'no-store'}); }
+function fmt(x){ if(x===null||x===undefined) return '—'; if(typeof x==='number') return x.toLocaleString(undefined,{maximumFractionDigits:1}); return x; }
+function normCtx(x){ if(!x) return 'Unknown'; const s=String(x); return s.includes('/')?s.split('/')[0].trim():s; }
+
+function pill(text,tone){ return `<span class="pill ${tone}">${text}</span>`; }
+function cprBadge(ctx){ const t=(ctx||'Unknown'); const tone=t==='Above'?'green':t==='At'?'gray':t==='Below'?'red':'amber'; return pill(t,tone); }
+function emaBadge(bias){ const b=(bias||'Neutral'); const tone=b==='Bullish'?'green':b==='Bearish'?'red':'gray'; return pill(b,tone); }
+function rsiBadge(v){ if(v==null||isNaN(v)) return pill('—','gray'); const n=Number(v); const tone=n>=60?'green':(n>=45?'amber':'red'); return pill(n.toFixed(1),tone); }
+
+async function loadPositions(book){
+  try{
+    const j = await (await fetch(`/portfolio/positions?book=${encodeURIComponent(book)}`, {cache:'no-store'})).json();
+    posMap = j && j.positions ? j.positions : {};
+  }catch{ posMap = {}; }
+}
+function computePnl(cmp,p){ if(!p||cmp==null) return null; const qty=Number(p.qty||0), avg=Number(p.avg_price||0); if(!(qty>0)||!(avg>0)) return null; const abs=(cmp-avg)*qty; return {abs}; }
+function pnlChip(sym,cmp){
+  const p=posMap[sym]; if(!p) return '';
+  const r=computePnl(cmp,p); if(!r) return `<span class="pnl-chip pnl-flat"><span class="pnl-val">—</span></span>`;
+  const cls=r.abs>1e-6?'pnl-up':(r.abs<-1e-6?'pnl-dn':'pnl-flat');
+  const abs=r.abs.toLocaleString(undefined,{maximumFractionDigits:0});
+  return `<span class="pnl-chip ${cls}"><span class="pnl-val">₹${abs}</span></span>`;
+}
+
+function renderSummary(rows){
+  const tb=document.getElementById('summaryBody');
+  if(!tb) return;
+  const sorted=[...rows].sort((a,b)=> (b.score||0)-(a.score||0));
+  tb.innerHTML = sorted.map(r=>{
+    const held = r.held ? `<span class="badge held tag ml-1">HELD</span>` : '';
+    const pnl  = pnlChip(r.symbol, r.cmp);
+    const dec  = (r.decision||'').toUpperCase();
+    const rowCls = dec==='BUY'||dec==='ADD' ? 'row-bull' : (dec==='EXIT'||dec==='AVOID'?'row-bear':'row-dim');
+    return `<tr class="${rowCls}">
+      <td class="sym"><strong>${r.symbol||''}</strong> ${held} ${pnl}</td>
+      <td><span class="badge ${dec==='BUY'||dec==='ADD'?'green':dec==='EXIT'||dec==='AVOID'?'red':'amber'}">${dec||''}</span></td>
+      <td class="num">${fmt(r.score)}</td>
+      <td class="num mono">${fmt(r.entry)}</td>
+      <td class="num mono">${fmt(r.sl)}</td>
+      <td class="targets-cell">${(r.targets||[]).join(' • ')}</td>
+      <td>${emaBadge(r.ema_bias)}</td>
+      <td>${rsiBadge(r.rsi)}</td>
+      <td>${cprBadge(normCtx(r.cpr_ctx))}</td>
+      <td>${(r.vwap_zone||'Unknown')}</td>
+      <td class="q-muted">${r.notes||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshSummary(){
+  const iv=document.getElementById('interval')?.value||'15';
+  const book=document.getElementById('book')?.value||'all';
+  await loadPositions(book);
+  const raw=(document.getElementById('symbols')?.value||'').trim();
+  const syms = raw ? raw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+
+  const url=new URL('/monitor/actionable', location.origin);
+  if(syms.length) syms.forEach(s=>url.searchParams.append('symbols', s));
+  url.searchParams.set('interval', iv);
+  url.searchParams.set('book', book);
+  url.searchParams.set('limit','250');
+
+  try{
+    const j=await (await noStore(url)).json();
+    lastRows = Array.isArray(j.rows) ? j.rows : [];
+    if(!lastRows.length){
+      document.getElementById('summaryBody').innerHTML = `<tr><td colspan="11" class="q-muted has-text-centered">No items.</td></tr>`;
+      return;
+    }
+    renderSummary(lastRows);
+  }catch(e){
+    document.getElementById('summaryBody').innerHTML = `<tr><td colspan="11" class="q-muted has-text-centered">Error: ${e}</td></tr>`;
+  }
+}
+
+window.addEventListener('load', ()=>{
+  document.getElementById('refreshBtn')?.addEventListener('click', refreshSummary);
+  refreshSummary();
+});
+</script>

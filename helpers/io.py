@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/io.py — v3.1 (Universal I/O: JSON/NDJSON/CSV/Parquet + JSONL + safe dirs)
+# queen/helpers/io.py — v3.2 (Universal I/O: JSON/NDJSON/CSV/Parquet + JSONL + safe dirs)
 # ============================================================
 from __future__ import annotations
 
@@ -8,9 +8,10 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import polars as pl
+
 from queen.helpers.logger import log
 
 
@@ -46,10 +47,10 @@ def read_json(path: str | Path) -> pl.DataFrame:
         text = p.read_text(encoding="utf-8").strip()
         if not text:
             return pl.DataFrame()
-        if text.lstrip().startswith("["):
-            return pl.read_json(p)
-        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
-        return pl.DataFrame(rows) if rows else pl.DataFrame()
+        if p.suffix.lower() in (".jsonl", ".ndjson") or not text.lstrip().startswith("["):
+            rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+            return pl.DataFrame(rows) if rows else pl.DataFrame()
+        return pl.read_json(p)
     except Exception as e:
         log.error(f"[IO] Failed to read JSON {p.name} → {e}")
         return pl.DataFrame()
@@ -69,9 +70,7 @@ def write_json(
             else:
                 data.write_json(p)
         else:
-            payload = json.dumps(data, ensure_ascii=False, indent=indent).encode(
-                "utf-8"
-            )
+            payload = json.dumps(data, ensure_ascii=False, indent=indent).encode("utf-8")
             if atomic:
                 _atomic_write_bytes(p, payload)
             else:
@@ -81,6 +80,22 @@ def write_json(
         return True
     except Exception as e:
         log.error(f"[IO] Failed to write JSON {p.name} → {e}")
+        return False
+
+
+##### Parquet #####
+def safe_write_parquet(df: pl.DataFrame, path: str | Path) -> bool:
+    """Write parquet safely with auto-dir + atomic rename + fallback logging."""
+    p = _p(path)
+    try:
+        ensure_dir(p)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        df.write_parquet(tmp, compression="zstd", statistics=True)
+        os.replace(tmp, p)
+        log.info(f"[IO] Safe parquet written → {p}")
+        return True
+    except Exception as e:
+        log.error(f"[IO] Safe parquet write failed for {p.name} → {e}")
         return False
 
 
@@ -153,7 +168,7 @@ def append_jsonl(path: str | Path, record: dict) -> None:
         f.write(line)
 
 
-def read_jsonl(path: str | Path, limit: Optional[int] = None) -> list[dict]:
+def read_jsonl(path: str | Path, limit: int | None = None) -> list[dict]:
     p = _p(path)
     if not p.exists():
         return []
@@ -178,7 +193,7 @@ def tail_jsonl(path: str | Path, n: int = 200) -> list[dict]:
 def read_any(path: str | Path) -> pl.DataFrame:
     p = _p(path)
     suf = p.suffix.lower()
-    if suf in (".json", ".ndjson"):
+    if suf in (".json", ".jsonl", ".ndjson"):
         return read_json(p)
     if suf == ".csv":
         return read_csv(p)
@@ -212,12 +227,22 @@ def write_text(path: str | Path, content: str, *, atomic: bool = True) -> bool:
 
 # ---------- self-test ----------
 if __name__ == "__main__":
+    from queen.settings import settings as SETTINGS
+
     print("🧩 IO smoke test")
+    base = SETTINGS.PATHS["TEST_HELPERS"]
     df = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
-    write_csv(df, "queen/data/runtime/test_helpers/io_test.csv")
-    print(read_csv("queen/data/runtime/test_helpers/io_test.csv").head(1))
-    write_json(df, "queen/data/runtime/test_helpers/io_test.json")
-    print(read_json("queen/data/runtime/test_helpers/io_test.json").shape)
-    append_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", {"ok": 1})
-    append_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", {"ok": 2})
-    print(tail_jsonl("queen/data/runtime/test_helpers/io_test.jsonl", 1))
+
+    p_csv = base / "io_test.csv"
+    p_json = base / "io_test.json"
+    p_jsonl = base / "io_test.jsonl"
+
+    write_csv(df, p_csv)
+    print(read_csv(p_csv).head(1))
+
+    write_json(df, p_json)
+    print(read_json(p_json).shape)
+
+    append_jsonl(p_jsonl, {"ok": 1})
+    append_jsonl(p_jsonl, {"ok": 2})
+    print(tail_jsonl(p_jsonl, 1))

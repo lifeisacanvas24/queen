@@ -1,0 +1,147 @@
+{% extends "_layouts/base.html" %}
+{% block title %}Queen — Alerts{% endblock %}
+
+{% block top %}
+  <h1 class="title">Queen — <span class="q-muted">Live Alerts</span></h1>
+{% endblock %}
+
+{% block content %}
+<div class="q-box p-4">
+  <div class="is-flex is-align-items-center mb-3">
+    <span class="pill mr-2 filter-chip" data-kind="price">Price</span>
+    <span class="pill mr-2 filter-chip" data-kind="indicator">Indicator</span>
+    <span class="pill mr-2 filter-chip" data-kind="pattern">Pattern</span>
+    <span class="pill ml-3" id="filter-all">All</span>
+    <span class="pill ml-1" id="filter-none">None</span>
+  </div>
+
+  <div id="alerts" class="content">
+    <p class="q-muted has-text-centered">Loading recent alerts...</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const box=document.getElementById('alerts');
+const FILTER={price:true,indicator:true,pattern:true};
+let es=null, reconnectTimer=null;
+
+/* ----------------- Utilities ------------------ */
+function colorFor(k){
+  k=(k||'').toLowerCase();
+  if(k==='price') return 'warning';
+  if(k==='indicator') return 'success';
+  if(k==='pattern') return 'link';
+  return 'info';
+}
+function isVisible(k){ return FILTER[(k||'').toLowerCase()] ?? true; }
+function fmtTime(ts){
+  if(!ts) return '';
+  try{
+    const d=new Date(ts);
+    return d.toLocaleTimeString('en-IN', {hour12:false});
+  }catch(e){ return ts; }
+}
+
+/* ----------------- Renderers ------------------ */
+function renderAlert(j){
+  const d=j.detail||{}, kind=(d.kind||'').toLowerCase(), ts=fmtTime(j.ts||j.timestamp);
+  const header=`${j.symbol||'?'} — ${j.rule || d.indicator || d.pattern || kind}`;
+  let line='';
+  if(kind==='price'){
+    line=`${d.op||''} <strong>${(+d.value||0).toFixed(2)}</strong>`;
+  }else if(kind==='indicator'){
+    const nm=d.indicator||'';
+    const last=(typeof d.last==='number')? d.last.toFixed(2):(d.last||'');
+    line=`${nm} ${d.op||''} <strong>${d.value??''}</strong> · last ${last}`;
+  }else if(kind==='pattern'){
+    line=`${d.pattern||''} → <strong>${String(d.value)}</strong>`;
+  }else{
+    line=`${JSON.stringify(d)}`;
+  }
+
+  const hidden=isVisible(kind)?'':'style="display:none"';
+  return `<article class="message is-${colorFor(kind)} fade-in" data-kind="${kind}" ${hidden}>
+    <div class="message-header"><span>${header}</span><span class="mono">${ts}</span></div>
+    <div class="message-body">${line}</div>
+  </article>`;
+}
+
+function applyFilter(){
+  document.querySelectorAll('#alerts [data-kind]').forEach(el=>{
+    const k=el.getAttribute('data-kind')||'';
+    const vis=isVisible(k);
+    el.style.display=vis?'':'none';
+  });
+  document.querySelectorAll('.filter-chip').forEach(chip=>{
+    const k=chip.getAttribute('data-kind');
+    chip.classList.toggle('blue', !!FILTER[k]);
+    chip.classList.toggle('is-light', !FILTER[k]);
+  });
+}
+
+/* ----------------- Stream Logic ------------------ */
+function startStream(){
+  stopStream();
+  es=new EventSource('/alerts/stream?replay=25');
+  es.onopen=()=>qSetHealth('ok');
+  es.onerror=()=>{
+    qSetHealth('down');
+    stopStream();
+    reconnectTimer=setTimeout(startStream, 5000);
+  };
+  es.onmessage=(e)=>{
+    try{
+      const j=JSON.parse(e.data);
+      const html=renderAlert(j);
+      box.insertAdjacentHTML('afterbegin', html);
+      applyFilter();
+      qSetHealth('ok');
+    }catch(_){}
+  };
+}
+
+function stopStream(){
+  if(es){ es.close(); es=null; }
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
+}
+
+/* ----------------- Initial Load ------------------ */
+async function loadRecent(){
+  try{
+    const r = await noStore('/alerts/recent?n=25');
+    const j = await r.json();
+    const items = j.items || [];
+    if(!items.length){
+      box.innerHTML = `<p class="q-muted has-text-centered">No recent alerts.</p>`;
+      return;
+    }
+    box.innerHTML = '';
+    items.forEach(x => box.insertAdjacentHTML('afterbegin', renderAlert(x)));
+    applyFilter();
+  }catch(e){
+    box.innerHTML = `<p class="q-muted has-text-centered">Failed to load alerts.</p>`;
+  }
+}
+
+/* ----------------- Event Bindings ------------------ */
+document.querySelectorAll('.filter-chip').forEach(chip=>{
+  chip.addEventListener('click',()=>{
+    const k=chip.getAttribute('data-kind');
+    FILTER[k]=!FILTER[k];
+    applyFilter();
+  });
+});
+document.getElementById('filter-all').onclick=()=>{
+  FILTER.price=FILTER.indicator=FILTER.pattern=true;
+  applyFilter();
+};
+document.getElementById('filter-none').onclick=()=>{
+  FILTER.price=FILTER.indicator=FILTER.pattern=false;
+  applyFilter();
+};
+
+loadRecent().then(()=>startStream());
+</script>
+{% endblock %}

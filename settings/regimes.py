@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/regimes.py — Market Regime Configuration (v9.0)
+# queen/settings/regimes.py — Market Regime Configuration (v9.1)
 # Forward-only, uppercase keys, helpers, Polars export
 # ============================================================
 from __future__ import annotations
@@ -59,6 +59,8 @@ REGIMES: Dict[str, dict] = {
     },
 }
 
+# Optional ordering for dashboards
+REGIME_ORDER = ["BEARISH", "NEUTRAL", "BULLISH"]
 
 # ------------------------------------------------------------
 # ⚙️ Regime Derivation (stateless)
@@ -85,6 +87,9 @@ def list_regimes() -> list[str]:
     return list(REGIMES.keys())
 
 
+def color_for(regime: str) -> str:
+    return get_regime_config(regime).get("color", "#9ca3af")  # gray fallback
+
 # ------------------------------------------------------------
 # 🧪 Validation & Export
 # ------------------------------------------------------------
@@ -92,7 +97,7 @@ def validate() -> dict:
     errs: list[str] = []
     for name, cfg in REGIMES.items():
         if name.upper() != name:
-            errs.append(f"{name}: regime keys must be UPPERCASE")
+            errs.append(f"{name}: regime key must be UPPERCASE")
         for req in (
             "trend_bias",
             "volatility_state",
@@ -105,16 +110,11 @@ def validate() -> dict:
             if req not in cfg:
                 errs.append(f"{name}: missing '{req}'")
         acts = cfg.get("actions", {})
-        if "risk_multiplier" in acts and not isinstance(
-            acts["risk_multiplier"], (int, float)
-        ):
+        if "risk_multiplier" in acts and not isinstance(acts["risk_multiplier"], (int, float)):
             errs.append(f"{name}: actions.risk_multiplier must be number")
-        if "indicator_sensitivity" in acts and not isinstance(
-            acts["indicator_sensitivity"], (int, float)
-        ):
+        if "indicator_sensitivity" in acts and not isinstance(acts["indicator_sensitivity"], (int, float)):
             errs.append(f"{name}: actions.indicator_sensitivity must be number")
     return {"ok": len(errs) == 0, "errors": errs, "count": len(REGIMES)}
-
 
 def to_polars_df() -> pl.DataFrame:
     """Flat view for dashboards / notebooks."""
@@ -131,8 +131,19 @@ def to_polars_df() -> pl.DataFrame:
                 "Color": c.get("color"),
             }
         )
-    return pl.DataFrame(rows)
+    # Optional: maintain a stable row order for displays
+    order_index = {r: i for i, r in enumerate(REGIME_ORDER)}
+    df = pl.DataFrame(rows)
+    if "Regime" in df.columns:
+        df = df.with_columns(
+            pl.col("Regime")
+            .map_elements(lambda x: order_index.get(x, 9999))
+            .alias("__ord__")
+        ).sort("__ord__").drop("__ord__")
+    return df
 
+# Alias for code that expects as_polars_df()
+as_polars_df = to_polars_df
 
 # ------------------------------------------------------------
 # ✅ Self-Test

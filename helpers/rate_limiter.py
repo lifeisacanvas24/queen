@@ -20,8 +20,17 @@ from typing import Optional
 from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 
-DEFAULT_QPS = float(SETTINGS.FETCH.get("MAX_REQ_PER_SEC", 50))
-DIAG_ENABLED = bool(SETTINGS.DIAGNOSTICS.get("ENABLED", True))
+
+def _get(d: dict, *keys, default=None):
+    for k in keys:
+        if k in d: return d[k]
+        if isinstance(k, str):
+            if k.lower() in d: return d[k.lower()]
+            if k.upper() in d: return d[k.upper()]
+    return default
+
+DEFAULT_QPS = float(_get(SETTINGS.FETCH, "max_req_per_sec", "MAX_REQ_PER_SEC", default=50))
+DIAG_ENABLED = bool(_get(SETTINGS.DIAGNOSTICS, "enabled", "ENABLED", default=True))
 
 
 class AsyncTokenBucket:

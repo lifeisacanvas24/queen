@@ -1,93 +1,286 @@
 ```plaintext
 queen/
+├── alerts/
+│   │   ├── evaluator copy.py
+│   │   ├── evaluator.py
+│   │   ├── rules.py
+│   │   └── state.py
 ├── apps/
 │   │   ├── fastapi/
-│   │   ├── terminal/
-│   │   └── .DS_Store
+│   │   └── terminal/
 ├── cli/
+│   │   ├── __init__.py
+│   │   ├── list_master.py
+│   │   ├── list_signals.py
+│   │   ├── list_technicals.py
+│   │   ├── live_monitor.py
+│   │   ├── monitor_stream.py
+│   │   ├── morning_intel.py
+│   │   ├── run_strategy.py
+│   │   ├── show_snapshot.py
+│   │   ├── symbol_scan.py
+│   │   └── validate_registry.py
+├── configs/
+│   │   ├── alert_1d_rules.yaml
+│   │   ├── alert_intraday_rules.yaml
+│   │   ├── alert_rules.yaml
+│   │   └── alert_rules_demo.yaml
 ├── daemons/
-│   │   ├── __pycache__/
-│   │   │   │   │   └── clock_daemon.cpython-312.pyc
-│   │   └── clock_daemon.py
+│   │   ├── __init__.py
+│   │   ├── __main__.py
+│   │   ├── alert_daemon.py
+│   │   ├── alert_v2 copy.py
+│   │   ├── alert_v2.py
+│   │   ├── live_engine.py
+│   │   ├── morning_intel.py
+│   │   └── scheduler.py
 ├── data/
-│   │   ├── profiles/
-│   │   │   │   │   ├── exports/
-│   │   │   │   │   ├── history/
-│   │   │   │   │   ├── symbols/
-│   │   │   │   │   └── .DS_Store
-│   │   ├── runtime/
-│   │   │   │   │   ├── cache/
-│   │   │   │   │   ├── exports/
-│   │   │   │   │   ├── logs/
-│   │   │   │   │   │   │   │   │   └── queen_runtime_20251022.jsonl
-│   │   │   │   │   ├── snapshots/
-│   │   │   │   │   │   │   │   │   ├── archives/
-│   │   │   │   │   │   │   │   │   └── .DS_Store
-│   │   │   │   │   ├── universe/
-│   │   │   │   │   │   │   │   │   ├── archives/
-│   │   │   │   │   │   │   │   │   └── .DS_Store
-│   │   │   │   │   └── .DS_Store
-│   │   ├── static/
-│   │   │   │   │   ├── .DS_Store
-│   │   │   │   │   ├── api_upstox.json
-│   │   │   │   │   ├── intraday_instruments.json
-│   │   │   │   │   └── nse_holidays.json
-│   │   └── .DS_Store
+│   └── [runtime files...]
 ├── docs/
-│   │   ├── __pycache__/
-│   │   │   │   │   └── queen_todo.cpython-312.pyc
-│   │   ├── folder_layout.md
+│   │   ├── alerts-fastapi.txt
+│   │   ├── changelog.md
+│   │   ├── cockpit.txt
+│   │   ├── curl-test.txt
+│   │   ├── daemons-todo.txt
+│   │   ├── developers_commands.md
+│   │   ├── git_commands.md
+│   │   ├── intraday_cockpit.txt
 │   │   ├── pending-to-bedone.txt
-│   │   └── queen_todo.py
-├── fetcher/
+│   │   ├── queen_todo.py
+│   │   ├── release.md
+│   │   ├── router-upstox-todo.txt
+│   │   ├── Screenshot 2025-11-04 at 1.48.45 PM.png
+│   │   ├── tactical-blueprint.txt
+│   │   ├── to-do-for-25th.txt
+│   │   ├── todo-for-24.txt
+│   │   └── transfering-chat.txt
+├── fetchers/
+│   │   ├── __init__.py
+│   │   ├── fetch_router-copy.py
+│   │   ├── fetch_router.py
 │   │   └── upstox_fetcher.py
 ├── helpers/
-│   │   ├── __pycache__/
-│   │   │   │   │   ├── __init__.cpython-312.pyc
-│   │   │   │   │   ├── instruments.cpython-312.pyc
-│   │   │   │   │   ├── logger.cpython-312.pyc
-│   │   │   │   │   ├── market.cpython-312.pyc
-│   │   │   │   │   ├── schema_adapter.cpython-312.pyc
-│   │   │   │   │   └── tactical_regime_adapter.cpython-312.pyc
 │   │   ├── __init__.py
+│   │   ├── common.py
+│   │   ├── fetch_utils.py
 │   │   ├── instruments.py
+│   │   ├── intervals.py
+│   │   ├── io.py
 │   │   ├── logger.py
 │   │   ├── market.py
-│   │   ├── scheduler.py
+│   │   ├── nse_fetcher.py
+│   │   ├── pl_compat.py
+│   │   ├── portfolio.py
+│   │   ├── rate_limiter.py
 │   │   ├── schema_adapter.py
 │   │   ├── settings_proxy.py
 │   │   └── tactical_regime_adapter.py
 ├── server/
+│   │   ├── routers/
+│   │   │   │   │   ├── alerts.py
+│   │   │   │   │   ├── analytics.py
+│   │   │   │   │   ├── cockpit.py
+│   │   │   │   │   ├── health.py
+│   │   │   │   │   ├── instruments.py
+│   │   │   │   │   ├── intel.py
+│   │   │   │   │   ├── market_state.py
+│   │   │   │   │   ├── monitor.py
+│   │   │   │   │   ├── pnl.py
+│   │   │   │   │   ├── portfolio.py
+│   │   │   │   │   └── services.py
+│   │   ├── static/
+│   │   │   │   │   └── queen.css
+│   │   ├── templates/
+│   │   │   │   │   ├── _layouts/
+│   │   │   │   │   │   │   │   │   └── base.html
+│   │   │   │   │   ├── _partials/
+│   │   │   │   │   │   │   │   │   ├── footer.html
+│   │   │   │   │   │   │   │   │   ├── head.html
+│   │   │   │   │   │   │   │   │   ├── header.html
+│   │   │   │   │   │   │   │   │   ├── panel_actionables.html
+│   │   │   │   │   │   │   │   │   ├── panel_portfolio.html
+│   │   │   │   │   │   │   │   │   ├── panel_top_actionables.html
+│   │   │   │   │   │   │   │   │   └── status_strip.html
+│   │   │   │   │   ├── alerts/
+│   │   │   │   │   │   │   │   │   └── alerts.html
+│   │   │   │   │   ├── cockpit/
+│   │   │   │   │   │   │   │   │   ├── analytics.html
+│   │   │   │   │   │   │   │   │   ├── history.html
+│   │   │   │   │   │   │   │   │   ├── live.html
+│   │   │   │   │   │   │   │   │   ├── summary.html
+│   │   │   │   │   │   │   │   │   └── upcoming.html
+│   │   │   │   │   ├── index.html
+│   │   │   │   │   └── summary.html
+│   │   ├── main.py
+│   │   └── state.py
+├── services/
+│   │   ├── __init__.py
+│   │   ├── forecast.py
+│   │   ├── history.py
+│   │   ├── live.py
+│   │   ├── morning.py
+│   │   ├── scoring.py
+│   │   └── symbol_scan.py
 ├── settings/
-│   │   ├── __pycache__/
-│   │   │   │   │   ├── __init__.cpython-312.pyc
-│   │   │   │   │   ├── metrics.cpython-312.pyc
-│   │   │   │   │   ├── regimes.cpython-312.pyc
-│   │   │   │   │   └── settings.cpython-312.pyc
 │   │   ├── __init__.py
 │   │   ├── formulas.py
+│   │   ├── indicator_policy.py
 │   │   ├── indicators.py
+│   │   ├── meta_controller_cfg.py
+│   │   ├── meta_drift.py
 │   │   ├── meta_layers.py
+│   │   ├── meta_memory.py
 │   │   ├── metrics.py
 │   │   ├── patterns.py
 │   │   ├── profiles.py
+│   │   ├── README_settings.md
 │   │   ├── regimes.py
 │   │   ├── settings.py
 │   │   ├── tactical.py
 │   │   ├── timeframes.py
 │   │   ├── universe.py
 │   │   └── weights.py
+├── strategies/
+│   │   ├── fusion.py
+│   │   └── meta_strategy_cycle.py
 ├── technicals/
 │   │   ├── indicators/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── advanced.py
+│   │   │   │   │   ├── adx_dmi.py
+│   │   │   │   │   ├── all.py
+│   │   │   │   │   ├── breadth_cumulative.py
+│   │   │   │   │   ├── breadth_momentum.py
+│   │   │   │   │   ├── core.py
+│   │   │   │   │   ├── keltner.py
+│   │   │   │   │   ├── momentum_macd.py
+│   │   │   │   │   ├── volatility_fusion.py
+│   │   │   │   │   ├── volume_chaikin.py
+│   │   │   │   │   └── volume_mfi.py
 │   │   ├── patterns/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── composite.py
+│   │   │   │   │   ├── core.py
+│   │   │   │   │   └── runner.py
 │   │   ├── signals/
+│   │   │   │   │   ├── fusion/
+│   │   │   │   │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   │   │   │   │   ├── cmv.py
+│   │   │   │   │   │   │   │   │   ├── liquidity_breadth.py
+│   │   │   │   │   │   │   │   │   └── market_regime.py
+│   │   │   │   │   ├── tactical/
+│   │   │   │   │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   │   │   │   │   ├── absorption.py
+│   │   │   │   │   │   │   │   │   ├── ai_inference.py
+│   │   │   │   │   │   │   │   │   ├── ai_optimizer.py
+│   │   │   │   │   │   │   │   │   ├── ai_recommender.py
+│   │   │   │   │   │   │   │   │   ├── ai_trainer.py
+│   │   │   │   │   │   │   │   │   ├── bias_regime.py
+│   │   │   │   │   │   │   │   │   ├── cognitive_orchestrator.py
+│   │   │   │   │   │   │   │   │   ├── core.py
+│   │   │   │   │   │   │   │   │   ├── divergence.py
+│   │   │   │   │   │   │   │   │   ├── event_log.py
+│   │   │   │   │   │   │   │   │   ├── exhaustion.py
+│   │   │   │   │   │   │   │   │   ├── helpers.py
+│   │   │   │   │   │   │   │   │   ├── live_daemon.py
+│   │   │   │   │   │   │   │   │   ├── live_supervisor.py
+│   │   │   │   │   │   │   │   │   ├── meta_controller.py
+│   │   │   │   │   │   │   │   │   ├── meta_introspector.py
+│   │   │   │   │   │   │   │   │   ├── reversal_stack.py
+│   │   │   │   │   │   │   │   │   ├── squeeze_pulse.py
+│   │   │   │   │   │   │   │   │   ├── tactical_liquidity_trap.py
+│   │   │   │   │   │   │   │   │   └── tactical_meta_dashboard.py
+│   │   │   │   │   ├── templates/
+│   │   │   │   │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   │   │   │   │   └── indicator_template.py
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── pre_breakout.py
+│   │   │   │   │   ├── registry.py
+│   │   │   │   │   ├── reversal_summary.py
+│   │   │   │   │   └── utils_patterns.py
 │   │   ├── strategy/
-│   │   └── .DS_Store
+│   │   │   │   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   ├── master_index.py
+│   │   └── registry.py
 ├── tests/
-│   │   ├── __pycache__/
-│   │   │   │   │   ├── market_playback.cpython-312.pyc
-│   │   │   │   │   └── market_test.cpython-312.pyc
 │   │   ├── market_playback.py
-│   │   └── market_test.py
-└── .DS_Store
+│   │   ├── market_test.py
+│   │   ├── smoke_absorption.py
+│   │   ├── smoke_advanced.py
+│   │   ├── smoke_ai_inference.py
+│   │   ├── smoke_ai_optimizer_paths.py
+│   │   ├── smoke_ai_trainer_paths.py
+│   │   ├── smoke_all.py
+│   │   ├── smoke_bias_regime.py
+│   │   ├── smoke_bias_regime_latency.py
+│   │   ├── smoke_breadth.py
+│   │   ├── smoke_breadth_combo.py
+│   │   ├── smoke_breadth_momentum.py
+│   │   ├── smoke_chaikin.py
+│   │   ├── smoke_cmv_latency.py
+│   │   ├── smoke_cognitive_orchestrator.py
+│   │   ├── smoke_divergence.py
+│   │   ├── smoke_divergence_latency.py
+│   │   ├── smoke_event_log.py
+│   │   ├── smoke_exhaustion_latency.py
+│   │   ├── smoke_fusion_all_latency.py
+│   │   ├── smoke_fusion_latency.py
+│   │   ├── smoke_fusion_lbx.py
+│   │   ├── smoke_fusion_market_regime.py
+│   │   ├── smoke_fusion_overall.py
+│   │   ├── smoke_helpers.py
+│   │   ├── smoke_indicators.py
+│   │   ├── smoke_io.py
+│   │   ├── smoke_keltner.py
+│   │   ├── smoke_lbx_latency.py
+│   │   ├── smoke_liquidity_trap_latency.py
+│   │   ├── smoke_liquidity_trap_vector.py
+│   │   ├── smoke_live_daemon.py
+│   │   ├── smoke_live_supervisor.py
+│   │   ├── smoke_macd.py
+│   │   ├── smoke_market_regime_latency.py
+│   │   ├── smoke_market_time.py
+│   │   ├── smoke_master_index.py
+│   │   ├── smoke_meta_controller.py
+│   │   ├── smoke_meta_dashboard.py
+│   │   ├── smoke_meta_settings_only.py
+│   │   ├── smoke_meta_strategy_cycle.py
+│   │   ├── smoke_meta_timestamps.py
+│   │   ├── smoke_mfi.py
+│   │   ├── smoke_ohlcv.py
+│   │   ├── smoke_orchestrator_contract.py
+│   │   ├── smoke_overall_latency.py
+│   │   ├── smoke_paths_models.py
+│   │   ├── smoke_patterns_all.py
+│   │   ├── smoke_patterns_composite.py
+│   │   ├── smoke_patterns_core.py
+│   │   ├── smoke_patterns_latency.py
+│   │   ├── smoke_patterns_runner.py
+│   │   ├── smoke_pre_breakout.py
+│   │   ├── smoke_registry.py
+│   │   ├── smoke_reversal_stack.py
+│   │   ├── smoke_reversal_summary.py
+│   │   ├── smoke_rsi.py
+│   │   ├── smoke_show_snapshot.py
+│   │   ├── smoke_signals_registry.py
+│   │   ├── smoke_squeeze_pulse.py
+│   │   ├── smoke_strategy_fusion.py
+│   │   ├── smoke_tactical_core.py
+│   │   ├── smoke_tactical_index_modes.py
+│   │   ├── smoke_tactical_inputs.py
+│   │   ├── smoke_technicals_registry.py
+│   │   ├── smoke_template_indicator.py
+│   │   ├── smoke_utils_patterns.py
+│   │   ├── smoke_volatility_fusion.py
+│   │   ├── smoke_weights.py
+│   │   ├── test_indicator_kwargs.py
+│   │   └── test_patterns_core.py
+├── .gitignore
+├── __init__.py
+├── intraday_cockpit.py
+├── intraday_cockpit_expanded.py
+├── intraday_cockpit_final.py
+├── pyproject.toml
+└── README.md
 ```

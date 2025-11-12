@@ -1,0 +1,51 @@
+{% extends "_layouts/base.html" %}
+{% block title %}Queen Cockpit — History{% endblock %}
+{% set page_id = "history" %}
+
+{% block top %}
+  <h1 class="title">Queen Cockpit — <span class="q-muted">History</span></h1>
+{% endblock %}
+
+{% block content %}
+<div class="q-box p-4">
+  <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+    <div class="q-muted">Archived signals / events</div>
+    <button id="refresh" class="button q-primary">Refresh</button>
+  </div>
+
+  <table class="q-table table is-fullwidth is-narrow">
+    <thead>
+      <tr><th>Symbol</th><th>Decision</th><th class="has-text-right">Score</th><th>Notes</th><th>Timestamp</th></tr>
+    </thead>
+    <tbody id="histBody"><tr><td colspan="5" class="q-muted has-text-centered">Loading…</td></tr></tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function noStore(u){ const url=(u instanceof URL)?u:new URL(u,location.origin); url.searchParams.set('_',Date.now()); return fetch(url,{cache:'no-store'}); }
+function fmt(x){ if(x===null||x===undefined) return '—'; return (typeof x==='number')? x.toLocaleString(undefined,{maximumFractionDigits:1}) : x; }
+function spin(){ document.getElementById('histBody').innerHTML =
+  `<tr><td colspan="5"><div class="q-spinner-wrap"><span class="q-spinner"></span><span class="q-muted">Refreshing…</span></div></td></tr>`; }
+function render(rows){
+  const tb=document.getElementById('histBody');
+  if(!rows.length){ tb.innerHTML = `<tr><td colspan="5" class="q-muted has-text-centered">No archived items found yet.</td></tr>`; return; }
+  tb.innerHTML = rows.slice().reverse().map(r=>`
+    <tr>
+      <td><strong>${r.symbol||r.sym||'—'}</strong></td>
+      <td>${r.decision||'—'}</td>
+      <td class="has-text-right">${fmt(r.score)}</td>
+      <td>${r.note||r.notes||'—'}</td>
+      <td class="mono">${r.ts||r.time||r.timestamp||'—'}</td>
+    </tr>`).join('');
+}
+async function loadHistory(){
+  spin();
+  try{ const j=await (await noStore('/cockpit/api/history')).json(); render((j&&Array.isArray(j.rows))?j.rows:[]); }
+  catch(_){ document.getElementById('histBody').innerHTML = `<tr><td colspan="5" class="q-muted has-text-centered">Failed to load history.</td></tr>`; }
+}
+document.getElementById('refresh').onclick=loadHistory;
+loadHistory();
+</script>
+{% endblock %}

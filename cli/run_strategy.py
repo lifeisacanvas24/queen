@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/cli/run_strategy.py — quick demo runner
+# queen/cli/run_strategy.py — v1.1 (quick demo runner)
 # ============================================================
 from __future__ import annotations
 
@@ -9,9 +9,10 @@ from datetime import datetime, timedelta
 from typing import Dict
 
 import polars as pl
-from queen.strategies.fusion import run_strategy
 from rich.console import Console
 from rich.table import Table
+
+from queen.strategies.fusion import run_strategy
 
 
 def _dummy_ohlcv(n: int = 180, interval: str = "1m") -> pl.DataFrame:
@@ -43,16 +44,17 @@ def _wire_minimals(
     sps_level: float,
     regime_cycle: tuple[str, str, str] = ("TREND", "RANGE", "VOLATILE"),
 ) -> pl.DataFrame:
-    idx = pl.arange(0, pl.len())
+    # dynamic index for expression context
+    idx = pl.int_range(0, pl.len())
     return df.with_columns(
         [
             pl.lit(float(sps_level)).alias("SPS"),
             pl.when(idx % 3 == 0)
-            .then(pl.lit(regime_cycle[0]))
-            .when(idx % 3 == 1)
-            .then(pl.lit(regime_cycle[1]))
-            .otherwise(pl.lit(regime_cycle[2]))
-            .alias("Regime_State"),
+             .then(pl.lit(regime_cycle[0]))
+             .when(idx % 3 == 1)
+             .then(pl.lit(regime_cycle[1]))
+             .otherwise(pl.lit(regime_cycle[2]))
+             .alias("Regime_State"),
             pl.lit(1.10).alias("ATR_Ratio"),
         ]
     )
@@ -61,8 +63,8 @@ def _wire_minimals(
 def main():
     frames: Dict[str, pl.DataFrame] = {
         "intraday_15m": _wire_minimals(_dummy_ohlcv(120, "1m"), sps_level=0.68),
-        "hourly_1h": _wire_minimals(_dummy_ohlcv(240, "1m"), sps_level=0.62),
-        "daily": _wire_minimals(_dummy_ohlcv(300, "1m"), sps_level=0.58),
+        "hourly_1h":    _wire_minimals(_dummy_ohlcv(240, "1m"), sps_level=0.62),
+        "daily_1d":     _wire_minimals(_dummy_ohlcv(300, "1m"), sps_level=0.58),
     }
     out = run_strategy("DEMO", frames)
 
@@ -80,8 +82,8 @@ def main():
             tf,
             f'{row["strategy_score"]:.3f}',
             row["bias"],
-            str(row["entry_ok"]),
-            str(row["exit_ok"]),
+            "✓" if row["entry_ok"] else "—",
+            "✓" if row["exit_ok"] else "—",
             row["risk_band"],
         )
     console.print(t)

@@ -9,6 +9,8 @@ from typing import Any, Dict
 
 from queen.settings import timeframes as TF  # single owner of TF math ✅
 
+__all__ = ["PROFILES", "get_profile", "all_profiles", "window_days", "validate"]
+
 # ------------------------------------------------------------
 # 🧩 Profile Settings (human-facing presets)
 # ------------------------------------------------------------
@@ -18,6 +20,7 @@ PROFILES: Dict[str, Dict[str, int]] = {
     "weekly": {"default_weeks": 26, "lookback_days": 365},
     "monthly": {"default_weeks": 60, "lookback_days": 1825},
 }
+
 
 
 # ------------------------------------------------------------
@@ -32,18 +35,8 @@ def all_profiles() -> list[str]:
     """List all available profile keys."""
     return list(PROFILES.keys())
 
-
 def window_days(profile_key: str, bars: int, token: str | None = None) -> int:
-    """Return approximate calendar-days window for `bars` of a given timeframe.
-
-    Delegates to timeframes.window_days_for_tf(); `profile_key` is only used
-    to pick a sensible default token when one isn't provided.
-
-    Examples:
-        window_days('weekly', 52)            -> uses '1w' unless token is passed
-        window_days('intraday', 200, '5m')   -> uses '5m'
-
-    """
+    """Return approximate calendar-days window for `bars` of a given timeframe."""
     pk = (profile_key or "").lower()
     tf_token = token or {
         "intraday": "15m",
@@ -51,8 +44,7 @@ def window_days(profile_key: str, bars: int, token: str | None = None) -> int:
         "weekly": "1w",
         "monthly": "1mo",
     }.get(pk, "1d")
-    return TF.window_days_for_tf(tf_token, int(bars))
-
+    return TF.window_days_for_tf(tf_token, int(max(1, bars)))
 
 def validate() -> dict:
     """Light schema check: keys, types, positive values."""
@@ -69,7 +61,6 @@ def validate() -> dict:
             if not isinstance(val, int) or val <= 0:
                 errs.append(f"{k}: '{req}' must be positive int")
     return {"ok": len(errs) == 0, "errors": errs, "count": len(PROFILES)}
-
 
 # ------------------------------------------------------------
 # ✅ Self-Test

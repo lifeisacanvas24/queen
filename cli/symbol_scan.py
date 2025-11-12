@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/cli/symbol_scan.py — v1.1 (Terminal/cron wrapper)
+# queen/cli/symbol_scan.py — v1.2 (Terminal/cron wrapper)
 # ============================================================
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from queen.alerts.rules import load_rules
 from queen.helpers.logger import log
@@ -38,11 +38,15 @@ def _print_table(rows: List[Dict[str, Any]]) -> None:
 
 async def _amain(args: argparse.Namespace) -> int:
     rules = load_rules(args.rules)
-    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-    # optional filter: only rules for those symbols
-    rules = [r for r in rules if r.symbol in set(symbols)]
+    wanted: Set[str] = {s.strip() for s in args.symbols.split(",") if s.strip()}
+    if not wanted:
+        log.error("No symbols provided after parsing.")
+        return 2
 
-    results = await run_symbol_scan(symbols, rules, bars=args.bars)
+    # Keep only rules for the requested symbols (if rule has a .symbol attribute)
+    rules = [r for r in rules if getattr(r, "symbol", None) in wanted] or rules
+
+    results = await run_symbol_scan(list(wanted), rules, bars=args.bars)
 
     if args.format == "json":
         print(json.dumps(results, ensure_ascii=False, indent=2))
@@ -51,6 +55,8 @@ async def _amain(args: argparse.Namespace) -> int:
             print(json.dumps(r, ensure_ascii=False))
     else:
         _print_table(results)
+
+    # exit 0 even if no rows matched (not an error)
     return 0
 
 

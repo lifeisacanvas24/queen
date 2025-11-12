@@ -1,0 +1,88 @@
+{
+  "generated_at": "2025-11-07T10:32:11.866944+05:30",
+  "next_session": "2025-11-10",
+  "symbols": [
+    "NETWEB",
+    "GODFRYPHLP",
+    "FORCEMOT"
+  ],
+  "rows": [
+    {
+      "symbol": "NETWEB",
+      "cmp": 3357.7,
+      "rsi": null,
+      "vwap": 3381.092872694269,
+      "atr": null,
+      "obv": "Flat",
+      "summary": "Neutral",
+      "targets": [
+        "T1 3374.5",
+        "T2 3391.3",
+        "T3 3408.1"
+      ],
+      "sl": 3324.1,
+      "score": 0,
+      "setup": "\ud83d\udd3b Weak momentum / Pullback",
+      "bias": "Weak",
+      "position": {
+        "qty": 58.0,
+        "avg_price": 4128.47
+      },
+      "pnl_abs": -44704.66,
+      "pnl_pct": -18.67,
+      "advice": "REDUCE risk or exit on VWAP failure; reassess"
+    },
+    {
+      "symbol": "GODFRYPHLP",
+      "cmp": 2993.5,
+      "rsi": null,
+      "vwap": 2999.0458526854827,
+      "atr": null,
+      "obv": "Flat",
+      "summary": "Neutral",
+      "targets": [
+        "T1 3008.5",
+        "T2 3023.4",
+        "T3 3038.4"
+      ],
+      "sl": 2963.6,
+      "score": 0,
+      "setup": "\ud83d\udd3b Weak momentum / Pullback",
+      "bias": "Weak",
+      "position": null,
+      "pnl_abs": null,
+      "pnl_pct": null,
+      "advice": "Avoid fresh entry"
+    },
+    {
+      "symbol": "FORCEMOT",
+      "cmp": 17864.0,
+      "rsi": null,
+      "vwap": 17821.531902979576,
+      "atr": null,
+      "obv": "Flat",
+      "summary": "Neutral",
+      "targets": [
+        "T1 17953.3",
+        "T2 18042.6",
+        "T3 18132.0"
+      ],
+      "sl": 17685.4,
+      "score": 2,
+      "setup": "\ud83d\udd3b Weak momentum / Pullback",
+      "bias": "Weak",
+      "position": {
+        "qty": 5.0,
+        "avg_price": 18073.2
+      },
+      "pnl_abs": -1046.0,
+      "pnl_pct": -1.16,
+      "advice": "HOLD; trail SL under CPR/EMA20"
+    }
+  ],
+  "summary": {
+    "count": 3,
+    "avg_score": 0.67,
+    "bias": "Balanced"
+  }
+}

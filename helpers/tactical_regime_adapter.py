@@ -7,8 +7,9 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 import polars as pl
-from queen.settings import regimes as regime_cfg
 from rich import print
+
+from queen.settings import regimes as regime_cfg
 
 
 class TacticalRegimeAdapter:
@@ -84,19 +85,17 @@ class TacticalRegimeAdapter:
         return pl.DataFrame(rows)
 
     def describe(self) -> None:
-        c = self.config
+        c = self.config or {}
+        actions = c.get("actions", {})
         print("\n[bold]🧭 Tactical Regime Adapter[/bold]")
         print(f"[cyan]Active Regime:[/cyan] {self.active_regime}")
-        print(f"[cyan]Trend Bias:[/cyan] {c['trend_bias']}")
-        print(f"[cyan]Volatility:[/cyan] {c['volatility_state']}")
-        print(f"[cyan]Liquidity:[/cyan] {c['liquidity_state']}")
-        print(f"[cyan]Risk Multiplier:[/cyan] {c['actions']['risk_multiplier']}")
-        print(f"[cyan]Position Sizing:[/cyan] {c['actions']['position_sizing']}")
-        print(
-            f"[cyan]Indicator Sensitivity:[/cyan] {c['actions']['indicator_sensitivity']}"
-        )
-        print(f"[cyan]Description:[/cyan] {c['description']}")
-
+        print(f"[cyan]Trend Bias:[/cyan] {c.get('trend_bias')}")
+        print(f"[cyan]Volatility:[/cyan] {c.get('volatility_state')}")
+        print(f"[cyan]Liquidity:[/cyan] {c.get('liquidity_state')}")
+        print(f"[cyan]Risk Multiplier:[/cyan] {actions.get('risk_multiplier')}")
+        print(f"[cyan]Position Sizing:[/cyan] {actions.get('position_sizing')}")
+        print(f"[cyan]Indicator Sensitivity:[/cyan] {actions.get('indicator_sensitivity')}")
+        print(f"[cyan]Description:[/cyan] {c.get('description')}")
     # ------------------------------------------------------------
     # ✅ Validation
     # ------------------------------------------------------------
@@ -110,7 +109,9 @@ class TacticalRegimeAdapter:
                 errs.append(f"{name}: missing actions")
         return {"ok": not errs, "errors": errs, "count": len(self.regime_data)}
 
-
+    def active_config(self) -> dict:
+        """Return current regime config (read-only view)."""
+        return dict(self.config or {})
 # ------------------------------------------------------------
 # ✅ Self-Test
 # ------------------------------------------------------------

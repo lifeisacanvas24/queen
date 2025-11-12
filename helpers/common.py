@@ -10,6 +10,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict
+from math import ceil
 
 
 # ---- time ----
@@ -17,6 +18,22 @@ def utc_now_iso() -> str:
     """UTC timestamp like 2025-10-27T06:41:12.323113Z."""
     return datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
+
+
+
+def next_candle_ms(now_ist: datetime, interval_min: int) -> int:
+    # align to the next interval boundary in IST
+    sec = interval_min * 60
+    epoch = int(now_ist.timestamp())
+    next_epoch = ((epoch // sec) + 1) * sec
+    return next_epoch * 1000  # ms
+
+def normalize_symbol(s: str | None) -> str | None:
+    """Uppercase, stripped, empty-safe symbol normalization."""
+    if s is None:
+        return None
+    s = str(s).strip().upper()
+    return s or None
 
 # ---- terminal color support ----
 def logger_supports_color(logger: logging.Logger) -> bool:

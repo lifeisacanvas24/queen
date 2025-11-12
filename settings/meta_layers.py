@@ -260,7 +260,7 @@ def validate() -> dict:
             if lb <= 0:
                 errs.append(f"{lname}.{ctx_key}: 'lookback' must be positive int")
             # unknown keys check (soft guard)
-            extra = set(ctx.keys()) - __ALLOWED_COMMON
+            extra = set(ctx.keys()) - _ALLOWED_COMMON
             if extra:
                 errs.append(f"{lname}.{ctx_key}: unknown keys {sorted(extra)}")
     return {"ok": len(errs) == 0, "errors": errs, "count": len(META_LAYERS)}

@@ -1,0 +1,193 @@
+/*-- queen/server/static/queen.css --*/
+/* ============================================================
+   Queen Cockpit — Tables + Pills + PnL + Status (merged v1.6)
+   ============================================================ */
+
+/* === Actionables table: widen numeric columns === */
+.q-table th.col-entry,
+.q-table td.col-entry {
+  min-width: 96px;
+}
+
+.q-table th.col-sl,
+.q-table td.col-sl {
+  min-width: 88px;
+}
+
+.q-table th.col-targets,
+.q-table td.col-targets {
+  min-width: 260px;
+  white-space: normal; /* allow wrapping on small screens */
+  word-break: break-word;
+  line-height: 1.25;
+}
+
+/* Keep numerics tight & readable */
+.q-table td.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slightly more breathing room between cells */
+.q-table.table.is-narrow td,
+.q-table.table.is-narrow th {
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
+
+/* Responsive: let targets shrink but not collapse */
+@media (max-width: 1200px) {
+  .q-table th.col-targets,
+  .q-table td.col-targets {
+    min-width: 200px;
+  }
+}
+@media (max-width: 980px) {
+  .q-table th.col-targets,
+  .q-table td.col-targets {
+    min-width: 160px;
+  }
+}
+
+/* ===================== Pills & Badges ====================== */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  min-width: 52px;
+  text-align: center;
+}
+.pill.green {
+  color: #0b5134;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.pill.amber {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+.pill.red {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+.pill.gray {
+  color: #374151;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+/* “HELD” tag */
+.badge.held {
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* ===================== PnL chip ====================== */
+.pnl-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 1px 6px; /* compact & consistent with pills */
+  margin-left: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: rgba(0, 0, 0, 0.04); /* fallback neutral */
+}
+.pnl-val {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tones */
+.pnl-up {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.pnl-dn {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+.pnl-flat {
+  color: #374151;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+/* Hover polish */
+.pnl-chip:hover,
+.pill:hover {
+  opacity: 0.85;
+  transition: opacity 0.15s ease-in-out;
+}
+
+/* ===================== Row moods ====================== */
+.row-bull td {
+  background: #f0fdf4;
+}
+.row-bear td {
+  background: #fef2f2;
+}
+.row-dim td {
+  background: #f9fafb;
+}
+
+/* ===================== Status strip ====================== */
+.q-status {
+  font-size: 0.85rem;
+  color: #6b7280;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1rem;
+}
+.q-status .line {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.q-status .key {
+  color: #9ca3af;
+}
+.q-status .val {
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+.q-status .dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: #d1d5db;
+  display: inline-block;
+}
+.q-status .dot.live {
+  background: #10b981;
+} /* green */
+.q-status .dot.idle {
+  background: #f59e0b;
+} /* amber */
+.q-status .dot.down {
+  background: #ef4444;
+} /* red */
+.q-status .rank {
+  display: inline-flex;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.q-status .rank b {
+  color: #111827;
+}

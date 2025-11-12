@@ -1,6 +1,0 @@
-[project.scripts]
-queen-daemons = "queen.daemons:run_cli"
-queen-clock   = "queen.daemons.clock_daemon:run_cli"
-queen-scheduler = "queen.daemons.scheduler:run_cli"
-queen-alert     = "queen.daemons.alert_daemon:run_cli"
-queen-alert2    = "queen.daemons.alert_v2:run_cli"

@@ -1,0 +1,21 @@
+<!-- server/templates/_partials/header.html -->
+<div class="q-box mb-4 px-3 py-3 is-flex is-justify-content-space-between is-align-items-center">
+  <div class="is-flex is-align-items-center">
+    <span id="healthDot" class="health-dot h-amber" title="stream health"></span>
+    <span id="healthText" class="is-size-7 q-muted">idle</span>
+    <span class="pill amber ml-3" id="sessionBadge">—</span>
+    <span class="is-size-6 mono ml-3" id="marketClock">--:--:-- IST</span>
+    <span id="universeChip" class="pill ml-3">-- syms</span>
+  </div>
+
+  <!-- Page switcher -->
+  <div class="is-flex is-align-items-center">
+    {% set path = request.url.path %}
+    <a href="/cockpit/live"      class="button {{ 'is-primary is-light' if path.startswith('/cockpit/live') else '' }}">LIVE</a>
+    <a href="/cockpit/summary"   class="button {{ 'is-primary is-light' if path.startswith('/cockpit/summary') else '' }}">SUMMARY</a>
+    <a href="/cockpit/upcoming"  class="button {{ 'is-primary is-light' if path.startswith('/cockpit/upcoming') else '' }}">UPCOMING</a>
+    <a href="/cockpit/analytics" class="button {{ 'is-primary is-light' if path.startswith('/cockpit/analytics') else '' }}">ANALYTICS</a>
+    <a href="/cockpit/history"   class="button {{ 'is-primary is-light' if path.startswith('/cockpit/history') else '' }}">HISTORY</a>
+    <button id="refreshAll" class="button is-small is-light ml-3">Refresh</button>
+  </div>
+</div>

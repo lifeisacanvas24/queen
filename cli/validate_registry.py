@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/cli/validate_registry.py — v0.1
+# queen/cli/validate_registry.py — v0.2
 # Prints indicator/signal counts + sample callability checks
 # Run:
 #   python -m queen.cli.validate_registry
 # ============================================================
-
 from __future__ import annotations
 
 import sys
@@ -55,12 +54,13 @@ def main() -> int:
             fn = get_indicator(name)
             if name == "adx_dmi":
                 out = fn(df, timeframe="15m")
-                assert {"adx", "di_plus", "di_minus", "adx_trend"}.issubset(out.columns)
+                assert {"adx", "di_plus", "di_minus", "adx_trend"}.issubset(set(out.columns)), "adx_dmi cols missing"
             elif name == "bollinger_bands":
                 mid, up, lo = fn(df)
-                assert isinstance(mid, pl.Series) and mid.len() == df.height
+                assert isinstance(mid, pl.Series), "bbands mid is not Series"
+                assert mid.len() == df.height, "bbands mid wrong length"
             else:
-                out = fn(df)  # Series or DataFrame — just ensure it doesn't crash
+                _ = fn(df)  # just ensure no exception
             print("     ↳ callable OK")
         except Exception:
             print(f"     ↳ ❌ failed:\n{traceback.format_exc()}")

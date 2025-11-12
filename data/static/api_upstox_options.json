@@ -1,0 +1,641 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Upstox API - Options",
+    "description": "Combined OpenAPI specification for Upstox Options APIs including Option Chain and Option Contracts endpoints.\n\nOption Chain API: Retrieve put/call option chain for an underlying symbol for a specific expiry date with market data and greeks.\nOption Contracts API: Retrieve option contracts (both Call and Put) for an underlying symbol with optional expiry date filter.\n\nNote: The Put/Call Option chain is currently not available for the MCX Exchange.\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Upstox Developer Support",
+      "url": "https://upstox.com/developer/"
+    },
+    "termsOfService": "https://upstox.com/developer/terms/"
+  },
+  "servers": [
+    {
+      "url": "https://api.upstox.com/v2",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Options",
+      "description": "Options trading and market data endpoints"
+    }
+  ],
+  "paths": {
+    "/option/chain": {
+      "get": {
+        "tags": ["Options"],
+        "summary": "Get Put/Call Option Chain",
+        "description": "Retrieves the put/call option chain for an underlying symbol for a specific expiry date.\nRequires a valid Bearer token for authentication.\n",
+        "operationId": "getPutCallOptionChain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instrument_key",
+            "in": "query",
+            "description": "Key of an underlying symbol (e.g., NSE_INDEX|Nifty 50).\nThe format follows pattern: {exchange}|{symbol}\n",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z_]+\\|[A-Za-z0-9\\s]+$"
+            },
+            "example": "NSE_INDEX|Nifty 50"
+          },
+          {
+            "name": "expiry_date",
+            "in": "query",
+            "description": "Expiry date in ISO 8601 format (YYYY-MM-DD)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2024-03-28"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with option chain data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionChainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/option/contract": {
+      "get": {
+        "tags": ["Options"],
+        "summary": "Get Option Contracts",
+        "description": "Retrieves option contracts for an underlying symbol.\nOptionally filter by expiry date. If expiry_date is not provided,\nreturns contracts for all available expiries.\n",
+        "operationId": "getOptionContracts",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instrument_key",
+            "in": "query",
+            "description": "Key of an underlying symbol (e.g., NSE_INDEX|Nifty 50, NSE_FO|RELIANCE).\nThe format follows pattern: {exchange}|{symbol}\n",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z_]+\\|[A-Za-z0-9\\s]+$"
+            },
+            "example": "NSE_INDEX|Nifty 50"
+          },
+          {
+            "name": "expiry_date",
+            "in": "query",
+            "description": "Expiry date in ISO 8601 format (YYYY-MM-DD). Optional parameter to filter contracts for a specific expiry.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2024-03-28"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with option contracts data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionContractsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Bearer token obtained through OAuth2 flow"
+      }
+    },
+    "schemas": {
+      "OptionChainResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Status of the API request",
+            "example": "success"
+          },
+          "data": {
+            "type": "object",
+            "description": "Option chain data container",
+            "properties": {
+              "call_options": {
+                "type": "array",
+                "description": "List of call option contracts",
+                "items": {
+                  "$ref": "#/components/schemas/OptionContract"
+                }
+              },
+              "put_options": {
+                "type": "array",
+                "description": "List of put option contracts",
+                "items": {
+                  "$ref": "#/components/schemas/OptionContract"
+                }
+              },
+              "expiry_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Expiry date of the options",
+                "example": "2024-03-28"
+              },
+              "underlying": {
+                "type": "object",
+                "description": "Underlying asset information",
+                "properties": {
+                  "instrument_key": {
+                    "type": "string",
+                    "description": "Instrument key of the underlying",
+                    "example": "NSE_INDEX|Nifty 50"
+                  },
+                  "last_price": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Last traded price of the underlying",
+                    "example": 22500.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "OptionContractsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Status of the API request",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "List of option contract data",
+            "items": {
+              "$ref": "#/components/schemas/OptionContract"
+            }
+          }
+        }
+      },
+      "OptionContract": {
+        "type": "object",
+        "description": "Option contract details",
+        "properties": {
+          "strike_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Strike price of the option",
+            "example": 22500
+          },
+          "instrument_key": {
+            "type": "string",
+            "description": "Unique identifier for the option contract",
+            "example": "NSE_FO|NIFTY24MAR22500CE"
+          },
+          "market_data": {
+            "$ref": "#/components/schemas/MarketData"
+          },
+          "option_greeks": {
+            "$ref": "#/components/schemas/OptionGreeks"
+          },
+          "exchange": {
+            "type": "string",
+            "description": "Exchange where the option is traded",
+            "example": "NSE"
+          },
+          "segment": {
+            "type": "string",
+            "description": "Market segment (e.g., NSE_FO)",
+            "example": "NSE_FO"
+          },
+          "underlying": {
+            "type": "string",
+            "description": "Underlying symbol",
+            "example": "NIFTY"
+          },
+          "option_type": {
+            "type": "string",
+            "description": "Option type - Call or Put",
+            "enum": ["CE", "PE", "CA", "PA"],
+            "example": "CE"
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Expiry date of the option",
+            "example": "2024-03-28"
+          },
+          "lot_size": {
+            "type": "integer",
+            "description": "Lot size for the contract",
+            "example": 50
+          },
+          "tick_size": {
+            "type": "number",
+            "format": "double",
+            "description": "Minimum price movement",
+            "example": 0.05
+          },
+          "trading_symbol": {
+            "type": "string",
+            "description": "Trading symbol",
+            "example": "NIFTY24MAR22500CE"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the contract",
+            "example": "Nifty 50"
+          },
+          "last_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Last traded price (if available)",
+            "example": 150.75
+          },
+          "freeze_quantity": {
+            "type": "integer",
+            "description": "Maximum quantity allowed per order",
+            "example": 1800
+          }
+        }
+      },
+      "MarketData": {
+        "type": "object",
+        "description": "Real-time market data for the option contract",
+        "properties": {
+          "ltp": {
+            "type": "number",
+            "format": "double",
+            "description": "Last traded price",
+            "example": 150.75
+          },
+          "ltq": {
+            "type": "number",
+            "description": "Last traded quantity",
+            "example": 75
+          },
+          "volume": {
+            "type": "number",
+            "description": "Total volume traded today",
+            "example": 125000
+          },
+          "oi": {
+            "type": "number",
+            "description": "Current open interest",
+            "example": 50000
+          },
+          "change_in_oi": {
+            "type": "number",
+            "description": "Change in open interest from previous day",
+            "example": 2500
+          },
+          "percent_change_in_oi": {
+            "type": "number",
+            "format": "double",
+            "description": "Percentage change in open interest",
+            "example": 5.25
+          },
+          "bid_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Best bid price",
+            "example": 150.5
+          },
+          "bid_qty": {
+            "type": "number",
+            "description": "Best bid quantity",
+            "example": 100
+          },
+          "ask_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Best ask price",
+            "example": 151
+          },
+          "ask_qty": {
+            "type": "number",
+            "description": "Best ask quantity",
+            "example": 80
+          },
+          "day_high": {
+            "type": "number",
+            "format": "double",
+            "description": "Day's high price",
+            "example": 165.5
+          },
+          "day_low": {
+            "type": "number",
+            "format": "double",
+            "description": "Day's low price",
+            "example": 145.25
+          },
+          "day_open": {
+            "type": "number",
+            "format": "double",
+            "description": "Day's opening price",
+            "example": 148
+          },
+          "day_close": {
+            "type": "number",
+            "format": "double",
+            "description": "Previous day's closing price",
+            "example": 149.5
+          }
+        }
+      },
+      "OptionGreeks": {
+        "type": "object",
+        "description": "Option greeks and implied volatility data",
+        "properties": {
+          "delta": {
+            "type": "number",
+            "format": "double",
+            "description": "Sensitivity of option price to underlying price changes",
+            "example": 0.55
+          },
+          "gamma": {
+            "type": "number",
+            "format": "double",
+            "description": "Rate of change of delta",
+            "example": 0.0025
+          },
+          "theta": {
+            "type": "number",
+            "format": "double",
+            "description": "Time decay of option value",
+            "example": -8.5
+          },
+          "vega": {
+            "type": "number",
+            "format": "double",
+            "description": "Sensitivity to volatility changes",
+            "example": 12.75
+          },
+          "iv": {
+            "type": "number",
+            "format": "double",
+            "description": "Implied volatility",
+            "example": 0.185
+          },
+          "rho": {
+            "type": "number",
+            "format": "double",
+            "description": "Sensitivity to interest rate changes",
+            "example": 0.85
+          },
+          "pop": {
+            "type": "number",
+            "format": "double",
+            "description": "Probability of profit (newly added field)",
+            "example": 0.65
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            }
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "string",
+            "description": "Error code identifier",
+            "example": "UDAPI1000"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Invalid instrument key"
+          },
+          "propertyPath": {
+            "type": "string",
+            "description": "Path to the property that caused the error",
+            "example": "instrument_key"
+          },
+          "invalidValue": {
+            "type": "string",
+            "description": "The invalid value provided",
+            "example": "INVALID_INSTRUMENT"
+          }
+        }
+      }
+    },
+    "examples": {
+      "OptionChainSuccess": {
+        "summary": "Successful option chain response",
+        "value": {
+          "status": "success",
+          "data": {
+            "underlying": {
+              "instrument_key": "NSE_INDEX|Nifty 50",
+              "last_price": 22500.5
+            },
+            "expiry_date": "2024-03-28",
+            "call_options": [
+              {
+                "strike_price": 22500,
+                "instrument_key": "NSE_FO|NIFTY24MAR22500CE",
+                "market_data": {
+                  "ltp": 150.75,
+                  "ltq": 75,
+                  "volume": 125000,
+                  "oi": 50000,
+                  "change_in_oi": 2500,
+                  "percent_change_in_oi": 5.25,
+                  "bid_price": 150.5,
+                  "bid_qty": 100,
+                  "ask_price": 151,
+                  "ask_qty": 80,
+                  "day_high": 165.5,
+                  "day_low": 145.25,
+                  "day_open": 148,
+                  "day_close": 149.5
+                },
+                "option_greeks": {
+                  "delta": 0.55,
+                  "gamma": 0.0025,
+                  "theta": -8.5,
+                  "vega": 12.75,
+                  "iv": 0.185,
+                  "rho": 0.85,
+                  "pop": 0.65
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ErrorExample": {
+        "summary": "Error response example",
+        "value": {
+          "status": "error",
+          "errors": [
+            {
+              "errorCode": "UDAPI1000",
+              "message": "Invalid instrument key format",
+              "propertyPath": "instrument_key",
+              "invalidValue": "NSE_INVALID"
+            }
+          ]
+        }
+      },
+      "OptionContractsSuccess": {
+        "summary": "Successful option contracts response",
+        "value": {
+          "status": "success",
+          "data": [
+            {
+              "instrument_key": "NSE_FO|NIFTY24MAR22500CE",
+              "exchange": "NSE",
+              "segment": "NSE_FO",
+              "underlying": "NIFTY",
+              "option_type": "CE",
+              "strike_price": 22500,
+              "expiry_date": "2024-03-28",
+              "lot_size": 50,
+              "tick_size": 0.05,
+              "trading_symbol": "NIFTY24MAR22500CE",
+              "name": "Nifty 50",
+              "freeze_quantity": 1800
+            },
+            {
+              "instrument_key": "NSE_FO|NIFTY24MAR22500PE",
+              "exchange": "NSE",
+              "segment": "NSE_FO",
+              "underlying": "NIFTY",
+              "option_type": "PE",
+              "strike_price": 22500,
+              "expiry_date": "2024-03-28",
+              "lot_size": 50,
+              "tick_size": 0.05,
+              "trading_symbol": "NIFTY24MAR22500PE",
+              "name": "Nifty 50",
+              "freeze_quantity": 1800
+            }
+          ]
+        }
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "Official Upstox Developer Documentation",
+    "url": "https://upstox.com/developer/api-documentation/"
+  }
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/patterns.py — Pattern Recognition Config (v8.1)
+# queen/settings/patterns.py — Pattern Recognition Config (v8.2)
 # Canonical definitions + safe helpers + validation (forward-only)
 # ============================================================
 from __future__ import annotations
@@ -8,6 +8,17 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from queen.settings import timeframes as TF  # single owner of TF logic
+
+__all__ = [
+    "JAPANESE",
+    "CUMULATIVE",
+    "get_pattern",
+    "list_patterns",
+    "required_candles",
+    "required_lookback",
+    "contexts_for",
+    "validate",
+]
 
 # ------------------------------------------------------------
 # 🕯️ Japanese Candlestick Patterns
@@ -165,65 +176,8 @@ CUMULATIVE: Dict[str, Dict[str, Any]] = {
     },
 }
 
-
 # ------------------------------------------------------------
 # 🧠 Helpers (safe accessors)
-# ------------------------------------------------------------
-def _norm(s: str) -> str:
-    return (s or "").strip().lower()
-
-
-def _group_dict(group: str) -> Dict[str, Dict[str, Any]]:
-    g = _norm(group)
-    if g == "japanese":
-        return JAPANESE
-    if g == "cumulative":
-        return CUMULATIVE
-    return {}
-
-
-def get_pattern(group: str, name: str) -> Dict[str, Any]:
-    """Retrieve pattern definition safely (case-insensitive)."""
-    return _group_dict(group).get(_norm(name), {})
-
-
-def list_patterns(group: str | None = None) -> list[str]:
-    """List available patterns (optionally by group)."""
-    if not group:
-        return list(JAPANESE.keys()) + list(CUMULATIVE.keys())
-    d = _group_dict(group)
-    return list(d.keys())
-
-
-def required_candles(name: str, group: str | None = None) -> int:
-    """Minimum candles the pattern definition requires."""
-    groups = [group] if group else ["japanese", "cumulative"]
-    for g in groups:
-        p = get_pattern(g, name)
-        if p:
-            return max(1, int(p.get("candles_required", 1)))
-    return 1
-
-
-def required_lookback(name: str, context_key: str) -> int:
-    """Return lookback bars for (pattern, context_key)."""
-    ctx = _norm(context_key)
-    for g in ["japanese", "cumulative"]:
-        p = get_pattern(g, name)
-        if not p:
-            continue
-        c = (p.get("contexts") or {}).get(ctx) or {}
-        lb = c.get("lookback")
-        if isinstance(lb, int) and lb > 0:
-            return lb
-    # fallback heuristic if not specified
-    candles = required_candles(name, group=None)
-    # simple, safe: 10× candles, min 20
-    return max(20, candles * 10)
-
-
-# ------------------------------------------------------------
-# 🔍 Validation (forward-only)
 # ------------------------------------------------------------
 _VALID_CONTEXTS = {
     "intraday_5m",
@@ -234,7 +188,65 @@ _VALID_CONTEXTS = {
     "monthly",
 }
 
+def _norm(s: str) -> str:
+    return (s or "").strip().lower()
 
+def _group_dict(group: str) -> Dict[str, Dict[str, Any]]:
+    g = _norm(group)
+    if g == "japanese":
+        return JAPANESE
+    if g == "cumulative":
+        return CUMULATIVE
+    return {}
+
+def get_pattern(group: str, name: str) -> Dict[str, Any]:
+    """Retrieve pattern definition safely (case-insensitive)."""
+    return _group_dict(group).get(_norm(name), {})
+
+def list_patterns(group: str | None = None) -> list[str]:
+    """List available patterns (optionally by group)."""
+    if not group:
+        return list(JAPANESE.keys()) + list(CUMULATIVE.keys())
+    d = _group_dict(group)
+    return list(d.keys())
+
+def required_candles(name: str, group: str | None = None) -> int:
+    """Minimum candles the pattern definition requires."""
+    groups = [group] if group else ["japanese", "cumulative"]
+    for g in groups:
+        p = get_pattern(g, name)
+        if p:
+            return max(1, int(p.get("candles_required", 1)))
+    return 1
+
+def contexts_for(name: str, group: str | None = None) -> dict:
+    """Return the contexts mapping for a pattern (or {})."""
+    groups = [group] if group else ["japanese", "cumulative"]
+    for g in groups:
+        p = get_pattern(g, name)
+        if p:
+            return dict(p.get("contexts") or {})
+    return {}
+
+def required_lookback(name: str, context_key: str) -> int:
+    """Return lookback bars for (pattern, context_key), with safe fallback."""
+    nm = _norm(name)
+    ctx = _norm(context_key)
+    for g in ["japanese", "cumulative"]:
+        p = get_pattern(g, nm)
+        if not p:
+            continue
+        c = (p.get("contexts") or {}).get(ctx) or {}
+        lb = c.get("lookback")
+        if isinstance(lb, int) and lb > 0:
+            return lb
+    # fallback heuristic if not specified
+    candles = required_candles(nm, group=None)
+    return max(20, candles * 10)
+
+# ------------------------------------------------------------
+# 🔍 Validation (forward-only)
+# ------------------------------------------------------------
 def validate() -> dict:
     """Validate structure and context tokens. Returns summary stats."""
     errs: list[str] = []
@@ -254,15 +266,12 @@ def validate() -> dict:
             for ckey, meta in ctxs.items():
                 if ckey not in _VALID_CONTEXTS:
                     errs.append(f"{group_name}.{name}: unknown context '{ckey}'")
-                # timeframe tokens inside context are optional; if present validate
                 tf_token = (meta or {}).get("timeframe")
                 if tf_token:
                     try:
                         TF.validate_token(str(tf_token).lower())
                     except Exception as e:
-                        errs.append(
-                            f"{group_name}.{name}: bad timeframe '{tf_token}': {e}"
-                        )
+                        errs.append(f"{group_name}.{name}: bad timeframe '{tf_token}': {e}")
                 lb = (meta or {}).get("lookback")
                 if lb is not None and (not isinstance(lb, int) or lb <= 0):
                     errs.append(f"{group_name}.{name}: lookback must be +int, got {lb}")
@@ -270,22 +279,6 @@ def validate() -> dict:
     _check_block(JAPANESE, "JAPANESE")
     _check_block(CUMULATIVE, "CUMULATIVE")
     return {"ok": not errs, "count": total, "errors": errs}
-
-
-def required_lookback(name: str, context_key: str) -> int:
-    nm = (name or "").strip().lower()
-    ctx = (context_key or "").strip().lower()
-    for g in ["japanese", "cumulative"]:
-        p = get_pattern(g, nm)
-        if not p:
-            continue
-        c = (p.get("contexts") or {}).get(ctx) or {}
-        lb = c.get("lookback")
-        if isinstance(lb, int) and lb > 0:
-            return lb
-    candles = required_candles(nm, group=None)
-    return max(20, candles * 10)
-
 
 # ------------------------------------------------------------
 # ✅ Self-Test
@@ -296,8 +289,5 @@ if __name__ == "__main__":
     print("🧩 Queen Pattern Library")
     pprint(list_patterns("japanese"))
     print("hammer/daily lookback →", required_lookback("hammer", "daily"))
-    print(
-        "bullish_engulfing/1h via ctx →",
-        required_lookback("bullish_engulfing", "hourly_1h"),
-    )
+    print("bullish_engulfing/1h via ctx →", required_lookback("bullish_engulfing", "hourly_1h"))
     print("validate →", validate())
