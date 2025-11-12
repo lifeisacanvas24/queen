@@ -8,6 +8,7 @@ import asyncio
 import random
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any
 
@@ -233,9 +234,39 @@ def rate_limited(key: str, n: int = 1):
         return wrapper
     return decorator
 
+# ------------------------------------------------------------
+# 🧵 Context-manager sugar
+# ------------------------------------------------------------
+@asynccontextmanager
+async def with_pool(key: str, n: int = 1):
+    """Throttle an arbitrary async block using the global pool.
 
-__all__ = ["AsyncTokenBucket", "RateLimiterPool", "get_pool", "rate_limited"]
+    Example:
+        async with with_pool("intraday"):
+            await broker_call()
 
+    """
+    pool = get_pool()
+    await pool.acquire(key, n)
+    try:
+        yield
+    finally:
+        # tokens are consumed on acquire; nothing to release
+        pass
+
+# alias for ultra-short syntax
+def limiter(key: str, n: int = 1):
+    """Alias of with_pool() so you can write: `async with limiter("intraday"):`"""
+    return with_pool(key, n)
+
+__all__ = [
+    "AsyncTokenBucket",
+    "RateLimiterPool",
+    "get_pool",
+    "rate_limited",
+    "with_pool",
+    "limiter",
+]
 
 # ------------------------------------------------------------
 # 🧪 CLI Self-Test
