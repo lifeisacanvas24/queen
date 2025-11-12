@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/rate_limiter.py — v2.1 (Async Token Bucket + DX niceties)
+# queen/helpers/rate_limiter.py — v2.5 (Async Token Bucket + Pool + Singleton + Decorator)
 # ============================================================
 from __future__ import annotations
 
 import asyncio
 import random
 import time
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import Any
 
 from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 
 
+# ------------------------------------------------------------
+# ⚙️ Config helpers
+# ------------------------------------------------------------
 def _get(d: dict, *keys, default=None):
     for k in keys:
         if k in d:
@@ -24,20 +30,15 @@ def _get(d: dict, *keys, default=None):
     return default
 
 
-DEFAULT_QPS = float(
-    _get(SETTINGS.FETCH, "max_req_per_sec", "MAX_REQ_PER_SEC", default=50)
-)
+DEFAULT_QPS = float(_get(SETTINGS.FETCH, "max_req_per_sec", "MAX_REQ_PER_SEC", default=50))
 DIAG_ENABLED = bool(_get(SETTINGS.DIAGNOSTICS, "enabled", "ENABLED", default=True))
 
 
+# ------------------------------------------------------------
+# 🪣 AsyncTokenBucket
+# ------------------------------------------------------------
 class AsyncTokenBucket:
-    """Asynchronous continuous-time token bucket with optional diagnostics.
-
-    Features:
-      • Non-blocking try_acquire()
-      • Batched acquire(n)
-      • Jitter to desync bursts
-    """
+    """Asynchronous continuous-time token bucket with diagnostics + jitter."""
 
     def __init__(
         self,
@@ -53,7 +54,7 @@ class AsyncTokenBucket:
             raise ValueError("rate_per_second must be > 0")
 
         self.rate = rate
-        self.capacity = rate  # bucket size == rate (1s burst allowance)
+        self.capacity = rate  # burst capacity per second
         self.tokens = float(rate)
         self.last_refill = time.monotonic()
         self.lock = asyncio.Lock()
@@ -63,7 +64,6 @@ class AsyncTokenBucket:
         self._jitter_min = float(jitter_min)
         self._jitter_max = float(jitter_max)
 
-    # ----- internals -----
     def _refill_unlocked(self, now: float) -> None:
         elapsed = now - self.last_refill
         if elapsed <= 0:
@@ -73,7 +73,6 @@ class AsyncTokenBucket:
             self.tokens = min(self.capacity, self.tokens + refill)
             self.last_refill = now
 
-    # ----- public API -----
     async def acquire(self, n: int = 1) -> None:
         """Acquire n tokens (blocking until available)."""
         if n <= 0:
@@ -82,7 +81,6 @@ class AsyncTokenBucket:
             now = time.monotonic()
             self._refill_unlocked(now)
 
-            # wait until we have n tokens
             while self.tokens < n:
                 needed = n - self.tokens
                 sleep_for = max(0.001, needed / self.rate)
@@ -98,7 +96,6 @@ class AsyncTokenBucket:
                     f"[RateLimiter:{self.name}] tokens={self.tokens:.2f}/{self.capacity} rate={self.rate:.2f}/s"
                 )
 
-        # slight jitter to desync callers
         await asyncio.sleep(random.uniform(self._jitter_min, self._jitter_max))
 
     def try_acquire(self, n: int = 1) -> bool:
@@ -106,46 +103,151 @@ class AsyncTokenBucket:
         if n <= 0:
             return True
         now = time.monotonic()
-        # Fast path: optimistic without awaiting the lock; still lock to mutate safely
-        if self.lock.locked():
-            return False
-        acquired = False
-        # Use a synchronous context with try/timeout pattern
-        async def _try():
-            nonlocal acquired
-            async with self.lock:
-                self._refill_unlocked(now)
-                if self.tokens >= n:
-                    self.tokens -= n
-                    acquired = True
-
-        # Run a tiny, immediately-scheduled task and block briefly (non-blocking wrt rate)
-        # But since this is a sync function, we cannot await. Instead, we do a best-effort
-        # lock-free read fallback.
-        if self.tokens >= n:
-            # small race risk mitigated by later refill; acceptable for non-blocking path
+        self._refill_unlocked(now)
+        if self.tokens >= n and not self.lock.locked():
             self.tokens -= n
             return True
         return False
+
+    async def set_rate(self, rate_per_second: float) -> None:
+        """Dynamically adjust rate and capacity safely."""
+        if rate_per_second <= 0:
+            raise ValueError("rate_per_second must be > 0")
+        async with self.lock:
+            now = time.monotonic()
+            self._refill_unlocked(now)
+            self.rate = float(rate_per_second)
+            self.capacity = float(rate_per_second)
+            self.tokens = min(self.tokens, self.capacity)
+            self.last_refill = now
+
+
+# ------------------------------------------------------------
+# 🧩 RateLimiterPool
+# ------------------------------------------------------------
+class RateLimiterPool:
+    """Pool of named AsyncTokenBuckets (per-endpoint/service)."""
+
+    def __init__(
+        self,
+        default_qps: float | None = None,
+        *,
+        per_key: dict[str, float] | None = None,
+        diag: bool | None = None,
+    ):
+        self._default_qps = float(default_qps or DEFAULT_QPS)
+        if self._default_qps <= 0:
+            raise ValueError("default_qps must be > 0")
+
+        # seed from settings.FETCH.rate_limits if present
+        rl_cfg = _get(SETTINGS.FETCH, "rate_limits", "RATE_LIMITS", default={}) or {}
+        seeded: dict[str, float] = {}
+        for k, v in rl_cfg.items():
+            if isinstance(v, (int, float)) and v > 0:
+                seeded[str(k)] = float(v)
+
+        if per_key:
+            for k, v in per_key.items():
+                if isinstance(v, (int, float)) and v > 0:
+                    seeded[str(k)] = float(v)
+
+        self._diag = DIAG_ENABLED if diag is None else bool(diag)
+        self._limiters: dict[str, AsyncTokenBucket] = {}
+        self._dict_lock = asyncio.Lock()
+
+        for key, qps in seeded.items():
+            self._limiters[key] = AsyncTokenBucket(qps, name=key, diag=self._diag)
+
+    async def _ensure(self, key: str) -> AsyncTokenBucket:
+        if key in self._limiters:
+            return self._limiters[key]
+        async with self._dict_lock:
+            if key not in self._limiters:
+                self._limiters[key] = AsyncTokenBucket(
+                    self._default_qps, name=key, diag=self._diag
+                )
+            return self._limiters[key]
+
+    async def acquire(self, key: str, n: int = 1) -> None:
+        limiter = await self._ensure(key)
+        await limiter.acquire(n)
+
+    async def set_rate(self, key: str, rate_per_second: float) -> None:
+        limiter = await self._ensure(key)
+        await limiter.set_rate(rate_per_second)
+
+    def try_acquire(self, key: str, n: int = 1) -> bool:
+        limiter = self._limiters.get(key)
+        if not limiter:
+            limiter = self._limiters.setdefault(
+                key, AsyncTokenBucket(self._default_qps, name=key, diag=self._diag)
+            )
+        return limiter.try_acquire(n)
+
+    def get(self, key: str) -> AsyncTokenBucket:
+        return self._limiters.setdefault(
+            key, AsyncTokenBucket(self._default_qps, name=key, diag=self._diag)
+        )
+
+    def stats(self) -> dict[str, dict[str, float]]:
+        return {
+            k: {"rate": v.rate, "tokens": float(v.tokens)} for k, v in self._limiters.items()
+        }
+
+    def keys(self) -> list[str]:
+        return list(self._limiters.keys())
+
+
+# ------------------------------------------------------------
+# 🧠 Lazy Singleton Pool Accessor
+# ------------------------------------------------------------
+_global_pool: RateLimiterPool | None = None
+
+def get_pool() -> RateLimiterPool:
+    """Return the global shared RateLimiterPool instance (lazy singleton)."""
+    global _global_pool
+    if _global_pool is None:
+        _global_pool = RateLimiterPool()
+        log.info("[RateLimiter] Global pool initialized.")
+    return _global_pool
+
+
+# ------------------------------------------------------------
+# ✨ rate_limited() decorator
+# ------------------------------------------------------------
+def rate_limited(key: str, n: int = 1):
+    """Async decorator that rate-limits calls using the global pool.
+
+    Example:
+        @rate_limited("intraday")
+        async def fetch_intraday(symbol):
+            ...
+
+    """
+    def decorator(fn: Callable[..., Awaitable[Any]]):
+        @wraps(fn)
+        async def wrapper(*args, **kwargs):
+            pool = get_pool()
+            await pool.acquire(key, n)
+            return await fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+__all__ = ["AsyncTokenBucket", "RateLimiterPool", "get_pool", "rate_limited"]
 
 
 # ------------------------------------------------------------
 # 🧪 CLI Self-Test
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    @rate_limited("demo")
+    async def demo_task(i):
+        print(f"executing {i}")
 
-    async def _test():
-        rl = AsyncTokenBucket(rate_per_second=10, name="demo", diag=False)
-        # Try fast path
-        ok = rl.try_acquire()
-        print("try_acquire:", ok)
-        # Batch 25 operations at 10 qps should finish ~2.5s
-        import time as _t
-        t0 = _t.perf_counter()
-        for i in range(25):
-            await rl.acquire()
-            if (i + 1) % 5 == 0:
-                print(f"acquired {i+1}")
-        print("elapsed:", _t.perf_counter() - t0)
+    async def _demo():
+        tasks = [demo_task(i) for i in range(10)]
+        await asyncio.gather(*tasks)
+        print("stats:", get_pool().stats())
 
-    asyncio.run(_test())
+    asyncio.run(_demo())

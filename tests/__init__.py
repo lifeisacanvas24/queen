@@ -26,6 +26,10 @@ SMOKES = [
     "queen.tests.smoke_intervals",
     "queen.tests.smoke_schema_adapter",   # ← new
     "queen.tests.smoke_rate_limiter",     # ← new
+    "queen.tests.smoke_rate_limiter_pool",   # ← new
+    "queen.tests.smoke_rate_limiter_global",
+    "queen.tests.smoke_rate_limited_decorator",   # ← new
+
 ]
 
 # ------------------------------------------------------------
