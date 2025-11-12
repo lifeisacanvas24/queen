@@ -24,6 +24,8 @@ SMOKES = [
     "queen.tests.smoke_market_time",
     "queen.tests.smoke_market_sleep",
     "queen.tests.smoke_intervals",
+    "queen.tests.smoke_schema_adapter",   # ← new
+    "queen.tests.smoke_rate_limiter",     # ← new
 ]
 
 # ------------------------------------------------------------

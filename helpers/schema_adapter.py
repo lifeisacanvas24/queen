@@ -14,11 +14,11 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any
 
 import polars as pl
 from rich.console import Console
@@ -59,15 +59,15 @@ def _load_schema() -> dict:
         return {}
 
 
-SCHEMA: Dict[str, Any] = _load_schema()
-ERROR_CODES: Dict[str, str] = SCHEMA.get("error_codes", {})
+SCHEMA: dict[str, Any] = _load_schema()
+ERROR_CODES: dict[str, str] = SCHEMA.get("error_codes", {})
 DEFAULT_SCHEMA = ["timestamp", "open", "high", "low", "close", "volume", "oi"]
 
 
 # ============================================================
 # 🔎 Introspection helpers
 # ============================================================
-def _parse_range_token(tok: str) -> Tuple[int, int]:
+def _parse_range_token(tok: str) -> tuple[int, int]:
     tok = str(tok).strip()
     if "-" in tok:
         a, b = tok.split("-", 1)
@@ -76,20 +76,20 @@ def _parse_range_token(tok: str) -> Tuple[int, int]:
     return v, v
 
 
-def _collect_intraday_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
+def _collect_intraday_supported() -> dict[str, Iterable[tuple[int, int]]]:
     intr = SCHEMA.get("intraday_candle_api", {}).get("supported_timelines", {})
-    out: Dict[str, Iterable[Tuple[int, int]]] = {}
+    out: dict[str, Iterable[tuple[int, int]]] = {}
     for unit, spec in intr.items():
         rng = spec.get("intervals")
         out[unit] = [_parse_range_token(rng)] if isinstance(rng, str) else []
     return out
 
 
-def _collect_historical_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
+def _collect_historical_supported() -> dict[str, Iterable[tuple[int, int]]]:
     hist = SCHEMA.get("historical_candle_api", {}).get("supported_timelines", {})
-    out: Dict[str, Iterable[Tuple[int, int]]] = {}
+    out: dict[str, Iterable[tuple[int, int]]] = {}
     for unit, entries in hist.items():
-        ranges: list[Tuple[int, int]] = []
+        ranges: list[tuple[int, int]] = []
         if isinstance(entries, list):
             for ent in entries:
                 tok = ent.get("intervals")
@@ -101,7 +101,7 @@ def _collect_historical_supported() -> Dict[str, Iterable[Tuple[int, int]]]:
 
 def get_supported_intervals(
     unit: str | None = None, *, intraday: bool | None = None
-) -> Dict[str, Iterable[Tuple[int, int]]]:
+) -> dict[str, Iterable[tuple[int, int]]]:
     intr = _collect_intraday_supported()
     hist = _collect_historical_supported()
 
@@ -129,10 +129,6 @@ def validate_interval(
 # ============================================================
 # 🧩 Helpers
 # ============================================================
-def _checksum(cols: list[str]) -> str:
-    return hashlib.md5(",".join(cols).encode()).hexdigest()
-
-
 def _normalize(candles: list[list[Any]]) -> list[list[Any]]:
     expected = len(DEFAULT_SCHEMA)
     normalized = []
@@ -281,17 +277,23 @@ def finalize_candle_df(df: pl.DataFrame, symbol: str, isin: str) -> pl.DataFrame
 # ============================================================
 # 🧠 Schema Drift
 # ============================================================
+def _checksum(cols: list[str]) -> str:
+    """Order-insensitive checksum for schema columns."""
+    from hashlib import md5
+    cols_sorted = list(cols)
+    cols_sorted.sort()
+    return md5(",".join(cols_sorted).encode()).hexdigest()
+
 _last_hash: str | None = None
 
-
 def _detect_drift(cols: list[str]):
+    """Log drift only when the *set* of columns changes (ignore order)."""
     global _last_hash
     checksum = _checksum(cols)
     if _last_hash and checksum != _last_hash:
         log.warning(f"[SchemaDrift] Columns changed → {cols}")
         _log_drift(cols)
     _last_hash = checksum
-
 
 def _log_drift(cols: list[str]):
     record = {"timestamp": datetime.now().isoformat(), "cols": cols}
