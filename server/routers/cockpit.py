@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from queen.alerts.rules import load_rules
 from queen.fetchers.upstox_fetcher import fetch_intraday
 from queen.helpers.instruments import list_symbols as _list_symbols
-from queen.helpers.instruments import list_symbols_from_active_universe
+from queen.helpers.instruments import filter_to_active_universe
 from queen.helpers.market import MARKET_TZ
 from queen.helpers.portfolio import load_positions
 from queen.services.history import load_history  # add this import
@@ -129,10 +129,18 @@ async def pulse_scan(req: PulseRequest) -> Dict[str, Any]:
 # Summary / Upcoming APIs (indicator computation + actioning)
 # -----------------------------------------------------------------------------
 def _universe(symbols: Optional[List[str]]) -> List[str]:
+    """Determine which symbols the cockpit should operate on.
+
+    Priority:
+      1) Explicit symbols passed via query
+      2) Intraday instruments JSON (INTRADAY)
+      3) Optional filter by active_universe.csv (if present)
+    """
     if symbols:
         return [s.upper() for s in symbols]
-    return list_symbols_from_active_universe("INTRADAY") or _list_symbols("INTRADAY")
 
+    base = _list_symbols("INTRADAY")
+    return filter_to_active_universe(base)
 
 
 

@@ -32,20 +32,63 @@ def ensure_float_series(s: pl.Series) -> pl.Series:
     if s is None:
         return pl.Series("value", [], dtype=pl.Float64)
     try:
+        # Newer Polars has .is_numeric(), older can use datatypes helper
         if hasattr(s.dtype, "is_numeric") and s.dtype.is_numeric():
             return s.cast(pl.Float64)
-        if pl.datatypes.is_numeric_dtype(s.dtype):
-            return s.cast(pl.Float64)
+        try:
+            if pl.datatypes.is_numeric_dtype(s.dtype):  # type: ignore[attr-defined]
+                return s.cast(pl.Float64)
+        except Exception:
+            pass
         return pl.Series(s.name, [float(x) for x in s])
     except Exception:
         return pl.Series(s.name, [np.nan] * len(s))
 
-def safe_fill_null(s: pl.Series, value: float = 0.0) -> pl.Series:
-    """Fill nulls safely, forward/backward compatible."""
+
+def safe_fill_null(
+    s: pl.Series,
+    value: float = 0.0,
+    *,
+    forward: bool = True,
+) -> pl.Series:
+    """Fill nulls safely, forward/backward compatible.
+
+    Args:
+        value: scalar to use for final fill (after forward-fill).
+        forward: if True, try a forward fill first, then scalar fill.
+                 if False, only scalar fill is applied.
+
+    Order:
+        1) (optional) forward-fill nulls
+        2) scalar fill of any remaining nulls
+    """
+    if s is None:
+        return pl.Series("value", [], dtype=pl.Float64)
+
+    out = s
+    if forward:
+        # 1) try forward fill on modern Polars
+        try:
+            out = out.fill_null(strategy="forward")
+        except Exception:
+            # 2) fallback for older Polars (fill_none may not exist everywhere)
+            try:
+                out = out.fill_none(strategy="forward")  # type: ignore[arg-type]
+            except Exception:
+                # if even that fails, just skip the forward step
+                pass
+
+    # 3) scalar value fill for whatever is still null/none
     try:
-        return s.fill_null(strategy="forward").fill_null(value)
+        out = out.fill_null(value)
     except Exception:
-        return s.fill_none(value)
+        try:
+            out = out.fill_none(value)  # type: ignore[arg-type]
+        except Exception:
+            # absolute last resort: rebuild series
+            out = pl.Series(out.name, [value if x is None else x for x in out])
+
+    return out
 
 
 def safe_concat(dfs: list[pl.DataFrame]) -> pl.DataFrame:
@@ -53,4 +96,5 @@ def safe_concat(dfs: list[pl.DataFrame]) -> pl.DataFrame:
     valid = [d for d in dfs if d is not None and not d.is_empty()]
     if not valid:
         return pl.DataFrame()
+    # diagonal_relaxed keeps all cols even if schemas differ slightly
     return pl.concat(valid, how="diagonal_relaxed")

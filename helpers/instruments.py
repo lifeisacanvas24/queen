@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/helpers/instruments.py — v9.6
-# Robust Loader + IO-DRY + Caches + Symbol Normalization
+# queen/helpers/instruments.py — v10.1
+# Static JSON Instruments (NSE/BSE) + Caches + Universe Filter
 # ============================================================
 
 from __future__ import annotations
@@ -10,77 +10,84 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from functools import cache, lru_cache
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
-from queen.helpers import io  # <-- DRY: central IO helpers
+from queen.helpers import io
 from queen.helpers.common import normalize_symbol
 from queen.helpers.logger import log
 from queen.settings import settings as SETTINGS
 
-VALID_MODES = ("INTRADAY", "WEEKLY", "MONTHLY", "PORTFOLIO")
-INSTRUMENT_COLUMNS = ["symbol", "isin", "listing_date"]  # optional: listing_date
+# Logical instrument universes we support
+VALID_MODES = ("INTRADAY", "WEEKLY", "MONTHLY")
+
+# Expected JSON structure:
+# [
+#   { "symbol": "FORCEMOT", "isin": "NSE_EQ|INE451A01017" },
+#   { "symbol": "NSDL", "isin": "BSE_EQ|INE301O01023", "listing_date": "2025-08-06" }
+# ]
+INSTRUMENT_COLUMNS = ["symbol", "isin", "listing_date"]  # listing_date optional
 
 
-# -------- Path Resolver -------------------------------------------------------
-def _instrument_paths_for(mode: str) -> Iterable[Path]:
-    """Return primary data path for `mode` + APPROVED_SYMBOLS as secondary."""
+# ============================================================
+# 📁 Path Resolution (uses EXCHANGE dict directly)
+# ============================================================
+def _instrument_path_for(mode: str) -> Path | None:
+    """Resolve the JSON file path for a given mode."""
     mode = (mode or "MONTHLY").strip().upper()
-    ex = SETTINGS.EXCHANGE["ACTIVE"]
-    ex_info = SETTINGS.EXCHANGE["EXCHANGES"].get(ex, {})
-    inst = ex_info.get("INSTRUMENTS", {})
-    wanted = [inst.get(mode), inst.get("APPROVED_SYMBOLS")]
+    ex_cfg = getattr(SETTINGS, "EXCHANGE", None)
+    if not isinstance(ex_cfg, dict):
+        log.error("[Instruments] SETTINGS.EXCHANGE must be a dict.")
+        return None
 
-    # Optional trace (low-noise) for easier debugging
-    log.debug(f"[Instruments] Resolving paths for mode={mode} (exchange={ex})")
+    active = ex_cfg.get("ACTIVE")
+    exchanges = ex_cfg.get("EXCHANGES", {})
+    ex_info = exchanges.get(active, {})
+    inst_cfg = ex_info.get("INSTRUMENTS", {})
 
-    return [Path(p).expanduser().resolve() for p in wanted if p]
+    path = inst_cfg.get(mode)
+    if not path:
+        log.warning(f"[Instruments] No path configured for mode={mode} in EXCHANGE.INSTRUMENTS.")
+        return None
+
+    return Path(path).expanduser().resolve()
 
 
 def _all_instrument_paths() -> Iterable[Path]:
-    ex = SETTINGS.EXCHANGE["ACTIVE"]
-    inst = SETTINGS.EXCHANGE["EXCHANGES"].get(ex, {}).get("INSTRUMENTS", {})
-    paths = [inst.get(m) for m in VALID_MODES] + [inst.get("APPROVED_SYMBOLS")]
-    uniq: dict[str, Path] = {}
-    for p in paths:
+    """Return all distinct instrument JSON paths across VALID_MODES."""
+    seen: dict[str, Path] = {}
+    for m in VALID_MODES:
+        p = _instrument_path_for(m)
         if p:
-            rp = str(Path(p).expanduser().resolve())
-            uniq[rp] = Path(rp)
-    return uniq.values()
+            rp = str(p)
+            if rp not in seen:
+                seen[rp] = p
+    return seen.values()
 
 
-# -------- Convenience shim for intraday universe ------------------------------
-def list_intraday_symbols() -> list[str]:
-    """v9 shim for older imports. Uses active_universe filter if available,
-    otherwise returns the full INTRADAY instrument list.
-    """
-    try:
-        return list_symbols_from_active_universe("INTRADAY")
-    except Exception:
-        return list_symbols("INTRADAY")
-
-
-# -------- Readers (DRY via queen.helpers.io) ---------------------------------
-def _read_any(path: Path) -> pl.DataFrame:
-    """Polars-first reader for parquet/csv/json/ndjson using shared IO layer."""
-    df = io.read_any(path)
+# ============================================================
+# 📚 Readers (via queen.helpers.io)
+# ============================================================
+def _read_instruments(path: Path | None) -> pl.DataFrame:
+    """Read instrument data using the shared IO layer."""
+    if not path:
+        return pl.DataFrame()
+    df = io.read_json(path)
     if df.is_empty():
-        if not Path(path).exists():
-            log.warning(f"[Instruments] File missing: {path}")
-        else:
-            log.warning(f"[Instruments] Empty/unsupported file: {path.name}")
+        log.warning(f"[Instruments] Empty or missing: {path}")
     return df
 
 
 def _normalize_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """Normalize and sanitize instrument columns across all exchanges."""
+    """Normalize and sanitize instrument columns."""
     if df.is_empty():
         return df
 
-    # lowercase all column names for uniformity
+    # lowercase column names
     df = df.rename({c: c.lower() for c in df.columns})
 
-    # common alias map for various broker/exchange schemas
+    # Alias mapping for flexibility
     alias = {
         "tradingsymbol": "symbol",
         "ticker": "symbol",
@@ -99,23 +106,25 @@ def _normalize_columns(df: pl.DataFrame) -> pl.DataFrame:
     if need_rename:
         df = df.rename(need_rename)
 
-    # try to parse listing_date to Date type if present
+    # Parse listing_date → Date if present
     if "listing_date" in df.columns:
         try:
             df = df.with_columns(
-                pl.col("listing_date").cast(pl.Utf8).str.strptime(pl.Date, strict=False)
+                pl.col("listing_date")
+                .cast(pl.Utf8)
+                .str.strptime(pl.Date, strict=False)
             )
         except Exception:
             log.warning("[Instruments] listing_date parse skipped.")
 
-    # validate essential columns
+    # Ensure required cols exist
     required = {"symbol", "isin"}
     missing = required - set(df.columns)
     if missing:
-        log.warning(f"[Instruments] Missing required columns after normalize: {missing}")
+        log.warning(f"[Instruments] Missing required columns: {missing}")
         return pl.DataFrame()
 
-    # ✅ Normalize symbol casing here (modern Polars)
+    # Normalize symbol casing
     df = df.with_columns(
         pl.col("symbol")
         .map_elements(normalize_symbol, return_dtype=pl.Utf8)
@@ -126,39 +135,48 @@ def _normalize_columns(df: pl.DataFrame) -> pl.DataFrame:
     return df.unique(subset=["symbol"], keep="first")
 
 
-# -------- Cached loaders ------------------------------------------------------
+# ============================================================
+# 🧠 Cached loaders
+# ============================================================
 @cache
 def load_instruments_df(mode: str = "MONTHLY") -> pl.DataFrame:
-    for p in _instrument_paths_for(mode):
-        df = _normalize_columns(_read_any(p))
-        if not df.is_empty():
-            log.info(f"[Instruments] Loaded {len(df)} rows from {p.name}")
-            return df
-        log.warning(f"[Instruments] {p.name} empty or invalid; trying fallback...")
-    log.error(f"[Instruments] No valid instrument data for mode={mode}")
-    return pl.DataFrame()
+    """Load instruments for a specific mode from STATIC JSON."""
+    p = _instrument_path_for(mode)
+    df_raw = _read_instruments(p)
+    df = _normalize_columns(df_raw)
+    if df.is_empty():
+        log.error(f"[Instruments] No valid instrument data for mode={mode}")
+        return pl.DataFrame()
+    log.info(f"[Instruments] Loaded {len(df)} rows for mode={mode} from {p.name}")
+    return df
 
 
 @cache
 def _merged_df_all_modes() -> pl.DataFrame:
+    """Merged view across all instrument sources (for fallback lookups)."""
     parts = []
     for p in _all_instrument_paths():
-        dfp = _normalize_columns(_read_any(p))
-        if not dfp.is_empty():
-            parts.append(dfp)
-    if parts:
-        merged = pl.concat(parts, how="vertical").unique(subset=["symbol"], keep="first")
-        log.info(
-            f"[Instruments] Merged view: {len(merged)} total symbols across all sources"
-        )
-        return merged
-    return pl.DataFrame()
+        df = _normalize_columns(_read_instruments(p))
+        if not df.is_empty():
+            parts.append(df)
+    if not parts:
+        return pl.DataFrame()
+    merged = (
+        pl.concat(parts, how="vertical")
+        .unique(subset=["symbol"], keep="first")
+    )
+    log.info(
+        f"[Instruments] Merged instruments: {len(merged)} symbols across all modes"
+    )
+    return merged
 
 
-# -------- Lookups -------------------------------------------------------------
+# ============================================================
+# 🔍 Lookups
+# ============================================================
 @lru_cache(maxsize=4096)
 def get_listing_date(symbol: str) -> date | None:
-    """Return the listing date for a given symbol, or None if unavailable."""
+    """Return listing date for symbol, if present in MONTHLY file."""
     symbol = normalize_symbol(symbol)
     df = load_instruments_df("MONTHLY")
     if df.is_empty() or "symbol" not in df.columns:
@@ -178,12 +196,13 @@ def get_listing_date(symbol: str) -> date | None:
             except Exception:
                 return None
     except Exception:
-        pass
+        return None
     return None
 
 
 @cache
 def get_instrument_map(mode: str = "MONTHLY") -> dict[str, str]:
+    """Symbol → isin map for a given mode."""
     df = load_instruments_df(mode)
     if df.is_empty():
         log.warning(f"[Instruments] Empty dataset for mode '{mode}'.")
@@ -192,15 +211,18 @@ def get_instrument_map(mode: str = "MONTHLY") -> dict[str, str]:
 
 
 def resolve_instrument(symbol_or_key: str, mode: str = "MONTHLY") -> str:
-    """Resolve a symbol or instrument key to ISIN (with normalization)."""
+    """Resolve a symbol or instrument key to its broker instrument-key (isin)."""
     symbol_or_key = normalize_symbol(symbol_or_key)
+    # Already "NSE_EQ|..." etc → treat as instrument key
     if "|" in symbol_or_key:
         return symbol_or_key
 
+    # Mode-local map first
     m = get_instrument_map(mode).get(symbol_or_key)
     if m:
         return m
 
+    # Fallback: merged view
     merged = _merged_df_all_modes()
     if not merged.is_empty():
         row = merged.filter(pl.col("symbol") == symbol_or_key)
@@ -213,7 +235,7 @@ def resolve_instrument(symbol_or_key: str, mode: str = "MONTHLY") -> str:
 
 
 def get_symbol_from_isin(isin: str, mode: str = "MONTHLY") -> str | None:
-    """Reverse lookup: ISIN → symbol."""
+    """Reverse lookup: ISIN/instrument-key → symbol."""
     df = load_instruments_df(mode)
     if df.is_empty():
         df = _merged_df_all_modes()
@@ -223,8 +245,8 @@ def get_symbol_from_isin(isin: str, mode: str = "MONTHLY") -> str | None:
     return row["symbol"].item() if not row.is_empty() else None
 
 
-def get_instrument_meta(symbol: str, mode: str = "MONTHLY") -> dict[str, str | None]:
-    """Return dict with symbol, isin, and (optional) listing_date."""
+def get_instrument_meta(symbol: str, mode: str = "MONTHLY") -> dict[str, Any]:
+    """Return dict with symbol, isin, and optional listing_date."""
     symbol = normalize_symbol(symbol)
     df = load_instruments_df(mode)
     if df.is_empty():
@@ -236,7 +258,10 @@ def get_instrument_meta(symbol: str, mode: str = "MONTHLY") -> dict[str, str | N
     if row.is_empty():
         raise ValueError(f"Unknown symbol: {symbol}")
 
-    meta = {"symbol": symbol, "isin": row["isin"].item()}
+    meta: dict[str, Any] = {
+        "symbol": symbol,
+        "isin": row["isin"].item(),
+    }
     if "listing_date" in row.columns:
         try:
             meta["listing_date"] = row["listing_date"].item()
@@ -245,35 +270,109 @@ def get_instrument_meta(symbol: str, mode: str = "MONTHLY") -> dict[str, str | N
     return meta
 
 
-def validate_historical_range(symbol: str, start_date: date, mode: str = "MONTHLY") -> bool:
-    """Ensure the requested range does not predate listing."""
+def validate_historical_range(
+    symbol: str,
+    start_date: date,
+    mode: str = "MONTHLY",
+) -> bool:
+    """Ensure the requested historical range does not predate listing."""
     symbol = normalize_symbol(symbol)
-    meta = get_instrument_meta(symbol, mode)
-    listing_date = meta.get("listing_date")
-    if not listing_date:
+    listing = get_listing_date(symbol)
+    if not listing:
         return True
-    if isinstance(listing_date, str):
+    if isinstance(listing, str):
         try:
-            listing_date = date.fromisoformat(listing_date)
+            listing = date.fromisoformat(listing)
         except Exception:
             return True
-    if start_date < listing_date:
-        log.warning(f"[RangeCheck] {symbol}: {start_date} < {listing_date}")
+    if start_date < listing:
+        log.warning(f"[RangeCheck] {symbol}: {start_date} < {listing}")
         return False
     return True
 
 
 def list_symbols(mode: str = "MONTHLY") -> list[str]:
+    """Return all symbols for the given mode (from static JSON)."""
     df = load_instruments_df(mode)
     return df["symbol"].drop_nulls().unique().to_list() if not df.is_empty() else []
 
 
-# -------- Cache admin ---------------------------------------------------------
+# ============================================================
+# 🌌 Active Universe (optional filter for cockpit)
+# ============================================================
+def _active_universe_csv() -> Path:
+    """Locate active_universe.csv if present.
+
+    Priority:
+      1) STATIC/active_universe.csv
+      2) PATHS['UNIVERSE']/active_universe.csv
+      3) fallback: STATIC/active_universe.csv (even if missing)
+    """
+    static_path = (SETTINGS.PATHS["STATIC"] / "active_universe.csv").expanduser().resolve()
+    if static_path.exists():
+        return static_path
+
+    try:
+        uni_root = SETTINGS.PATHS["UNIVERSE"]
+        uni_path = (uni_root / "active_universe.csv").expanduser().resolve()
+        if uni_path.exists():
+            return uni_path
+    except Exception:
+        pass
+
+    # harmless default (may not exist)
+    return static_path
+
+
+@lru_cache(maxsize=1)
+def load_active_universe() -> set[str]:
+    """Load 'active_universe.csv' and normalize symbols.
+
+    Expected structure:
+        symbol
+        FORCEMOT
+        GODFRYPHLP
+        ...
+    """
+    p = _active_universe_csv()
+    if not p.exists():
+        log.info("[Instruments] active_universe.csv not found → using full list.")
+        return set()
+    try:
+        df = io.read_csv(p)
+        if df.is_empty():
+            return set()
+        col = None
+        for c in df.columns:
+            if c.lower() == "symbol":
+                col = c
+                break
+        if not col:
+            return set()
+        symbols = set(df[col].drop_nulls().unique().to_list())
+        return {normalize_symbol(s) for s in symbols if s}
+    except Exception as e:
+        log.warning(f"[Instruments] Universe load failed ({e})")
+        return set()
+
+
+def filter_to_active_universe(symbols: Iterable[str]) -> list[str]:
+    """Filter an iterable of symbols by the active universe (if present)."""
+    uni = load_active_universe()
+    if not uni:
+        return [normalize_symbol(s) for s in symbols]
+    return [normalize_symbol(s) for s in symbols if normalize_symbol(s) in uni]
+
+
+# ============================================================
+# 🧹 Cache Admin
+# ============================================================
 def clear_instrument_cache() -> None:
     load_instruments_df.cache_clear()
     get_instrument_map.cache_clear()
     _merged_df_all_modes.cache_clear()
     get_listing_date.cache_clear()
+    load_active_universe.cache_clear()
     log.info("[Instruments] Cache cleared.")
 
 
@@ -283,76 +382,24 @@ def cache_info() -> dict[str, str]:
         "get_instrument_map": str(get_instrument_map.cache_info()),
         "_merged_df_all_modes": str(_merged_df_all_modes.cache_info()),
         "get_listing_date": str(get_listing_date.cache_info()),
+        "load_active_universe": str(load_active_universe.cache_info()),
     }
     log.info(f"[Instruments] Cache info: {infos}")
     return infos
 
 
-# -------- Universe helpers ----------------------------------------------------
-def _active_universe_csv() -> Path:
-    try:
-        return (SETTINGS.PATHS["UNIVERSE"] / "active_universe.csv").expanduser().resolve()
-    except Exception:
-        return Path("active_universe.csv")  # harmless fallback
-
-
-@lru_cache(maxsize=1)
-def load_active_universe() -> set[str]:
-    """Load 'active_universe.csv' and normalize symbols."""
-    p = _active_universe_csv()
-    if not p.exists():
-        return set()
-    try:
-        df = io.read_csv(p)
-        cols = {c.lower() for c in df.columns}
-        col = "symbol" if "symbol" in cols else next(
-            (c for c in df.columns if c.lower() == "symbol"), None
-        )
-        if not col:
-            return set()
-        symbols = set(df[col].drop_nulls().unique().to_list())
-        return {normalize_symbol(s) for s in symbols if s}
-    except Exception:
-        return set()
-
-
-def filter_to_active_universe(symbols: Iterable[str]) -> list[str]:
-    uni = load_active_universe()
-    if not uni:
-        return [normalize_symbol(s) for s in symbols]
-    return [normalize_symbol(s) for s in symbols if normalize_symbol(s) in uni]
-
-
-def list_symbols_from_active_universe(mode: str = "MONTHLY") -> list[str]:
-    """If {PATHS['UNIVERSE']}/active_universe.csv exists, return intersection."""
-    base = {normalize_symbol(s) for s in list_symbols(mode)}
-    ufile = (SETTINGS.PATHS["UNIVERSE"] / "active_universe.csv").expanduser().resolve()
-    if not ufile.exists() or not ufile.is_file():
-        return sorted(base)
-
-    try:
-        udf = io.read_csv(ufile)
-        if "symbol" not in udf.columns:
-            return sorted(base)
-        allowed = {normalize_symbol(s) for s in udf["symbol"].drop_nulls().unique().to_list() if s}
-        if not allowed:
-            return sorted(base)
-        return sorted(base & allowed)
-    except Exception as e:
-        log.warning(f"[Instruments] Universe filter skipped ({e})")
-        return sorted(base)
-
-
-# -------- Self-test -----------------------------------------------------------
+# ============================================================
+# 🧪 Self-Test
+# ============================================================
 if __name__ == "__main__":
-    print("📘 Instruments Resolver — v9.6")
-    for m in ("MONTHLY", "PORTFOLIO", "WEEKLY", "INTRADAY"):
+    print("📘 Instruments Resolver — v10.1 (STATIC JSON + Universe)")
+    for m in ("INTRADAY", "MONTHLY", "WEEKLY"):
         df = load_instruments_df(m)
-        print(m, len(df))
+        print(m, "→", len(df), "rows")
     try:
-        print("NSDL →", resolve_instrument("nsdl"))
-        print("Meta →", get_instrument_meta("NSDL"))
-        print("List →", list_symbols()[:5])
+        print("Intraday symbols sample:", list_symbols("INTRADAY")[:10])
+        base = list_symbols("INTRADAY")
+        print("Universe-filtered sample:", filter_to_active_universe(base)[:10])
     except Exception as e:
         print("Lookup error:", e)
     print("Cache →", cache_info())

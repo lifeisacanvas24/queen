@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import polars as pl
 
-from queen.helpers.nse_fetcher import fetch_nse_bands
+from queen.fetchers.nse_fetcher import fetch_nse_bands, get_cached_nse_bands
 from queen.helpers.portfolio import compute_pnl, position_for
 from queen.technicals.indicators import core as ind
 

@@ -52,9 +52,10 @@ def _build_paths(env: str) -> Dict[str, Path]:
         "TEST_HELPERS": _mk(base_runtime / "test_helpers"),
         # static + project resources
         "STATIC": _REPO_ROOT / "queen" / "data" / "static",
+        "INSTRUMENTS": _REPO_ROOT / "queen" / "data" / "static",
+        "UNIVERSE": _REPO_ROOT / "queen" / "data" / "static",
         "PROFILES": _REPO_ROOT / "queen" / "data" / "static" / "profiles",
         "CONFIGS": _REPO_ROOT / "configs",
-        "UNIVERSE": _mk(base_runtime / "universe"),
         "TEMPLATES": _mk(_REPO_ROOT / "queen" / "server" / "templates"),
     }
 
@@ -75,6 +76,17 @@ def set_env(value: str) -> None:
 # 🧩 App / Defaults / Brokers / Fetch / Scheduler / Logging
 # ------------------------------------------------------------
 APP = {"name": "Queen of Quant", "version": "v9.3", "env": get_env()}
+
+# ------------------------------------------------------------
+# 🌐 External APIs (HTTP endpoints)
+# ------------------------------------------------------------
+EXTERNAL_APIS = {
+    "NSE": {
+        "BASE_URL": "https://www.nseindia.com",
+        "QUOTE_EQUITY": "/api/quote-equity?symbol={symbol}",
+        "QUOTE_REFERER": "/get-quotes/equity?symbol={symbol}",
+    },
+}
 
 DEFAULTS: Dict[str, Any] = {
     "BROKER": "upstox",
@@ -206,23 +218,27 @@ EXCHANGE = {
             },
             "TRADING_DAYS": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
             "EXPIRY_DAY": "Thursday",
+
             # 🌅 Calendar file
             "HOLIDAYS": str(PATHS["STATIC"] / "nse_holidays.json"),
-            # 📘 Instruments & Universe
+
+            # 📘 Instruments — STATIC JSONs (source of truth)
+            #   intraday_instruments.json
+            #   monthly_instruments.json
+            #   weekly_instruments.json (optional)
             "INSTRUMENTS": {
-                # JSON-based primary sources
-                "MONTHLY": str(PATHS["STATIC"] / "monthly_instruments.json"),
-                "WEEKLY": str(PATHS["STATIC"] / "monthly_instruments.json"),
-                "INTRADAY": str(PATHS["STATIC"] / "intraday_instruments.json"),
-                # CSV-based Universe & portfolio lists
-                "PORTFOLIO": str(PATHS["UNIVERSE"] / "portfolio.csv"),
-                "APPROVED_SYMBOLS": str(PATHS["UNIVERSE"] / "approved_symbols.csv"),
-                "NSE_UNIVERSE": str(PATHS["UNIVERSE"] / "nse_universe.csv"),
-                "BSE_UNIVERSE": str(PATHS["UNIVERSE"] / "bse_universe.csv"),
-            },
-        },
-    },
-    "ACTIVE": "NSE_BSE",
+                          "MONTHLY":   str(PATHS["STATIC"] / "monthly_instruments.json"),
+                          "WEEKLY":    str(PATHS["STATIC"] / "monthly_instruments.json"),
+                          "INTRADAY":  str(PATHS["STATIC"] / "intraday_instruments.json"),
+                          # optional universe/portfolio stuff:
+                          "PORTFOLIO": str(PATHS["UNIVERSE"] / "portfolio.csv"),
+                          "APPROVED_SYMBOLS": str(PATHS["UNIVERSE"] / "approved_symbols.csv"),
+                          "NSE_UNIVERSE": str(PATHS["UNIVERSE"] / "nse_universe.csv"),
+                          "BSE_UNIVERSE": str(PATHS["UNIVERSE"] / "bse_universe.csv"),
+                      },
+                  },
+              },
+              "ACTIVE": "NSE_BSE",
 }
 
 # Ensure DEFAULTS carries the active exchange key used by helpers
