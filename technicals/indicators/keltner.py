@@ -1,60 +1,66 @@
+#!/usr/bin/env python3
 # ============================================================
-# queen/technicals/indicators/keltner.py
+# queen/technicals/indicators/keltner.py — v3.1 (Bible v10.5)
 # ------------------------------------------------------------
 # ⚙️ Keltner Channel — Volatility Envelope Engine
-# Config-driven, NaN-safe, headless for Quant-Core v4.x
-# Measures volatility compression & expansion zones
+# • Config-driven via settings/indicator_policy ("KELTNER")
+# • Uses context ("intraday_15m") + timeframe token ("15m")
+# • Measures volatility compression & expansion zones
+#
+# Exposes:
+#   compute_keltner(df, context="intraday_15m", timeframe=None) -> pl.DataFrame
+#   summarize_keltner(df) -> dict
+#   compute_volatility_index(df) -> float (0..1)
+#
+# No file I/O, no legacy helpers, no vol_keltner.
 # ============================================================
 
 from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from queen.helpers.io import write_json_atomic  # used in __main__ snapshot (optional)
+
+from queen.helpers.logger import log
+from queen.helpers.ta_math import atr_wilder as _atr_wilder
+from queen.helpers.ta_math import ema as _ema_np
+from queen.helpers.ta_math import normalize_0_1 as _norm_0_1
 from queen.settings.indicator_policy import params_for as _params_for
-from queen.settings.settings import dev_snapshot_path
+from queen.settings.timeframes import context_to_token
+
+__all__ = ["compute_keltner", "summarize_keltner", "compute_volatility_index"]
 
 
 # ============================================================
-# 🔧 Helpers: EMA and True Range
+# 🔧 Helpers
 # ============================================================
-def ema(series: np.ndarray, span: int) -> np.ndarray:
-    """Compute Exponential Moving Average."""
-    if len(series) == 0:
-        return np.array([])
-    alpha = 2 / (span + 1)
-    result = np.zeros_like(series, dtype=float)
-    result[0] = series[0]
-    for i in range(1, len(series)):
-        result[i] = alpha * series[i] + (1 - alpha) * result[i - 1]
-    return result
-
-
-def true_range(high, low, close_prev):
-    """True range computation."""
-    return np.maximum.reduce(
-        [high - low, np.abs(high - close_prev), np.abs(low - close_prev)]
-    )
-
-
-def compute_atr(high, low, close, period=14):
-    """Average True Range with Wilder smoothing."""
-    if len(high) == 0:
-        return np.array([])
-    tr = true_range(high, low, np.roll(close, 1))
-    atr = np.zeros_like(tr)
-    atr[period - 1] = np.nanmean(tr[:period])
-    for i in range(period, len(tr)):
-        atr[i] = ((atr[i - 1] * (period - 1)) + tr[i]) / period
-    return np.nan_to_num(atr)
 
 
 # ============================================================
 # 🧠 Core Keltner Channel Computation (Config + Diagnostics)
 # ============================================================
-def compute_keltner(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.DataFrame:
-    """Compute Keltner Channel and volatility metrics (headless, settings-driven)."""
-    p = _params_for("KELTNER", timeframe) or {}
+def compute_keltner(
+    df: pl.DataFrame,
+    *,
+    context: str = "intraday_15m",
+    timeframe: str | None = None,
+) -> pl.DataFrame:
+    """Compute Keltner Channel and volatility metrics (headless, settings-driven).
+
+    Args:
+        df: Polars DataFrame with 'high','low','close'.
+        context: settings context key (e.g. 'intraday_15m').
+        timeframe: optional token override (e.g. '15m'); if None, derived from context.
+
+    Returns:
+        DataFrame with KC_* columns attached.
+
+    """
+    if not isinstance(df, pl.DataFrame) or df.height == 0:
+        return df
+
+    tf_token = (timeframe or context_to_token(context)).strip().lower()
+
+    p = _params_for("KELTNER", tf_token) or {}
     ema_period = int(p.get("ema_period", 20))
     atr_mult = float(p.get("atr_mult", 2.0))
     atr_period = int(p.get("atr_period", 14))
@@ -62,67 +68,69 @@ def compute_keltner(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.Dat
     squeeze_thresh = float(p.get("squeeze_threshold", 0.8))
     expansion_thresh = float(p.get("expansion_threshold", 1.2))
 
-    df = df.clone()
+    out = df.clone()
 
     # Validate columns
-    for col in ["high", "low", "close"]:
-        if col not in df.columns:
-            _log_indicator_warning(
-                "KELTNER", context, f"Missing '{col}' column — skipping computation."
+    for col in ("high", "low", "close"):
+        if col not in out.columns:
+            log.warning(
+                f"[KELTNER] Missing '{col}' column — skipping computation "
+                f"(context={context}, tf={tf_token})."
             )
-            return df
+            return out
 
-    high = df["high"].to_numpy().astype(float)
-    low = df["low"].to_numpy().astype(float)
-    close = df["close"].to_numpy().astype(float)
+    high = out["high"].to_numpy().astype(float, copy=False)
+    low = out["low"].to_numpy().astype(float, copy=False)
+    close = out["close"].to_numpy().astype(float, copy=False)
 
-    if len(close) < ema_period + 2:
-        _log_indicator_warning(
-            "KELTNER", context, f"Insufficient data (<{ema_period+2}) for EMA/ATR."
+    if close.size < ema_period + 2:
+        log.warning(
+            f"[KELTNER] Insufficient data (<{ema_period + 2}) for EMA/ATR "
+            f"(context={context}, tf={tf_token}). Returning flat defaults."
         )
-        zeros = np.zeros_like(close)
-        return df.with_columns(
+        zeros = np.zeros_like(close, dtype=float)
+        return out.with_columns(
             [
                 pl.Series("KC_mid", zeros),
                 pl.Series("KC_upper", zeros),
                 pl.Series("KC_lower", zeros),
+                pl.Series("KC_width", zeros),
+                pl.Series("KC_width_pct", zeros),
                 pl.Series("KC_norm", zeros),
-                pl.Series("KC_Bias", ["➡️ Stable"] * len(close)),
+                pl.Series("KC_Bias", ["➡️ Stable"] * close.size),
             ]
         )
 
-    # Core Keltner computations
-    mid = ema(close, ema_period)
-    atr = compute_atr(high, low, close, atr_period)
+    # Core Keltner computations via ta_math
+    mid = _ema_np(close, ema_period)
+    atr = _atr_wilder(high, low, close, period=atr_period)
     upper = mid + atr_mult * atr
     lower = mid - atr_mult * atr
 
     # Volatility width metrics
     channel_width = upper - lower
-    width_pct = (
-        np.divide(channel_width, mid, out=np.zeros_like(channel_width), where=mid != 0)
-        * 100
-    )
-    max_width = (
-        np.nanmax(width_pct)
-        if np.isfinite(np.nanmax(width_pct)) and np.nanmax(width_pct) > 0
-        else 1.0
-    )
-    width_norm = np.nan_to_num(width_pct / max_width)
+    width_pct = np.divide(
+        channel_width,
+        mid,
+        out=np.zeros_like(channel_width, dtype=float),
+        where=mid != 0,
+    ) * 100.0
+
+    # Normalized width [0,1] using shared helper
+    width_norm = _norm_0_1(width_pct)
 
     # Squeeze / expansion detection
-    roll = np.convolve(
-        width_norm, np.ones(squeeze_window) / squeeze_window, mode="same"
-    )
+    squeeze_window = max(int(squeeze_window), 1)
+    kernel = np.ones(squeeze_window, dtype=float) / float(squeeze_window)
+    roll = np.convolve(width_norm, kernel, mode="same")
     squeeze_flag = width_norm < (roll * squeeze_thresh)
     expansion_flag = width_norm > (roll * expansion_thresh)
 
-    vol_bias = np.full(len(width_norm), "➡️ Stable", dtype=object)
+    vol_bias = np.full(width_norm.size, "➡️ Stable", dtype=object)
     vol_bias[squeeze_flag] = "🟡 Squeeze"
     vol_bias[expansion_flag] = "🟢 Expansion"
 
-    # Build final frame
-    return df.with_columns(
+    return out.with_columns(
         [
             pl.Series("KC_mid", mid),
             pl.Series("KC_upper", upper),
@@ -140,8 +148,11 @@ def compute_keltner(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.Dat
 # ============================================================
 def summarize_keltner(df: pl.DataFrame) -> dict:
     """Return structured summary for tactical layer."""
-    if df.height == 0 or "KC_Bias" not in df.columns:
+    if not isinstance(df, pl.DataFrame) or df.height == 0:
         return {"status": "empty"}
+
+    if "KC_Bias" not in df.columns:
+        return {"status": "missing", "missing": ["KC_Bias"]}
 
     last_bias = str(df["KC_Bias"][-1])
     last_width = (
@@ -157,7 +168,8 @@ def summarize_keltner(df: pl.DataFrame) -> dict:
     )
 
     return {
-        "KC_width_pct": round(float(last_width), 2),
+        "status": "ok",
+        "KC_width_pct": round(float(last_width), 2) if np.isfinite(last_width) else None,
         "KC_state": state,
         "Bias": last_bias,
     }
@@ -171,22 +183,24 @@ def compute_volatility_index(df: pl.DataFrame) -> float:
     the Keltner Channel width. Used by Tactical Fusion Engine.
     """
     try:
-        if df.is_empty():
+        if not isinstance(df, pl.DataFrame) or df.is_empty():
             return 0.5
 
         # Ensure KC columns exist — compute them if not
         if "KC_norm" not in df.columns:
             df = compute_keltner(df)
 
-        # Volatility intensity = mean normalized band width
         volx = float(df["KC_norm"].mean())
+        if not np.isfinite(volx):
+            return 0.5
         return round(max(0.0, min(1.0, volx)), 3)
-    except Exception:
+    except Exception as e:
+        log.warning(f"[KELTNER] compute_volatility_index failed → {e}")
         return 0.5
 
 
 # ============================================================
-# 🧪 Local Dev Diagnostic (Headless Snapshot)
+# 🧪 Local Dev Diagnostic (Headless)
 # ============================================================
 if __name__ == "__main__":
     np.random.seed(42)
@@ -199,7 +213,7 @@ if __name__ == "__main__":
     df = pl.DataFrame({"high": high, "low": low, "close": close})
     df = compute_keltner(df, context="intraday_15m")
     summary = summarize_keltner(df)
-    write_json_atomic(dev_snapshot_path("keltner"), summary)
-    print(
-        "📊 [Headless] Keltner snapshot written →queen/data/dev_snapshots/keltner.json"
-    )
+    volx = compute_volatility_index(df)
+
+    print("📊 [Headless] Keltner summary:", summary)
+    print("⚡ Volatility index (VolX):", volx)

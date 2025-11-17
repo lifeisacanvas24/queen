@@ -10,67 +10,170 @@
 <div class="q-box p-4">
   <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
     <div class="is-flex is-align-items-center">
-      <div class="select mr-2"><select id="interval">
-        <option value="5">5m</option><option value="15" selected>15m</option>
-        <option value="30">30m</option><option value="60">60m</option>
-      </select></div>
-      <div class="select mr-2"><select id="book"></select></div>
-      <input id="symbols" class="input mono" style="width:320px" placeholder="Symbols (comma) or blank for universe">
+      <div class="select mr-2">
+        <select id="interval">
+          <option value="5">5m</option>
+          <option value="15" selected>15m</option>
+          <option value="30">30m</option>
+          <option value="60">60m</option>
+        </select>
+      </div>
+      <div class="select mr-2">
+        <select id="book"></select>
+      </div>
+      <input
+        id="symbols"
+        class="input mono"
+        style="width:320px"
+        placeholder="Symbols (comma) or blank for universe"
+      >
     </div>
     <button id="refresh" class="button q-primary">Refresh</button>
   </div>
 
-  <table class="q-table table is-fullwidth is-narrow">
-    <thead>
-      <tr>
-        <th>Symbol</th><th>Decision</th><th>Score</th><th>Entry</th>
-        <th>SL</th><th>Targets</th><th>EMA Bias</th><th>RSI</th><th>VWAP/CPR</th><th>Notes</th>
-      </tr>
-    </thead>
-    <tbody id="sumBody"></tbody>
-  </table>
+  <div style="overflow-x:auto;">
+    <table class="q-table table is-fullwidth is-narrow">
+      <thead>
+        <tr>
+          <!-- Core -->
+          <th>Symbol</th>
+          <th>CMP</th>
+          <th>Decision</th>
+          <th>Score</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>Targets</th>
+          <th>EMA Bias</th>
+          <th>RSI</th>
+          <th>VWAP / CPR</th>
+          <th>Notes</th>
+
+          <!-- Instrument strip (Upstox-style) -->
+          <th title="Session Open">Open</th>
+          <th title="Session High">High</th>
+          <th title="Session Low">Low</th>
+          <th title="Previous Close">Prev&nbsp;Close</th>
+          <th title="Volume">Volume</th>
+          <th title="Average traded price (session VWAP-style)">Avg&nbsp;Price</th>
+          <th title="Upper Circuit">UC</th>
+          <th title="Lower Circuit">LC</th>
+          <th title="52-week High">52W&nbsp;High</th>
+          <th title="52-week Low">52W&nbsp;Low</th>
+        </tr>
+      </thead>
+      <tbody id="sumBody"></tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function fmt(x){ if(x==null) return '—'; return (typeof x==='number')? x.toLocaleString(undefined,{maximumFractionDigits:2}) : x; }
-function badge(dec){ const map={BUY:'green',ADD:'green',HOLD:'amber',EXIT:'red',AVOID:'red'}; const c=map[dec]||'amber'; return `<span class="badge ${c}">${dec||''}</span>`; }
+function fmt(x){
+  if (x == null || x === '' || x === '--') return '—';
+  if (typeof x === 'number') {
+    // Compact formatting for big volumes as well
+    if (Math.abs(x) >= 1_000_000) {
+      return (x / 1_000_000).toLocaleString(undefined, {
+        maximumFractionDigits: 2
+      }) + 'M';
+    }
+    if (Math.abs(x) >= 1_000) {
+      return (x / 1_000).toLocaleString(undefined, {
+        maximumFractionDigits: 1
+      }) + 'K';
+    }
+    return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  return x;
+}
+
+function badge(dec){
+  const map = {BUY:'green', ADD:'green', HOLD:'amber', EXIT:'red', AVOID:'red'};
+  const c = map[(dec || '').toUpperCase()] || 'amber';
+  return `<span class="badge ${c}">${dec || ''}</span>`;
+}
 
 async function loadBooks(){
-  const r=await fetch('/portfolio/books'); const j=await r.json();
-  const sel=document.getElementById('book'); sel.innerHTML='';
-  (j.books||['all']).forEach(b=>{ const o=document.createElement('option'); o.value=b; o.textContent=b; sel.appendChild(o); });
+  try {
+    const r = await fetch('/portfolio/books');
+    const j = await r.json();
+    const sel = document.getElementById('book');
+    sel.innerHTML = '';
+    (j.books || ['all']).forEach(b => {
+      const o = document.createElement('option');
+      o.value = b;
+      o.textContent = b;
+      sel.appendChild(o);
+    });
+  } catch (e) {
+    // fallback
+    const sel = document.getElementById('book');
+    sel.innerHTML = '<option value="all">all</option>';
+  }
 }
 
 async function refresh(){
-  const raw=(document.getElementById('symbols').value||'').trim();
-  const syms= raw? raw.split(',').map(s=>s.trim()).filter(Boolean): [];
-  const iv=document.getElementById('interval').value||'15';
-  const book=document.getElementById('book').value||'all';
-  const url=new URL('/cockpit/api/summary', window.location.origin);
-  syms.forEach(s=>url.searchParams.append('symbols', s));
-  url.searchParams.set('interval', iv); url.searchParams.set('book', book);
-  const r=await fetch(url); const j=await r.json();
-  const tb=document.getElementById('sumBody');
-  tb.innerHTML=(j.rows||[]).map(x=>{
-    const vwap = x.vwap_zone||'—', cpr = x.cpr_ctx||'—';
+  const raw = (document.getElementById('symbols').value || '').trim();
+  const syms = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const iv   = document.getElementById('interval').value || '15';
+  const book = document.getElementById('book').value || 'all';
+
+  const url = new URL('/cockpit/api/summary', window.location.origin);
+  syms.forEach(s => url.searchParams.append('symbols', s));
+  url.searchParams.set('interval', iv);
+  url.searchParams.set('book', book);
+
+  const r  = await fetch(url);
+  const j  = await r.json();
+  const tb = document.getElementById('sumBody');
+
+  tb.innerHTML = (j.rows || []).map(x => {
+    const vwap = x.vwap_zone || '—';
+    const cpr  = x.cpr_ctx   || '—';
+
+    // instrument strip fields (added via build_cockpit_row)
+    const open        = x.open;
+    const high        = x.high;
+    const low         = x.low;
+    const prevClose   = x.prev_close;
+    const volume      = x.volume;
+    const avgPrice    = x.avg_price;
+    const uc          = x.upper_circuit;
+    const lc          = x.lower_circuit;
+    const w52h        = x['52w_high'];
+    const w52l        = x['52w_low'];
+
+    const cmp         = x.cmp ?? x.CMP; // allow either casing
+
     return `<tr>
-      <td><strong>${x.symbol}</strong></td>
+      <td><strong>${x.symbol}</strong>${x.held ? ' ⭐' : ''}</td>
+      <td>${fmt(cmp)}</td>
       <td>${badge(x.decision)}</td>
       <td>${fmt(x.score)}</td>
       <td>${fmt(x.entry)}</td>
       <td>${fmt(x.sl)}</td>
-      <td>${(x.targets||[]).join(' • ')}</td>
-      <td>${x.ema_bias||'—'}</td>
-      <td>${fmt(x.RSI||x.rsi)}</td>
+      <td>${(x.targets || []).join(' • ')}</td>
+      <td>${x.ema_bias || x.EMA_BIAS || '—'}</td>
+      <td>${fmt(x.RSI || x.rsi)}</td>
       <td>${vwap} / ${cpr}</td>
-      <td>${x.notes||'—'}</td>
+      <td>${x.notes || '—'}</td>
+
+      <td>${fmt(open)}</td>
+      <td>${fmt(high)}</td>
+      <td>${fmt(low)}</td>
+      <td>${fmt(prevClose)}</td>
+      <td>${fmt(volume)}</td>
+      <td>${fmt(avgPrice)}</td>
+      <td>${fmt(uc)}</td>
+      <td>${fmt(lc)}</td>
+      <td>${fmt(w52h)}</td>
+      <td>${fmt(w52l)}</td>
     </tr>`;
   }).join('');
 }
 
-document.getElementById('refresh').onclick=refresh;
+document.getElementById('refresh').onclick = refresh;
 loadBooks().then(refresh);
 </script>
 {% endblock %}

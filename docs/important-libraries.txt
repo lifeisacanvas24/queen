@@ -1,0 +1,812 @@
+pip install nsetools
+pip install NSEDownload
+https://github.com/0xramm/Indian-Stock-Market-API
+https://indianapi.in/indian-stock-market
+
+# Rust Re-implementations of Python Libraries for Performance
+
+## ⚡ Copy-Paste Version for Documentation
+
+### **DataFrames & Data Processing (Pandas/Spark Alternatives)**
+1. **Polars** - 10-100× faster pandas replacement with lazy evaluation & Arrow integration
+2. **Elusion** - High-performance DataFrame with flexible query construction
+3. **DataFusion** - Apache Arrow-native query engine (Spark equivalent)
+4. **DuckDB** - Embedded OLAP SQL engine for analytical queries
+5. **black-jack** - Out-of-core DataFrame processing for large datasets
+
+### **HTTP Requests & Web Scraping**
+6. **reqwest** - 8-10× faster replacement for `requests`/`httpx` (sync & async support)
+7. **tokio** - Async runtime replacing `asyncio`/`aiohttp` for concurrent requests
+8. **scraper** - BeautifulSoup equivalent for HTML parsing with CSS selectors
+9. **spider** - Scrapy alternative for large-scale web crawling in Rust
+10. **thirtyfour** - Selenium WebDriver client for browser automation
+11. **playwright-rust** - Playwright bindings for headless browser scraping
+12. **headless_chrome** - Headless Chrome automation (dynamic content handling)
+13. **hyper** - Low-level HTTP implementation (urllib equivalent)
+
+### **Validation & Schema Processing**
+14. **Pydantic v2** - 4-50× faster validation with Rust core engine
+15. **typeguard** - Runtime type checker with Rust extensions
+
+### **Development Tools & CLI**
+16. **Ruff** - 10-100× faster linter replacing flake8/pylint
+17. **uv** - 10-100× faster pip replacement for package installation
+18. **Maturin** - Build tool for Python-Rust hybrid projects
+
+### **Serialization & Data Formats**
+19. **orjson** - Ultra-fast JSON library (replaces ujson/standard json)
+20. **rtoml** - Fast TOML parser with Rust backend
+21. **srsly** - High-performance serialization (JSON, MessagePack) used by spaCy
+22. **rmp** - MessagePack implementation with Rust speed
+23. **ultrajson** - JSON library with Rust variants for C-like performance
+
+### **Machine Learning & Numeric Computing**
+24. **rust-numpy** - Zero-copy NumPy array operations via PyO3
+25. **ndarray** - N-dimensional arrays with SIMD (NumPy alternative)
+26. **nalgebra** - Linear algebra library (SciPy.linalg replacement)
+27. **Burn** - Deep learning framework (PyTorch alternative)
+28. **Linfa** - ML algorithms (scikit-learn alternative)
+
+### **Image Processing**
+29. **image-rs** - Encoding/decoding images (Pillow alternative)
+30. **imageproc** - Image processing operations
+31. **opencv-rust** - OpenCV bindings for computer vision
+
+### **NLP & Text Processing**
+32. **Tokenizers** - Hugging Face's 10× faster tokenization library
+33. **spaCy's Rust components** - Accelerated tokenization and parsing
+
+---
+
+## Performance Summary
+
+| Category | Python Library | Rust Alternative | Performance Gain |
+|----------|----------------|------------------|------------------|
+| DataFrames | pandas | Polars | 10-100× faster |
+| Validation | Pydantic v1 | Pydantic v2 | 4-50× faster |
+| Linting | flake8/pylint | Ruff | 10-100× faster |
+| Package Management | pip | uv | 10-100× faster |
+| HTTP Requests | requests | reqwest | 8-10× faster |
+| HTML Parsing | BeautifulSoup | scraper | 5-10× faster |
+| Serialization | json/ujson | orjson | 5-20× faster |
+
+ **🔧 Key Technical Drivers**  : Rust's zero-cost abstractions, memory safety without GC, parallel execution using all CPU cores, lazy evaluation, and Apache Arrow integration enabling zero-copy data sharing.
+
+
+Here are two comprehensive Python scripts for fetching stock data including 52-week high/low fields from NSE and BSE exchanges:
+
+---
+
+## **Script 1: NSE Data Fetcher (using nsetools)**
+
+This script extracts complete instrument panel data including 52-week high/low from NSE.
+
+```python
+#!/usr/bin/env python3
+"""
+NSE Stock Data Fetcher
+Extracts comprehensive instrument data including 52-week high/low from NSE India
+"""
+
+import time
+from datetime import datetime
+from nsetools import Nse
+from NSEDownload import stocks
+import pandas as pd
+import json
+
+class NSEDataFetcher:
+    def __init__(self, delay=1):
+        """
+        Initialize NSE fetcher with rate limiting
+
+        Args:
+            delay (int): Delay in seconds between API calls (default: 1)
+        """
+        self.nse = Nse()
+        self.delay = delay
+
+    def get_stock_quote(self, symbol):
+        """
+        Fetch complete stock quote with 52-week high/low and all instrument fields
+
+        Args:
+            symbol (str): NSE stock symbol (e.g., 'RELIANCE', 'INFY')
+
+        Returns:
+            dict: Complete stock data including 52w fields
+        """
+        try:
+            # Validate symbol first
+            if not self.nse.is_valid_code(symbol):
+                print(f"❌ Invalid NSE symbol: {symbol}")
+                return None
+
+            print(f"Fetching NSE data for {symbol}...")
+            data = self.nse.get_quote(symbol)
+
+            # Extract key instrument panel fields
+            instrument_data = {
+                # Basic Info
+                'symbol': data.get('symbol'),
+                'company_name': data.get('companyName'),
+                'isin_code': data.get('isinCode'),
+                'series': data.get('series'),
+
+                # Price Data
+                'last_price': data.get('lastPrice'),
+                'previous_close': data.get('previousClose'),
+                'open_price': data.get('open'),
+                'day_high': data.get('dayHigh'),
+                'day_low': data.get('dayLow'),
+
+                # 52-Week High/Low (Primary fields)
+                '52_week_high': data.get('high52'),
+                '52_week_low': data.get('low52'),
+
+                # Additional 52-Week Data
+                'week_high_low': data.get('weekHighLow', {}),
+
+                # Volume & Turnover
+                'total_traded_volume': data.get('totalTradedVolume'),
+                'total_traded_value': data.get('totalTradedValue'),
+                'quantity_traded': data.get('quantityTraded'),
+
+                # Market Depth
+                'market_cap': data.get('marketCap'),
+                'free_float_market_cap': data.get('ffmc'),
+
+                # Dates
+                'last_update_time': data.get('lastUpdateTime'),
+                'ex_date': data.get('exDate'),
+                'record_date': data.get('recordDate'),
+                'bc_start_date': data.get('bcStartDate'),
+                'bc_end_date': data.get('bcEndDate'),
+
+                # Corporate Actions
+                ' Dividend': data.get('dividend'),
+                'bonus': data.get('bonus'),
+                'right': data.get('right'),
+                'book_closure_start': data.get('bcStartDate'),
+                'book_closure_end': data.get('bcEndDate'),
+
+                # Technical Indicators
+                'price_band_upper': data.get('pricebandupper'),
+                'price_band_lower': data.get('pricebandlower'),
+                'var_margin': data.get('varMargin'),
+
+                # Delivery Data
+                'delivery_quantity': data.get('deliveryQuantity'),
+                'delivery_to_traded_quantity': data.get('deliveryToTradedQuantity'),
+
+                # Metadata
+                'face_value': data.get('faceValue'),
+                'security_type': data.get('securityType'),
+                'price_hint': data.get('priceband'),
+
+                # Raw data for debugging
+                '_raw': data
+            }
+
+            time.sleep(self.delay)  # Rate limiting
+            return instrument_data
+
+        except Exception as e:
+            print(f"❌ Error fetching {symbol}: {str(e)}")
+            return None
+
+    def get_historical_with_52week(self, symbol, start_date, end_date):
+        """
+        Fetch historical data with 52-week high/low columns
+
+        Args:
+            symbol (str): Stock symbol
+            start_date (str): Start date (DD-MM-YYYY)
+            end_date (str): End date (DD-MM-YYYY)
+
+        Returns:
+            pd.DataFrame: DataFrame with 52-week high/low columns
+        """
+        try:
+            print(f"Fetching historical data for {symbol}...")
+
+            df = stocks.get_data(
+                stock_symbol=symbol,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            # Ensure 52-week columns are present
+            if '52 Week High Price' in df.columns and '52 Week Low Price' in df.columns:
+                df['52_week_high'] = df['52 Week High Price']
+                df['52_week_low'] = df['52 Week Low Price']
+
+            return df
+
+        except Exception as e:
+            print(f"❌ Error fetching historical data: {str(e)}")
+            return None
+
+    def get_52_week_extremes(self):
+        """
+        Fetch all stocks currently at 52-week highs or lows
+
+        Returns:
+            dict: Stocks at 52-week highs and lows
+        """
+        try:
+            highs = self.nse.get_52_week_high()
+            lows = self.nse.get_52_week_low()
+
+            return {
+                '52_week_highs': highs,
+                '52_week_lows': lows
+            }
+        except Exception as e:
+            print(f"❌ Error fetching extremes: {str(e)}")
+            return None
+
+def main():
+    """Example usage of NSE data fetcher"""
+
+    # Initialize fetcher with 1-second delay
+    fetcher = NSEDataFetcher(delay=1)
+
+    # Example 1: Get complete quote for a single stock
+    print("\n" + "="*60)
+    print("EXAMPLE 1: Single Stock Quote with 52-Week Data")
+    print("="*60)
+
+    symbol = "RELIANCE"
+    quote = fetcher.get_stock_quote(symbol)
+
+    if quote:
+        print(f"\n📊 Instrument Panel for {symbol}")
+        print("-" * 40)
+        print(f"Company: {quote['company_name']}")
+        print(f"Last Price: ₹{quote['last_price']}")
+        print(f"Day High/Low: ₹{quote['day_high']} / ₹{quote['day_low']}")
+        print(f"52-Week High: ₹{quote['52_week_high']}")
+        print(f"52-Week Low: ₹{quote['52_week_low']}")
+        print(f"Total Volume: {quote['total_traded_volume']:,}")
+        print(f"Market Cap: ₹{quote['market_cap']:,}")
+        print(f"ISIN Code: {quote['isin_code']}")
+
+        # Save to JSON
+        with open(f'{symbol}_nse_data.json', 'w') as f:
+            json.dump(quote, f, indent=2, default=str)
+        print(f"\n✅ Data saved to {symbol}_nse_data.json")
+
+    # Example 2: Get historical data with 52-week bands
+    print("\n" + "="*60)
+    print("EXAMPLE 2: Historical Data with 52-Week Bands")
+    print("="*60)
+
+    hist_df = fetcher.get_historical_with_52week(
+        symbol="TCS",
+        start_date="01-01-2024",
+        end_date="31-01-2024"
+    )
+
+    if hist_df is not None:
+        print(f"\n📈 Historical Data (first 5 rows):")
+        print(hist_df.head())
+        print(f"\nColumns available: {list(hist_df.columns)}")
+
+        # Save to CSV
+        hist_df.to_csv('TCS_historical_52week.csv', index=False)
+        print("\n✅ Historical data saved to TCS_historical_52week.csv")
+
+    # Example 3: Get stocks at 52-week extremes
+    print("\n" + "="*60)
+    print("EXAMPLE 3: Stocks at 52-Week Extremes")
+    print("="*60)
+
+    extremes = fetcher.get_52_week_extremes()
+
+    if extremes:
+        print(f"\n🔺 Stocks at 52-Week Highs: {len(extremes['52_week_highs'])}")
+        for stock in extremes['52_week_highs'][:5]:  # Top 5
+            print(f"  - {stock['symbol']}: ₹{stock['ltp']} (High: ₹{stock['new52WHL']})")
+
+        print(f"\n🔻 Stocks at 52-Week Lows: {len(extremes['52_week_lows'])}")
+        for stock in extremes['52_week_lows'][:5]:  # Top 5
+            print(f"  - {stock['symbol']}: ₹{stock['ltp']} (Low: ₹{stock['new52WHL']})")
+
+if __name__ == "__main__":
+    print("NSE Stock Data Fetcher - Starting...")
+    main()
+```
+
+**Installation:**
+```bash
+pip install nsetools
+pip install NSEDownload
+pip install pandas
+```
+
+---
+
+## **Script 2: BSE/NSE Unified Data Fetcher (using Indian Stock Market API)**
+
+This script fetches data for both NSE and BSE stocks, including BSE-only symbols like NSDL, using the free unified API.
+
+```python
+#!/usr/bin/env python3
+"""
+Unified Indian Stock Market Data Fetcher
+Supports both NSE and BSE exchanges via free API
+Handles BSE-only symbols like NSDL
+"""
+
+import requests
+import json
+import time
+from datetime import datetime
+import sys
+
+class IndianStockMarketAPI:
+    """
+    Free API for fetching NSE & BSE stock data
+    Base URL: http://nse-api-khaki.vercel.app:5000
+    """
+
+    def __init__(self, base_url="http://nse-api-khaki.vercel.app:5000", delay=0.5):
+        """
+        Initialize API client
+
+        Args:
+            base_url (str): API base URL
+            delay (float): Delay between requests in seconds
+        """
+        self.base_url = base_url.rstrip('/')
+        self.delay = delay
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+
+    def _make_request(self, endpoint, params=None):
+        """
+        Make API request with error handling
+
+        Args:
+            endpoint (str): API endpoint
+            params (dict): Query parameters
+
+        Returns:
+            dict: JSON response or None
+        """
+        try:
+            url = f"{self.base_url}{endpoint}"
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            time.sleep(self.delay)  # Rate limiting
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ API Request Error: {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON Decode Error: {str(e)}")
+            return None
+
+    def get_stock_details(self, symbol, exchange=None, response_format='num'):
+        """
+        Fetch detailed stock data for NSE or BSE symbol
+
+        Args:
+            symbol (str): Stock symbol (e.g., 'RELIANCE', 'NSDL')
+            exchange (str): 'NSE' or 'BSE' (auto-detected if None)
+            response_format (str): 'num' for numbers, 'val' for values with units
+
+        Returns:
+            dict: Complete stock details including 52-week data
+        """
+        # Auto-detect exchange for BSE-only symbols
+        if exchange is None:
+            if symbol.upper() in ['NSDL', 'CDSL', 'MCX', 'NCDEX']:
+                exchange = 'BSE'
+                symbol_with_suffix = f"{symbol}.BO"
+            else:
+                symbol_with_suffix = symbol
+        else:
+            suffix = '.NS' if exchange.upper() == 'NSE' else '.BO'
+            symbol_with_suffix = f"{symbol}{suffix}" if not symbol.endswith(suffix) else symbol
+
+        print(f"Fetching data for {symbol_with_suffix}...")
+
+        params = {'symbol': symbol_with_suffix, 'res': response_format}
+        data = self._make_request('/stock', params)
+
+        if not data or data.get('status') != 'success':
+            print(f"❌ Failed to fetch data for {symbol}")
+            return None
+
+        stock_data = data.get('data', {})
+
+        # Extract comprehensive fields
+        instrument_data = {
+            # Symbol Info
+            'symbol': stock_data.get('symbol'),
+            'ticker': stock_data.get('ticker'),
+            'company_name': stock_data.get('company_name'),
+            'exchange': stock_data.get('exchange'),
+
+            # Price Data
+            'current_price': stock_data.get('current_price'),
+            'previous_close': stock_data.get('previous_close'),
+            'open_price': stock_data.get('open_price'),
+            'day_high': stock_data.get('day_high'),
+            'day_low': stock_data.get('day_low'),
+
+            # 52-Week High/Low
+            '52_week_high': stock_data.get('week_52_high'),
+            '52_week_low': stock_data.get('week_52_low'),
+
+            # Volume Data
+            'volume': stock_data.get('volume'),
+            'total_traded_value': stock_data.get('total_traded_value'),
+
+            # Market Data
+            'market_cap': stock_data.get('market_cap'),
+            'free_float_market_cap': stock_data.get('free_float_market_cap'),
+            'free_float_shares': stock_data.get('free_float_shares'),
+
+            # Valuation
+            'pe_ratio': stock_data.get('pe_ratio'),
+            'pb_ratio': stock_data.get('pb_ratio'),
+            'dividend_yield': stock_data.get('dividend_yield'),
+            'face_value': stock_data.get('face_value'),
+            'book_value': stock_data.get('book_value'),
+            'eps': stock_data.get('eps'),
+
+            # Price Bands
+            'price_band_upper': stock_data.get('price_band_upper'),
+            'price_band_lower': stock_data.get('price_band_lower'),
+            'upper_band': stock_data.get('upper_band'),
+            'lower_band': stock_data.get('lower_band'),
+
+            # Corporate Actions
+            'dividend': stock_data.get('dividend'),
+            'bonus': stock_data.get('bonus'),
+            'ex_date': stock_data.get('ex_date'),
+            'record_date': stock_data.get('record_date'),
+            'bc_start_date': stock_data.get('bc_start_date'),
+            'bc_end_date': stock_data.get('bc_end_date'),
+
+            # Metadata
+            'isin_code': stock_data.get('isin_code'),
+            'security_code': stock_data.get('security_code'),
+            'industry': stock_data.get('industry'),
+            'sector': stock_data.get('sector'),
+            'tick_size': stock_data.get('tick_size'),
+            'lot_size': stock_data.get('lot_size'),
+
+            # Timestamps
+            'last_updated': stock_data.get('last_updated'),
+            'timestamp': stock_data.get('timestamp'),
+
+            # Additional Info
+            'smart_advice': stock_data.get('smart_advice'),
+            'price_change': stock_data.get('price_change'),
+            'price_change_pct': stock_data.get('price_change_pct'),
+            'p_change': stock_data.get('pChange'),
+            'change': stock_data.get('change'),
+
+            # Raw response for debugging
+            '_raw': stock_data
+        }
+
+        return instrument_data
+
+    def get_multiple_stocks(self, symbols, response_format='num'):
+        """
+        Fetch data for multiple stocks in one request
+
+        Args:
+            symbols (list): List of stock symbols
+            response_format (str): 'num' or 'val'
+
+        Returns:
+            list: List of stock data dictionaries
+        """
+        symbols_str = ','.join(symbols)
+        params = {'symbols': symbols_str, 'res': response_format}
+
+        data = self._make_request('/stock/list', params)
+
+        if not data or data.get('status') != 'success':
+            print("❌ Failed to fetch multiple stocks")
+            return None
+
+        return data.get('data', [])
+
+    def search_symbol(self, query):
+        """
+        Search for stock symbols by company name
+
+        Args:
+            query (str): Search query (e.g., 'reliance', 'nsdl')
+
+        Returns:
+            list: Search results with symbols
+        """
+        params = {'q': query}
+        data = self._make_request('/search', params)
+
+        if not data or data.get('status') != 'success':
+            print(f"❌ Search failed for '{query}'")
+            return None
+
+        return data.get('data', [])
+
+    def get_all_symbols(self):
+        """
+        Get all available cached symbols with NSE and BSE tickers
+
+        Returns:
+            dict: Available symbols
+        """
+        data = self._make_request('/symbols')
+
+        if not data or data.get('status') != 'success':
+            print("❌ Failed to fetch symbols list")
+            return None
+
+        return data.get('data', {})
+
+def main():
+    """Example usage of unified API"""
+
+    # Initialize API client
+    api = IndianStockMarketAPI(delay=0.5)
+
+    # Example 1: NSE stock (Reliance)
+    print("\n" + "="*60)
+    print("EXAMPLE 1: NSE Stock (Reliance)")
+    print("="*60)
+
+    reliance = api.get_stock_details('RELIANCE.NS')
+    if reliance:
+        print(f"\n📊 RELIANCE (NSE)")
+        print("-" * 30)
+        print(f"Company: {reliance['company_name']}")
+        print(f"Current Price: ₹{reliance['current_price']}")
+        print(f"Day High/Low: ₹{reliance['day_high']} / ₹{reliance['day_low']}")
+        print(f"52-Week High: ₹{reliance['52_week_high']}")
+        print(f"52-Week Low: ₹{reliance['52_week_low']}")
+        print(f"Market Cap: ₹{reliance['market_cap']:,}")
+        print(f"P/E Ratio: {reliance['pe_ratio']}")
+        print(f"Volume: {reliance['volume']:,}")
+
+        # Save to JSON
+        with open('reliance_nse_api.json', 'w') as f:
+            json.dump(reliance, f, indent=2, default=str)
+        print("\n✅ Data saved to reliance_nse_api.json")
+
+    # Example 2: BSE-only stock (NSDL)
+    print("\n" + "="*60)
+    print("EXAMPLE 2: BSE-Only Stock (NSDL)")
+    print("="*60)
+
+    nsdl = api.get_stock_details('NSDL.BO')
+    if nsdl:
+        print(f"\n📊 NSDL (BSE Only)")
+        print("-" * 30)
+        print(f"Company: {nsdl['company_name']}")
+        print(f"Current Price: ₹{nsdl['current_price']}")
+        print(f"Day High/Low: ₹{nsdl['day_high']} / ₹{nsdl['day_low']}")
+        print(f"52-Week High: ₹{nsdl['52_week_high']}")
+        print(f"52-Week Low: ₹{nsdl['52_week_low']}")
+        print(f"ISIN Code: {nsdl['isin_code']}")
+        print(f"Security Code: {nsdl['security_code']}")
+
+        # Save to JSON
+        with open('nsdl_bse_api.json', 'w') as f:
+            json.dump(nsdl, f, indent=2, default=str)
+        print("\n✅ Data saved to nsdl_bse_api.json")
+
+    # Example 3: Search for BSE symbols
+    print("\n" + "="*60)
+    print("EXAMPLE 3: Search for BSE-Only Symbols")
+    print("="*60)
+
+    search_results = api.search_symbol('nsdl')
+    if search_results:
+        print(f"\n🔍 Search results for 'nsdl':")
+        for result in search_results[:5]:  # Top 5
+            print(f"  - {result.get('ticker')}: {result.get('company_name')}")
+
+    # Example 4: Multiple stocks (mixed NSE & BSE)
+    print("\n" + "="*60)
+    print("EXAMPLE 4: Multiple Stocks (Mixed Exchanges)")
+    print("="*60)
+
+    symbols = ['RELIANCE.NS', 'TCS.NS', 'NSDL.BO']
+    multiple = api.get_multiple_stocks(symbols)
+
+    if multiple:
+        print(f"\n📈 Batch data for {len(multiple)} stocks:")
+        for stock in multiple:
+            print(f"  - {stock.get('ticker')}: ₹{stock.get('current_price')} "
+                  f"(52W: ₹{stock.get('week_52_low')} - ₹{stock.get('week_52_high')})")
+
+        # Save to JSON
+        with open('multiple_stocks.json', 'w') as f:
+            json.dump(multiple, f, indent=2, default=str)
+        print("\n✅ Batch data saved to multiple_stocks.json")
+
+if __name__ == "__main__":
+    print("Unified Indian Stock Market API - Starting...")
+    print("Supports both NSE and BSE exchanges")
+    main()
+```
+
+**Installation:**
+```bash
+pip install requests
+```
+
+---
+
+## **Key Differences Between Scripts**
+
+| Feature | NSE Script (nsetools) | Unified API Script |
+|---------|----------------------|-------------------|
+| **Source** | Official NSE data | Third-party aggregator |
+| **Authentication** | None required | None required |
+| **BSE Support** | ❌ No | ✅ Yes |
+| **Rate Limits** | 1 req/sec recommended | 0.5 req/sec recommended |
+| **Data Freshness** | Real-time | ~15-20 min delay |
+| **52W Fields** | `high52`, `low52` | `week_52_high`, `week_52_low` |
+| **Best For** | NSE-only analysis | Mixed NSE/BSE portfolios |
+
+---
+
+## **Usage for BSE-Only Symbols**
+
+For symbols listed **only on BSE** (like NSDL, CDSL, MCX):
+
+**Using Unified API:**
+```python
+api = IndianStockMarketAPI()
+
+# Auto-detects BSE for known BSE-only symbols
+nsdl_data = api.get_stock_details('NSDL')  # Automatically uses .BO
+
+# Or explicitly specify BSE
+mcd_data = api.get_stock_details('MCD.BO')  # BSE suffix
+```
+
+**Result includes full instrument panel:**
+- 52-week high/low ✓
+- Market cap ✓
+- P/E ratio ✓
+- Volume data ✓
+- ISIN code ✓
+- All corporate action dates ✓
+
+The Unified API script is recommended for comprehensive analysis spanning both exchanges, while the NSE script provides the most reliable direct access to NSE's official data.
+
+
+==========
+
+Based on the search results, here's the detailed information about 52-week high/low data availability from NSE and BSE:
+
+## **NSE API - 52 Week High/Low Availability**
+
+**Yes, NSE APIs do provide 52-week high/low fields.** The data is available through multiple endpoints:
+
+### **1. Stock Quote API (with all_data=True)**
+The NSETools library's `get_quote()` method returns 52-week data in the `weekHighLow` object:
+```json
+{
+  "weekHighLow": {
+    "min": 4890,  // 52-week low
+    "max": 5218.45 // 52-week high
+  }
+}
+```
+
+### **2. Index Stock Quotes**
+When fetching stocks within an index, the API directly provides `yearHigh` and `yearLow` fields:
+```json
+{
+  "yearHigh": 1757.8,  // 52-week high
+  "yearLow": 1427.05   // 52-week low
+}
+```
+
+### **3. Price Band API**
+The NSE Price Band Hitter API also includes `yearHigh` and `yearLow` in its response .
+
+### **Key Fields Available:**
+- `yearHigh` / `yearLow` (direct fields)
+- `weekHighLow.min` / `weekHighLow.max` (nested object)
+- `52_week_high` / `52_week_low` (in some third-party aggregators)
+
+## **For BSE-Only Listed Symbols (like NSDL)**
+
+### **Official BSE API Status**
+There is **no publicly documented official API** from BSE (Bombay Stock Exchange) that provides the same level of access as NSE's APIs. BSE primarily provides data through:
+- **BSE Website**: Manual access to stock quotes
+- **Data vendors**: Through commercial agreements
+- **Third-party aggregators**: APIs that scrape or aggregate BSE data
+
+### **Third-Party Solutions for BSE Data**
+
+#### **1. Unified NSE/BSE APIs**
+Several services provide combined NSE and BSE data:
+
+**Indian Stock Exchange API** :
+- **Endpoint**: `/fetch_52_week_high_low_data`
+- **Response includes both BSE and NSE data**:
+```json
+{
+  "BSE_52WeekHighLow": {
+    "high52Week": [
+      {
+        "ticker": "RELIANCE.BO",
+        "company": "Reliance Industries",
+        "price": 2200.55,
+        "52_week_high": 2300.00
+      }
+    ],
+    "low52Week": [
+      {
+        "ticker": "TATASTEEL.BO",
+        "company": "Tata Steel",
+        "price": 850.00,
+        "52_week_low": 800.00
+      }
+    ]
+  }
+}
+```
+
+**Indian Stock Market API** :
+- **Supports BSE symbols using `.BO` suffix**
+- Example: `GET /stock?symbol=NSDL.BO`
+- Returns: `year_high` and `year_low` fields for BSE stocks
+
+#### **2. Data Fields for BSE Stocks**
+When available, BSE data typically includes:
+- `week_52_high` (52-week high price)
+- `week_52_low` (52-week low price)
+- `year_high` / `year_low` (alternative naming)
+
+### **Recommended Approach for BSE-Only Symbols**
+
+For symbols listed exclusively on BSE (like NSDL):
+
+1. **Use third-party unified APIs** that support both exchanges:
+   - Services mentioned in , ,  provide BSE data
+   - Use `.BO` ticker suffix for BSE symbols
+
+2. **API Call Pattern**:
+```bash
+# For BSE-only symbol like NSDL
+GET /stock?symbol=NSDL.BO
+GET /fetch_52_week_high_low_data?ticker=NSDL.BO
+```
+
+3. **Field Mapping**:
+   - Map `52_week_high` → `weekHighLow.max`
+   - Map `52_week_low` → `weekHighLow.min`
+   - Or use direct `year_high` / `year_low` fields when available
+
+### **Limitations & Considerations**
+
+- **No free official BSE API**: Unlike NSE, BSE doesn't provide a free public API
+- **Data latency**: Third-party APIs may have 15-20 minute delay
+- **Rate limits**: Third-party services have usage limits
+- **Authentication**: Most require API key registration
+- **Coverage**: Verify the API covers your specific BSE-only symbols
+
+### **Alternative: Web Scraping**
+If official APIs are insufficient, you could scrape BSE's website (bseindia.com), but this violates terms of service and is not recommended for production use.
+
+**Bottom Line**: For BSE-only symbols, you'll need to rely on third-party aggregators or commercial data vendors, as BSE doesn't offer a public API comparable to NSE's.

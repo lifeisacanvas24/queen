@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/indicators/volume_mfi.py — v1.1 (forward-only)
+# queen/technicals/indicators/volume_mfi.py — v1.2 (no-duplicate safe)
 # Money Flow Index (MFI) — settings-driven, NaN-safe, Polars/NumPy
 # Outputs: ['MFI','MFI_norm','MFI_Bias','MFI_Flow']
 # ============================================================
@@ -9,19 +9,9 @@ import numpy as np
 import polars as pl
 from queen.helpers.pl_compat import _s2np
 from queen.settings.indicator_policy import params_for as _params_for
+from queen.settings.timeframes import context_to_token
 
 
-def _tf_from_context(context: str) -> str:
-    c = (context or "").lower()
-    if c.startswith("intraday_"):
-        return c.split("_", 1)[-1]  # '15m'
-    if c.startswith("hourly_"):
-        return c.split("_", 1)[-1]  # '1h'
-    if c in {"daily", "1d", "d"}:
-        return "1d"
-    if c in {"weekly", "1w", "w"}:
-        return "1w"
-    return c or "15m"
 
 
 def mfi(
@@ -90,13 +80,18 @@ def mfi(
     flow[delta < 0] = "⬇️ Outflow"
 
     return pl.DataFrame(
-        {"MFI": mfi_full, "MFI_norm": mfi_norm, "MFI_Bias": bias, "MFI_Flow": flow}
+        {
+            "MFI": mfi_full,
+            "MFI_norm": mfi_norm,
+            "MFI_Bias": bias,
+            "MFI_Flow": flow,
+        }
     )
 
 
 def compute_mfi(df: pl.DataFrame, context: str = "intraday_15m") -> pl.DataFrame:
-    """Compatibility wrapper for orchestrators/tests that pass 'context'."""
-    tf = _tf_from_context(context)
+    """Context → timeframe adapter."""
+    tf = context_to_token(context)
     return mfi(df, timeframe=tf)
 
 
@@ -124,4 +119,10 @@ def summarize_mfi(df: pl.DataFrame) -> dict:
 
 
 def attach_mfi(df: pl.DataFrame, timeframe: str = "15m") -> pl.DataFrame:
-    return df.hstack(mfi(df, timeframe=timeframe))
+    """Attach MFI block with no duplicate column names."""
+    add = mfi(df, timeframe=timeframe)
+    # Drop any existing MFI columns before hstack to avoid name clashes
+    drop_cols = [c for c in add.columns if c in df.columns]
+    if drop_cols:
+        df = df.drop(drop_cols)
+    return df.hstack(add)

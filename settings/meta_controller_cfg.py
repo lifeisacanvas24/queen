@@ -1,3 +1,4 @@
+#queen/settings/meta_controller_cfg.py
 META_CTRL = {
     "model_file": "tactical_ai_model.pkl",
     "retrain_interval_hours": 24,

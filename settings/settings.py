@@ -52,11 +52,14 @@ def _build_paths(env: str) -> Dict[str, Path]:
         "TEST_HELPERS": _mk(base_runtime / "test_helpers"),
         # static + project resources
         "STATIC": _REPO_ROOT / "queen" / "data" / "static",
+        "SERVER_STATIC": _REPO_ROOT / "queen" / "server" / "static",
         "INSTRUMENTS": _REPO_ROOT / "queen" / "data" / "static",
         "UNIVERSE": _REPO_ROOT / "queen" / "data" / "static",
         "PROFILES": _REPO_ROOT / "queen" / "data" / "static" / "profiles",
         "CONFIGS": _REPO_ROOT / "configs",
         "TEMPLATES": _mk(_REPO_ROOT / "queen" / "server" / "templates"),
+        "ARCHIVES": _mk(base_runtime / "archives"),
+
     }
 
 PATHS: Dict[str, Path] = _build_paths(get_env())

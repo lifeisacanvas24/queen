@@ -36,6 +36,12 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         tmp_name = tmp.name
     os.replace(tmp_name, path)
 
+# ---------- atomic JSON write ----------
+def write_json_atomic(path: Path | str, obj) -> None:
+    """Atomically write a JSON-serializable object to disk (UTF-8)."""
+    p = Path(path)
+    data = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+    _atomic_write_bytes(p, data)
 
 # ---------- JSON / NDJSON ----------
 def read_json(path: str | Path) -> pl.DataFrame:

@@ -1,84 +1,144 @@
+{% extends "_layouts/base.html" %}
+{% block title %}Queen Cockpit — Summary{% endblock %}
+{% set page_id = "summary" %}
+
+{% block top %}
+  <h1 class="title">
+    Queen Cockpit — <span class="q-muted">Summary</span>
+    <span id="sessionBadge" class="session-badge">—</span>
+  </h1>
+{% endblock %}
+
+{% block content %}
+<div class="q-box p-4">
+  <!-- Root that JS will populate -->
+  <div id="summaryRoot"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-let posMap = {}; // {SYM:{qty,avg_price}}
-let lastRows = [];
+/* ------------------------------------------------------------------
+   SUMMARY PAGE — build UI + wire events + render cards
+   ------------------------------------------------------------------ */
 
-function noStore(u){ const url=(u instanceof URL)?u:new URL(u,location.origin); url.searchParams.set('_',Date.now()); return fetch(url,{cache:'no-store'}); }
-function fmt(x){ if(x===null||x===undefined) return '—'; if(typeof x==='number') return x.toLocaleString(undefined,{maximumFractionDigits:1}); return x; }
-function normCtx(x){ if(!x) return 'Unknown'; const s=String(x); return s.includes('/')?s.split('/')[0].trim():s; }
+async function refreshSummary() {
+  const intervalEl = document.getElementById('interval');
+  const symbolsEl  = document.getElementById('symbols');
+  const bookEl     = document.getElementById('book');
+  const refreshBtn = document.getElementById('refresh');
 
-function pill(text,tone){ return `<span class="pill ${tone}">${text}</span>`; }
-function cprBadge(ctx){ const t=(ctx||'Unknown'); const tone=t==='Above'?'green':t==='At'?'gray':t==='Below'?'red':'amber'; return pill(t,tone); }
-function emaBadge(bias){ const b=(bias||'Neutral'); const tone=b==='Bullish'?'green':b==='Bearish'?'red':'gray'; return pill(b,tone); }
-function rsiBadge(v){ if(v==null||isNaN(v)) return pill('—','gray'); const n=Number(v); const tone=n>=60?'green':(n>=45?'amber':'red'); return pill(n.toFixed(1),tone); }
+  console.log('Summary controls snapshot', {
+    intervalEl, symbolsEl, bookEl, refreshBtn
+  });
 
-async function loadPositions(book){
-  try{
-    const j = await (await fetch(`/portfolio/positions?book=${encodeURIComponent(book)}`, {cache:'no-store'})).json();
-    posMap = j && j.positions ? j.positions : {};
-  }catch{ posMap = {}; }
-}
-function computePnl(cmp,p){ if(!p||cmp==null) return null; const qty=Number(p.qty||0), avg=Number(p.avg_price||0); if(!(qty>0)||!(avg>0)) return null; const abs=(cmp-avg)*qty; return {abs}; }
-function pnlChip(sym,cmp){
-  const p=posMap[sym]; if(!p) return '';
-  const r=computePnl(cmp,p); if(!r) return `<span class="pnl-chip pnl-flat"><span class="pnl-val">—</span></span>`;
-  const cls=r.abs>1e-6?'pnl-up':(r.abs<-1e-6?'pnl-dn':'pnl-flat');
-  const abs=r.abs.toLocaleString(undefined,{maximumFractionDigits:0});
-  return `<span class="pnl-chip ${cls}"><span class="pnl-val">₹${abs}</span></span>`;
-}
+  if (!intervalEl || !symbolsEl || !bookEl || !refreshBtn) {
+    console.warn('Summary controls not ready yet (missing inputs)');
+    return;
+  }
+  if (!window.qs || !qs.noStore) {
+    console.warn('qs helpers not ready yet');
+    return;
+  }
 
-function renderSummary(rows){
-  const tb=document.getElementById('summaryBody');
-  if(!tb) return;
-  const sorted=[...rows].sort((a,b)=> (b.score||0)-(a.score||0));
-  tb.innerHTML = sorted.map(r=>{
-    const held = r.held ? `<span class="badge held tag ml-1">HELD</span>` : '';
-    const pnl  = pnlChip(r.symbol, r.cmp);
-    const dec  = (r.decision||'').toUpperCase();
-    const rowCls = dec==='BUY'||dec==='ADD' ? 'row-bull' : (dec==='EXIT'||dec==='AVOID'?'row-bear':'row-dim');
-    return `<tr class="${rowCls}">
-      <td class="sym"><strong>${r.symbol||''}</strong> ${held} ${pnl}</td>
-      <td><span class="badge ${dec==='BUY'||dec==='ADD'?'green':dec==='EXIT'||dec==='AVOID'?'red':'amber'}">${dec||''}</span></td>
-      <td class="num">${fmt(r.score)}</td>
-      <td class="num mono">${fmt(r.entry)}</td>
-      <td class="num mono">${fmt(r.sl)}</td>
-      <td class="targets-cell">${(r.targets||[]).join(' • ')}</td>
-      <td>${emaBadge(r.ema_bias)}</td>
-      <td>${rsiBadge(r.rsi)}</td>
-      <td>${cprBadge(normCtx(r.cpr_ctx))}</td>
-      <td>${(r.vwap_zone||'Unknown')}</td>
-      <td class="q-muted">${r.notes||'—'}</td>
-    </tr>`;
-  }).join('');
-}
+  qs.spinGrid("sumGrid");
 
-async function refreshSummary(){
-  const iv=document.getElementById('interval')?.value||'15';
-  const book=document.getElementById('book')?.value||'all';
-  await loadPositions(book);
-  const raw=(document.getElementById('symbols')?.value||'').trim();
-  const syms = raw ? raw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const iv   = intervalEl.value || '15';
+  const raw  = (symbolsEl.value || '').trim();
+  const book = bookEl.value || 'all';
 
-  const url=new URL('/monitor/actionable', location.origin);
-  if(syms.length) syms.forEach(s=>url.searchParams.append('symbols', s));
+  const syms = raw
+    ? raw.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  const url = new URL('/cockpit/api/summary', window.location.origin);
   url.searchParams.set('interval', iv);
   url.searchParams.set('book', book);
-  url.searchParams.set('limit','250');
+  syms.forEach(s => url.searchParams.append('symbols', s));
 
-  try{
-    const j=await (await noStore(url)).json();
-    lastRows = Array.isArray(j.rows) ? j.rows : [];
-    if(!lastRows.length){
-      document.getElementById('summaryBody').innerHTML = `<tr><td colspan="11" class="q-muted has-text-centered">No items.</td></tr>`;
-      return;
-    }
-    renderSummary(lastRows);
-  }catch(e){
-    document.getElementById('summaryBody').innerHTML = `<tr><td colspan="11" class="q-muted has-text-centered">Error: ${e}</td></tr>`;
+  // Load positions so cards can show HELD + PnL
+  await qs.loadPositions(book);
+
+  try {
+    const j = await qs.noStore(url).then(r => r.json());
+    const rows = Array.isArray(j.rows) ? j.rows : [];
+    qs.renderCards("sumGrid", rows);
+  } catch (e) {
+    console.error('Summary refresh failed:', e);
+    qs.errorGrid("sumGrid", e);
   }
 }
 
-window.addEventListener('load', ()=>{
-  document.getElementById('refreshBtn')?.addEventListener('click', refreshSummary);
-  refreshSummary();
+window.addEventListener('load', () => {
+  let root = document.getElementById('summaryRoot');
+  if (!root) {
+    console.warn('Summary root not found (load) — creating one');
+    root = document.createElement('div');
+    root.id = 'summaryRoot';
+    // Try to place it in the main q-box if present, else in <main>, else body
+    const host =
+      document.querySelector('.q-box') ||
+      document.querySelector('main') ||
+      document.body;
+    host.appendChild(root);
+  }
+
+  // Inject the full controls + grid markup
+  root.innerHTML = `
+    <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+      <div class="is-flex is-align-items-center" style="gap:0.75rem; flex-wrap:wrap">
+
+        <!-- Interval -->
+        <div class="select">
+          <select id="interval">
+            <option value="5">5m</option>
+            <option value="15" selected>15m</option>
+            <option value="30">30m</option>
+            <option value="60">60m</option>
+          </select>
+        </div>
+
+        <!-- Book -->
+        <div class="select">
+          <select id="book"></select>
+        </div>
+
+        <!-- Symbols -->
+        <input
+          id="symbols"
+          class="input mono"
+          style="width:300px"
+          placeholder="Symbols (comma) or blank for universe"
+        >
+      </div>
+
+      <button id="refresh" class="button q-primary">Refresh</button>
+    </div>
+
+    <!-- ⬇ Card Grid Container -->
+    <div id="sumGrid" class="card-grid"></div>
+  `;
+
+  const refreshBtn = document.getElementById('refresh');
+  if (!refreshBtn) {
+    console.warn('Summary controls not ready yet (no refresh button after inject)');
+    return;
+  }
+
+  // Wire Refresh button
+  refreshBtn.onclick = refreshSummary;
+
+  // Load books + first render
+  if (window.qs && typeof qs.loadBooks === 'function') {
+    qs.loadBooks("book").then(refreshSummary);
+  } else {
+    console.warn('qs.loadBooks not ready');
+  }
+
+  // Header session chip
+  if (window.qs && typeof qs.initSessionBadge === 'function') {
+    qs.initSessionBadge("sessionBadge");
+  }
 });
 </script>
+{% endblock %}

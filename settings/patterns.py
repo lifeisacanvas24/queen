@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/settings/patterns.py — Pattern Recognition Config (v8.2)
+# queen/settings/patterns.py — Pattern Recognition Config (v10.5)
 # Canonical definitions + safe helpers + validation (forward-only)
+#
+# Bible v10.5 alignment:
+#   • Japanese primitives: hammer, shooting_star, doji,
+#       bullish_engulfing, bearish_engulfing (+ inside_bar, stars)
+#   • Structural / cumulative bases and triangles intact
+#   • Each pattern tagged with:
+#       - role: "REVERSAL" | "CONTINUATION" | "STRUCTURAL" | "INDECISION" | "CONSOLIDATION"
+#       - bias: "bullish" | "bearish" | "neutral"
+#   • Contexts use context_key → timeframe_token (5m, 15m, 1d, 1w, ...)
+#   • required_lookback() is the single source of truth for lookback bars.
 # ============================================================
 from __future__ import annotations
 
@@ -17,163 +27,212 @@ __all__ = [
     "required_candles",
     "required_lookback",
     "contexts_for",
+    "role_for",
     "validate",
 ]
 
 # ------------------------------------------------------------
-# 🕯️ Japanese Candlestick Patterns
+# 🕯️ Japanese Candlestick Patterns (Bible v10.5)
 # ------------------------------------------------------------
 JAPANESE: Dict[str, Dict[str, Any]] = {
+    # --- 1-bar primitives (umbrella lines + doji) ---
     "hammer": {
+        "role": "REVERSAL",        # used by Reversal Stack / Bible
+        "bias": "bullish",
         "candles_required": 1,
         "contexts": {
-            "intraday_5m": {"timeframe": "5m", "lookback": 40},
+            # intraday reversal candidate near CPR / supports
+            "intraday_5m":  {"timeframe": "5m",  "lookback": 40},
             "intraday_15m": {"timeframe": "15m", "lookback": 40},
-            "daily": {"timeframe": "1d", "lookback": 15},
+            # swing reversal on dailies
+            "daily":        {"timeframe": "1d",  "lookback": 15},
         },
-        "_note": "Hammer: Bullish reversal; long lower wick; confirms best with volume uptick.",
+        "_note": "Hammer: Bullish reversal; long lower wick; strongest near CPR/S1 with volume/OBV uptick.",
     },
     "shooting_star": {
+        "role": "REVERSAL",
+        "bias": "bearish",
         "candles_required": 1,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 40},
-            "daily": {"timeframe": "1d", "lookback": 15},
+            "daily":        {"timeframe": "1d",  "lookback": 15},
         },
-        "_note": "Shooting Star: Bearish reversal; long upper wick; confirms with OBV divergence.",
+        "_note": "Shooting Star: Bearish reversal; long upper wick; strongest near CPR/R1–R2 with OBV divergence.",
     },
     "doji": {
+        "role": "INDECISION",      # treated as candidate, not standalone signal
+        "bias": "neutral",
         "candles_required": 1,
         "contexts": {
-            "intraday_5m": {"timeframe": "5m", "lookback": 25},
+            "intraday_5m":  {"timeframe": "5m",  "lookback": 25},
             "intraday_15m": {"timeframe": "15m", "lookback": 25},
-            "daily": {"timeframe": "1d", "lookback": 10},
+            "daily":        {"timeframe": "1d",  "lookback": 10},
         },
-        "_note": "Doji: Indecision marker; confirmation needed from next candle body expansion.",
+        "_note": "Doji: Indecision marker; requires confirmation from next candle body + context (RSI/CPR/volume).",
     },
+
+    # --- 2-bar engulfing & consolidation ---
     "bullish_engulfing": {
+        "role": "REVERSAL",
+        "bias": "bullish",
         "candles_required": 2,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 30},
-            "hourly_1h": {"timeframe": "1h", "lookback": 25},
-            "daily": {"timeframe": "1d", "lookback": 15},
-            "weekly": {"timeframe": "1w", "lookback": 8},
+            "hourly_1h":    {"timeframe": "1h",  "lookback": 25},
+            "daily":        {"timeframe": "1d",  "lookback": 15},
+            "weekly":       {"timeframe": "1w",  "lookback": 8},
         },
-        "_note": "Bullish Engulfing: Full-body reversal; OBV uptick strengthens reliability.",
+        "_note": "Bullish Engulfing: Full-body bullish reversal after decline; OBV uptick + RSI < 50 → 50+ strengthens.",
     },
     "bearish_engulfing": {
+        "role": "REVERSAL",
+        "bias": "bearish",
         "candles_required": 2,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 30},
-            "hourly_1h": {"timeframe": "1h", "lookback": 25},
-            "daily": {"timeframe": "1d", "lookback": 15},
-            "weekly": {"timeframe": "1w", "lookback": 8},
+            "hourly_1h":    {"timeframe": "1h",  "lookback": 25},
+            "daily":        {"timeframe": "1d",  "lookback": 15},
+            "weekly":       {"timeframe": "1w",  "lookback": 8},
         },
-        "_note": "Bearish Engulfing: Marks exhaustion after extended rally; OBV contraction confirms.",
+        "_note": "Bearish Engulfing: Exhaustion after rally; strongest with RSI > 60 rolling down and OBV contraction.",
     },
     "inside_bar": {
+        "role": "CONSOLIDATION",   # used for SPS / squeeze setups
+        "bias": "neutral",
         "candles_required": 2,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 35},
-            "daily": {"timeframe": "1d", "lookback": 20},
+            "daily":        {"timeframe": "1d",  "lookback": 20},
         },
-        "_note": "Inside Bar: Consolidation before expansion; strong precursor for SPS buildup.",
+        "_note": "Inside Bar: Range contraction before expansion; strong precursor for SPS/VCP-style breakouts.",
     },
+
+    # --- 3-bar star patterns (handled by patterns/composite) ---
     "morning_star": {
+        "role": "REVERSAL",
+        "bias": "bullish",
         "candles_required": 3,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 50},
-            "daily": {"timeframe": "1d", "lookback": 25},
+            "daily":        {"timeframe": "1d",  "lookback": 25},
         },
-        "_note": "Morning Star: 3-bar bullish reversal sequence; ideal near lower CPR zone.",
+        "_note": "Morning Star: 3-bar bullish reversal; ideal near lower CPR / prior demand with RSI from oversold.",
     },
     "evening_star": {
+        "role": "REVERSAL",
+        "bias": "bearish",
         "candles_required": 3,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 50},
-            "daily": {"timeframe": "1d", "lookback": 25},
+            "daily":        {"timeframe": "1d",  "lookback": 25},
         },
-        "_note": "Evening Star: 3-bar bearish reversal; confirms with RSI > 65 dropping to < 50.",
+        "_note": "Evening Star: 3-bar bearish reversal; strongest near CPR/R1–R2 with RSI > 65 rolling back sub-50.",
     },
+    # NOTE:
+    # Other composite patterns like Harami, Piercing Line, Dark Cloud Cover,
+    # Three Soldiers/Crows, Tweezers are detected in patterns/composite.py.
+    # They may reuse these roles/biases via fusion-level mapping rather than
+    # needing explicit entries here (keeps registry lean).
 }
 
 # ------------------------------------------------------------
-# 📈 Cumulative / Structural Patterns
+# 📈 Cumulative / Structural Patterns (Bases, Triangles, VCP)
 # ------------------------------------------------------------
 CUMULATIVE: Dict[str, Dict[str, Any]] = {
     "double_bottom": {
+        "role": "STRUCTURAL",
+        "bias": "bullish",
         "candles_required": 30,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 120},
-            "hourly_1h": {"timeframe": "1h", "lookback": 60},
-            "daily": {"timeframe": "1d", "lookback": 50},
-            "weekly": {"timeframe": "1w", "lookback": 26},
+            "hourly_1h":    {"timeframe": "1h",  "lookback": 60},
+            "daily":        {"timeframe": "1d",  "lookback": 50},
+            "weekly":       {"timeframe": "1w",  "lookback": 26},
         },
-        "_note": "Double Bottom: Mid/long-term accumulation base; confirms with OBV breakout.",
+        "_note": "Double Bottom: Mid/long-term accumulation base; confirms with OBV breakout + CPR expansion.",
     },
     "double_top": {
+        "role": "STRUCTURAL",
+        "bias": "bearish",
         "candles_required": 30,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 120},
-            "hourly_1h": {"timeframe": "1h", "lookback": 60},
-            "daily": {"timeframe": "1d", "lookback": 50},
-            "weekly": {"timeframe": "1w", "lookback": 26},
+            "hourly_1h":    {"timeframe": "1h",  "lookback": 60},
+            "daily":        {"timeframe": "1d",  "lookback": 50},
+            "weekly":       {"timeframe": "1w",  "lookback": 26},
         },
-        "_note": "Double Top: Distribution zone; matches high RPS readings.",
+        "_note": "Double Top: Distribution zone; aligns with extended RPS strength and weakening OBV.",
     },
     "cup_handle": {
+        "role": "STRUCTURAL",
+        "bias": "bullish",
         "candles_required": 60,
         "contexts": {
             "hourly_1h": {"timeframe": "1h", "lookback": 90},
-            "daily": {"timeframe": "1d", "lookback": 90},
-            "weekly": {"timeframe": "1w", "lookback": 52},
+            "daily":     {"timeframe": "1d", "lookback": 90},
+            "weekly":    {"timeframe": "1w", "lookback": 52},
         },
-        "_note": "Cup & Handle: Classic breakout structure; aligns with SPS > 1.0 and MCS > 0.5.",
+        "_note": "Cup & Handle: Classic breakout structure; strongest when SPS > 1.0 and MCS > 0.5 near breakout.",
     },
     "head_shoulders": {
+        "role": "STRUCTURAL",
+        "bias": "bearish",
         "candles_required": 40,
         "contexts": {
             "hourly_1h": {"timeframe": "1h", "lookback": 80},
-            "daily": {"timeframe": "1d", "lookback": 60},
-            "weekly": {"timeframe": "1w", "lookback": 26},
+            "daily":     {"timeframe": "1d", "lookback": 60},
+            "weekly":    {"timeframe": "1w", "lookback": 26},
         },
-        "_note": "Head & Shoulders: Bearish reversal; confirm with RPS > 1.0 and RSI divergence.",
+        "_note": "Head & Shoulders: Major bearish reversal; confirm with RPS > 1.0 then breaking neckline with volume.",
     },
     "inverse_head_shoulders": {
+        "role": "STRUCTURAL",
+        "bias": "bullish",
         "candles_required": 40,
         "contexts": {
             "hourly_1h": {"timeframe": "1h", "lookback": 80},
-            "daily": {"timeframe": "1d", "lookback": 60},
-            "weekly": {"timeframe": "1w", "lookback": 26},
+            "daily":     {"timeframe": "1d", "lookback": 60},
+            "weekly":    {"timeframe": "1w", "lookback": 26},
         },
-        "_note": "Inverse H&S: Bullish reversal; confirm with OBV rising and CPR breakout.",
+        "_note": "Inverse H&S: Bullish reversal; OBV rising and CPR breakout above neckline improve odds.",
     },
     "ascending_triangle": {
+        "role": "CONTINUATION",
+        "bias": "bullish",
         "candles_required": 25,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 60},
-            "daily": {"timeframe": "1d", "lookback": 30},
-            "weekly": {"timeframe": "1w", "lookback": 15},
+            "daily":        {"timeframe": "1d",  "lookback": 30},
+            "weekly":       {"timeframe": "1w",  "lookback": 15},
         },
-        "_note": "Ascending Triangle: Bullish continuation; forms during SPS buildup.",
+        "_note": "Ascending Triangle: Bullish continuation; often forms during SPS buildup in strong leaders.",
     },
     "descending_triangle": {
+        "role": "CONTINUATION",
+        "bias": "bearish",
         "candles_required": 25,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 60},
-            "daily": {"timeframe": "1d", "lookback": 30},
-            "weekly": {"timeframe": "1w", "lookback": 15},
+            "daily":        {"timeframe": "1d",  "lookback": 30},
+            "weekly":       {"timeframe": "1w",  "lookback": 15},
         },
-        "_note": "Descending Triangle: Bearish continuation; confirms with RPS elevation.",
+        "_note": "Descending Triangle: Bearish continuation; confirms with volume on breakdown + elevated RPS.",
     },
     "vcp": {
+        "role": "STRUCTURAL",
+        "bias": "bullish",
         "candles_required": 40,
         "contexts": {
             "intraday_15m": {"timeframe": "15m", "lookback": 80},
-            "daily": {"timeframe": "1d", "lookback": 40},
-            "weekly": {"timeframe": "1w", "lookback": 20},
+            "daily":        {"timeframe": "1d",  "lookback": 40},
+            "weekly":       {"timeframe": "1w",  "lookback": 20},
         },
-        "_note": "VCP (Volatility Contraction Pattern): Bullish breakout trigger; OBV rising and CPR tightening.",
+        "_note": "VCP (Volatility Contraction Pattern): Bullish breakout setup; OBV rising, CPR tightening, volume dry-ups.",
     },
+    # NOTE: Bible “base > 3 weeks” is typically implemented as
+    # part of VCP/base detection logic. Config here is enough;
+    # detector implementation can live in technicals/state.py or
+    # patterns/core_structural.py later without changing this contract.
 }
 
 # ------------------------------------------------------------
@@ -188,8 +247,10 @@ _VALID_CONTEXTS = {
     "monthly",
 }
 
+
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
+
 
 def _group_dict(group: str) -> Dict[str, Dict[str, Any]]:
     g = _norm(group)
@@ -199,9 +260,11 @@ def _group_dict(group: str) -> Dict[str, Dict[str, Any]]:
         return CUMULATIVE
     return {}
 
+
 def get_pattern(group: str, name: str) -> Dict[str, Any]:
     """Retrieve pattern definition safely (case-insensitive)."""
     return _group_dict(group).get(_norm(name), {})
+
 
 def list_patterns(group: str | None = None) -> list[str]:
     """List available patterns (optionally by group)."""
@@ -209,6 +272,7 @@ def list_patterns(group: str | None = None) -> list[str]:
         return list(JAPANESE.keys()) + list(CUMULATIVE.keys())
     d = _group_dict(group)
     return list(d.keys())
+
 
 def required_candles(name: str, group: str | None = None) -> int:
     """Minimum candles the pattern definition requires."""
@@ -219,6 +283,7 @@ def required_candles(name: str, group: str | None = None) -> int:
             return max(1, int(p.get("candles_required", 1)))
     return 1
 
+
 def contexts_for(name: str, group: str | None = None) -> dict:
     """Return the contexts mapping for a pattern (or {})."""
     groups = [group] if group else ["japanese", "cumulative"]
@@ -228,8 +293,12 @@ def contexts_for(name: str, group: str | None = None) -> dict:
             return dict(p.get("contexts") or {})
     return {}
 
+
 def required_lookback(name: str, context_key: str) -> int:
-    """Return lookback bars for (pattern, context_key), with safe fallback."""
+    """Return lookback bars for (pattern, context_key), with safe fallback.
+
+    This is the single source of truth that fusion / runners should call.
+    """
     nm = _norm(name)
     ctx = _norm(context_key)
     for g in ["japanese", "cumulative"]:
@@ -240,9 +309,21 @@ def required_lookback(name: str, context_key: str) -> int:
         lb = c.get("lookback")
         if isinstance(lb, int) and lb > 0:
             return lb
+
     # fallback heuristic if not specified
     candles = required_candles(nm, group=None)
     return max(20, candles * 10)
+
+
+def role_for(name: str, group: str | None = None) -> str:
+    """Return the Bible role tag for a pattern, e.g. 'REVERSAL', 'STRUCTURAL'."""
+    groups = [group] if group else ["japanese", "cumulative"]
+    for g in groups:
+        p = get_pattern(g, name)
+        if p:
+            return str(p.get("role", "UNKNOWN")).upper()
+    return "UNKNOWN"
+
 
 # ------------------------------------------------------------
 # 🔍 Validation (forward-only)
@@ -280,14 +361,19 @@ def validate() -> dict:
     _check_block(CUMULATIVE, "CUMULATIVE")
     return {"ok": not errs, "count": total, "errors": errs}
 
+
 # ------------------------------------------------------------
 # ✅ Self-Test
 # ------------------------------------------------------------
 if __name__ == "__main__":
     from pprint import pprint
 
-    print("🧩 Queen Pattern Library")
-    pprint(list_patterns("japanese"))
+    print("🧩 Queen Pattern Library (Bible v10.5)")
+    print("Japanese:", list_patterns("japanese"))
+    print("Cumulative:", list_patterns("cumulative"))
     print("hammer/daily lookback →", required_lookback("hammer", "daily"))
-    print("bullish_engulfing/1h via ctx →", required_lookback("bullish_engulfing", "hourly_1h"))
-    print("validate →", validate())
+    print("bullish_engulfing/hourly_1h →", required_lookback("bullish_engulfing", "hourly_1h"))
+    print("role_for(hammer) →", role_for("hammer"))
+    print("role_for(double_top) →", role_for("double_top"))
+    print("validate →")
+    pprint(validate())

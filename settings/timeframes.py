@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Optional
 
 # ------------------------------------------------------------
 # 🕓 Canonical map: human-friendly → fetcher-canonical
@@ -145,6 +145,98 @@ def get_timeframe(name: str) -> dict[str, Any]:
 def list_timeframes() -> list[str]:
     return list(TIMEFRAMES.keys())
 
+_DEFAULT_TOKEN = "15m"
+
+def context_to_token(context: Optional[str], default: str = _DEFAULT_TOKEN) -> str:
+    """Map settings context key → short timeframe token.
+
+    Examples:
+      'intraday_15m'  → '15m'
+      'hourly_1h'     → '1h'
+      'daily'         → '1d'
+      'weekly'        → '1w'
+      'monthly'       → '1mo'
+
+    If context already looks like a token ('15m', '1h', '1d'),
+    it is normalized & passed through.
+
+    Falls back to `default` ('15m') when ambiguous/empty.
+
+    """
+    if not context:
+        return default
+
+    ctx = context.strip().lower()
+
+    # Common prefixes
+    if ctx.startswith("intraday_") or ctx.startswith("hourly_"):
+        # 'intraday_15m' → '15m', 'hourly_1h' → '1h'
+        token = ctx.split("_", 1)[1]
+        return normalize_tf(token) or default
+
+    # Canonical named contexts
+    mapping = {
+        "daily": "1d",
+        "1d": "1d",
+        "d": "1d",
+        "weekly": "1w",
+        "1w": "1w",
+        "w": "1w",
+        "monthly": "1mo",
+        "1mo": "1mo",
+    }
+
+    token = mapping.get(ctx, ctx or default)
+    token = normalize_tf(token) or default
+
+    # Optional: validate; if invalid, fall back to default
+    try:
+        validate_token(token)
+    except Exception:
+        return default
+
+    return token
+
+
+def token_to_context(
+    token: Optional[str],
+    *,
+    domain: str = "intraday",
+    default: str = "intraday_15m",
+) -> str:
+    """Map a timeframe token → a context key.
+
+    Examples:
+      token_to_context("15m")          → 'intraday_15m' (default domain)
+      token_to_context("1h","hourly")  → 'hourly_1h'
+      token_to_context("1d")           → 'daily'
+      token_to_context("1w")           → 'weekly'
+      token_to_context("1mo")          → 'monthly'
+
+    """
+    if not token:
+        return default
+
+    t = normalize_tf(token)
+
+    # Daily/weekly/monthly handled as named contexts
+    if t in {"1d", "d"}:
+        return "daily"
+    if t in {"1w", "w"}:
+        return "weekly"
+    if t in {"1mo"}:
+        return "monthly"
+
+    # Intraday/hourly families
+    if domain == "intraday" and t.endswith("m"):
+        return f"intraday_{t}"
+    if domain == "hourly" and t.endswith("h"):
+        return f"hourly_{t}"
+
+    # Fallback: echo the token or give default
+    return t or default
+
+
 # ------------------------------------------------------------
 # 📦 Public exports
 # ------------------------------------------------------------
@@ -163,7 +255,10 @@ __all__ = [
     "window_days_for_tf",
     "get_timeframe",
     "list_timeframes",
+    "context_to_token",   # 👈 add
+    "token_to_context",   # 👈 add
 ]
+
 
 if __name__ == "__main__":
     print("OK:", to_fetcher_interval("5m"), window_days_for_tf("1w", 60))

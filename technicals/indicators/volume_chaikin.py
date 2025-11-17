@@ -1,5 +1,5 @@
 # ============================================================
-# queen/technicals/indicators/volume_chaikin.py
+# queen/technicals/indicators/volume_chaikin.py — v1.1 (no-duplicate safe)
 # ------------------------------------------------------------
 # Chaikin Oscillator — Volume Momentum Engine (forward-only)
 # Settings-driven, NaN-safe, pure Polars/NumPy.
@@ -37,10 +37,7 @@ def chaikin(
     short_period: int | None = None,
     long_period: int | None = None,
 ) -> pl.DataFrame:
-    """Compute Chaikin Oscillator & derived volume flow signals.
-    Returns a DataFrame with:
-      'adl', 'chaikin', 'chaikin_norm', 'chaikin_bias', 'chaikin_flow'
-    """
+    """Compute Chaikin Oscillator & derived volume flow signals."""
     if not isinstance(df, pl.DataFrame):
         raise TypeError("chaikin: expected a Polars DataFrame")
 
@@ -116,6 +113,9 @@ def summarize_chaikin(df: pl.DataFrame) -> dict:
 
 
 def attach_chaikin(df: pl.DataFrame, timeframe: str = "15m") -> pl.DataFrame:
-    """Attach chaikin outputs to the input DF (by row alignment)."""
+    """Attach Chaikin outputs with no duplicate column names."""
     add = chaikin(df, timeframe=timeframe)
+    drop_cols = [c for c in add.columns if c in df.columns]
+    if drop_cols:
+        df = df.drop(drop_cols)
     return df.hstack(add)

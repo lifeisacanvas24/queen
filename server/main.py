@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from queen.helpers.market import MARKET_TZ
 
@@ -63,9 +64,16 @@ def create_app() -> FastAPI:
         app.include_router(analytics.router)
 
     # --- Templates ---
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    app.state.templates = templates
+        templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+        app.state.templates = templates
 
+        # ✅ Static files (JS/CSS) mounting — this makes url_for("static", ...) work
+        static_dir = PATHS["SERVER_STATIC"]
+        app.mount(
+            "/static",
+            StaticFiles(directory=str(static_dir)),
+            name="static",  # IMPORTANT: name must be "static" to match url_for('static', ...)
+        )
     return app
 
 

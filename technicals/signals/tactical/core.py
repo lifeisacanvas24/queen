@@ -1,50 +1,40 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/technicals/signals/tactical/core.py — Tactical Fusion Engine (v2.1)
+# queen/technicals/signals/tactical/core.py
+# Tactical Fusion Engine — v3.0 (Bible v10.5+)
 # ============================================================
 """Adaptive Tactical Fusion Engine — blends regime (RScore), volatility (VolX),
-and liquidity (LBX) metrics into a unified Tactical Index.
+liquidity (LBX), and pattern context (PatternScore) into a unified Tactical Index.
 
-✅ Settings-driven (queen.settings.settings)
-✅ Dynamically re-weights based on timeframe (weights.json)
+✅ Settings-driven via queen.settings.weights (no JSON files)
+✅ Uses component weights from tactical_component_weights()
+✅ Uses ENTRY/EXIT thresholds from get_thresholds()
 ✅ Emits regime classification (Bullish / Neutral / Bearish)
-✅ Pure Polars where DF is used; otherwise dict-friendly
+✅ Accepts dict or Polars DataFrame as input
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
 import polars as pl
-from queen.helpers.common import timeframe_key
+
 from queen.helpers.logger import log
-
-try:
-    from queen.settings import settings as SETTINGS
-except Exception:
-    SETTINGS = None
-
+from queen.settings.weights import (
+    get_thresholds,
+    tactical_component_weights,
+    tactical_normalization,
+)
 
 # --------------------------- Utils ---------------------------
 
 
-def _safe_read_json(path: Path | str, fallback: dict = None) -> dict:
-    try:
-        p = Path(path)
-        if not p.exists():
-            return fallback or {}
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:
-        log.warning(f"[TacticalCore] Could not read {path}: {e}")
-        return fallback or {}
-
-
 def _zscore(values: Dict[str, float]) -> Dict[str, float]:
     arr = np.array(list(values.values()), dtype=float)
-    mean = float(arr.mean()) if arr.size else 0.0
+    if arr.size == 0:
+        return {k: 0.0 for k in values}
+    mean = float(arr.mean())
     std = float(arr.std()) or 1.0
     return {k: (float(v) - mean) / std for k, v in values.items()}
 
@@ -66,41 +56,40 @@ def compute_tactical_index(
     *,
     interval: str = "15m",
 ) -> Dict[str, Any]:
-    """Blend RScore, VolX, and LBX into a normalized Tactical Index (settings-driven)."""
-    # 1) Resolve config paths from SETTINGS
-    if SETTINGS:
-        cfg_dir = SETTINGS.PATHS["CONFIGS"]
-        tac_cfg_path = SETTINGS.PATHS["CONFIGS"] / "tactical.json"
-        w_cfg_path = SETTINGS.PATHS["CONFIGS"] / "weights.json"
-    else:
-        cfg_dir = Path("./configs")
-        tac_cfg_path = cfg_dir / "tactical.json"
-        w_cfg_path = cfg_dir / "weights.json"
+    """Blend RScore, VolX, LBX, and PatternScore into a normalized Tactical Index.
 
-    # 2) Load configs
-    tac_cfg = _safe_read_json(
-        tac_cfg_path,
-        fallback={
-            "inputs": {
-                "RScore": {"weight": 0.5, "source": "RScore_norm"},
-                "VolX": {"weight": 0.25, "source": "VolX_norm"},
-                "LBX": {"weight": 0.25, "source": "LBX_norm"},
-            },
-            "normalization": {"method": "minmax", "clip": [0, 1]},
-            "regimes": {"bearish": 0.3, "neutral": 0.7, "labels": {}, "colors": {}},
-            "output": {"name": "Tactical_Index", "rounding": 3},
-        },
-    )
-    weights_cfg = _safe_read_json(w_cfg_path, fallback={})
+    Args:
+        metrics:
+            • dict with scalar values (e.g. {'RScore_norm': 0.8, 'VolX_norm': 0.6, ...})
+            • or Polars DataFrame with columns for each source field.
+        interval:
+            • timeframe token like '5m', '15m', '1h', '1d'
+            • only used for threshold lookup and metadata.
 
-    # 3) Timeframe key → adaptive weights (optional)
-    tf_key = timeframe_key(interval)  # e.g., "intraday_15m", "hourly_1h", "daily"
-    adaptive_weights = (
-        weights_cfg.get("timeframes", {}).get(tf_key, {}).get("meta_layers", {}) or {}
-    )
+    """
+    # 1) Settings: component weights + normalization config
+    comp_weights = tactical_component_weights()         # e.g. {'RScore':0.4, ...}
+    norm_cfg = tactical_normalization()                 # {'method': 'minmax', 'clip': (0,1)}
+    method = (norm_cfg.get("method") or "minmax").lower()
+    clip_lo, clip_hi = norm_cfg.get("clip", (0.0, 1.0))
 
-    # 4) Extract raw metric values (dict or DF)
-    inputs: Dict[str, dict] = tac_cfg.get("inputs", {})
+    # 2) Thresholds (use ENTRY/EXIT as bullish/bearish)
+    #    get_thresholds may later be per-context; for now we pass interval as-is.
+    th = get_thresholds(interval)
+    bear_th = float(th.get("EXIT", 0.30))
+    bull_th = float(th.get("ENTRY", 0.70))
+
+    # 3) Define logical inputs → source field names
+    #    (keys here must match comp_weights keys)
+    inputs = {
+        "RScore": {"source": "RScore_norm"},
+        "VolX": {"source": "VolX_norm"},
+        "LBX": {"source": "LBX_norm"},
+        # PatternScore is assumed to be PatternComponent in the incoming metrics
+        "PatternScore": {"source": "PatternComponent"},
+    }
+
+    # 4) Extract raw metric values (strict: all components in comp_weights must be present)
     raw: Dict[str, float] = {}
     missing: list[str] = []
 
@@ -108,78 +97,91 @@ def compute_tactical_index(
         if isinstance(metrics, dict):
             return metrics.get(src_key)
         if isinstance(metrics, pl.DataFrame) and src_key in metrics.columns:
-            # Mean of the series as a stable scalar (can be changed to last() if desired)
+            # Use mean as a stable scalar; change to last() if you prefer last-bar behavior
             return float(pl.Series(metrics[src_key]).mean())
         return None
 
     for key, meta in inputs.items():
+        if key not in comp_weights:
+            # weight not configured → skip entirely
+            continue
         src = meta.get("source", key)
         val = _extract(src)
         if val is None:
-            missing.append(key)
-            val = 0.0
-        raw[key] = float(val)
+            missing.append(f"{key} (source={src})")
+        else:
+            raw[key] = float(val)
 
     if missing:
-        log.warning(f"[TacticalCore] Missing inputs: {missing} — defaulting to 0.0")
+        raise ValueError(
+            f"compute_tactical_index: missing required inputs from metrics: {missing}"
+        )
 
-    # 5) Normalize
-    norm_cfg = tac_cfg.get("normalization", {})
-    method = (norm_cfg.get("method", "minmax") or "minmax").lower()
-    normed = _zscore(raw) if method == "zscore" else _minmax(raw)
+    # 5) Normalize component scores
+    if method == "zscore":
+        normed = _zscore(raw)
+    else:
+        normed = _minmax(raw)
 
-    # 6) Weight & fuse (base * adaptive)
+    # 6) Weight & fuse
     weighted: Dict[str, float] = {}
     total_w = 0.0
     for key, val in normed.items():
-        base_w = float(inputs.get(key, {}).get("weight", 1.0))
-        adapt_w = (
-            float(adaptive_weights.get(key.upper(), 1.0)) if adaptive_weights else 1.0
-        )
-        w = base_w * adapt_w
+        w = float(comp_weights.get(key, 0.0))
+        if w <= 0.0:
+            continue
         weighted[key] = val * w
         total_w += w
 
     fused = sum(weighted.values()) / (total_w or 1.0)
 
-    # 7) Clip & round
-    lo, hi = norm_cfg.get("clip", [0, 1])
-    fused = max(min(fused, float(hi)), float(lo))
-    fused = round(fused, int(tac_cfg.get("output", {}).get("rounding", 3)))
+    # 7) Clip & round Tactical Index
+    fused = max(min(fused, float(clip_hi)), float(clip_lo))
+    fused = round(fused, 3)
 
-    # 8) Regime classification
-    regimes = tac_cfg.get("regimes", {})
-    bear_th = float(regimes.get("bearish", 0.3))
-    neut_th = float(regimes.get("neutral", 0.7))
-    labels = regimes.get("labels", {})
-    colors = regimes.get("colors", {})
-
+    # 8) Regime classification (bearish / neutral / bullish)
     if fused < bear_th:
-        regime = "bearish"
-    elif fused < neut_th:
-        regime = "neutral"
+        regime_name = "bearish"
+    elif fused < bull_th:
+        regime_name = "neutral"
     else:
-        regime = "bullish"
+        regime_name = "bullish"
+
+    # Simple default labels/colors; can be later extended via settings if needed
+    default_labels = {
+        "bearish": "Bearish",
+        "neutral": "Neutral",
+        "bullish": "Bullish",
+    }
+    default_colors = {
+        "bearish": "#ef4444",  # red
+        "neutral": "#9ca3af",  # grey
+        "bullish": "#3b82f6",  # blue
+    }
 
     out = {
+        # Expose normalized components used inside fusion
         "RScore_norm": round(normed.get("RScore", 0.0), 3),
         "VolX_norm": round(normed.get("VolX", 0.0), 3),
         "LBX_norm": round(normed.get("LBX", 0.0), 3),
-        tac_cfg.get("output", {}).get("name", "Tactical_Index"): fused,
+        "PatternScore_norm": round(normed.get("PatternScore", 0.0), 3),
+        # Tactical Index
+        "Tactical_Index": fused,
+        # Regime metadata
         "regime": {
-            "name": regime.capitalize(),
-            "label": labels.get(regime, regime.capitalize()),
-            "color": colors.get(regime, "#3b82f6"),
+            "name": regime_name.capitalize(),
+            "label": default_labels.get(regime_name, regime_name.capitalize()),
+            "color": default_colors.get(regime_name, "#3b82f6"),
         },
         "_meta": {
             "interval": interval,
-            "adaptive_weights": adaptive_weights,
             "method": method,
-            "missing_inputs": missing,
+            "missing_inputs": [],   # strict mode raised earlier if missing
+            "weights": comp_weights,
         },
     }
 
-    log.info(f"[TacticalCore] Tactical Index={fused} ({regime.upper()}, {interval})")
+    log.info(f"[TacticalCore] Tactical Index={fused} ({regime_name.upper()}, {interval})")
     return out
 
 

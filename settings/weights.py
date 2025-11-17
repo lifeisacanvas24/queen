@@ -49,3 +49,65 @@ def fusion_weights_for(present_tfs: list[str]) -> dict[str, float]:
         return {tf: eq for tf in present_tfs}
     s = sum(v for v in raw.values() if v > 0)
     return {tf: (v / s if s else 0.0) for tf, v in raw.items()}
+
+# ============================================================
+# 🔥 Tactical & Reversal Stack Weighting — v1.0 (Bible v10.5+)
+# ============================================================
+
+REVERSAL_WEIGHTS = {
+    # Regime influence: TREND / RANGE make reversals more meaningful
+    "REGIME_WEIGHT": 2,
+
+    # Divergence influence
+    "DIVERGENCE_WEIGHT": 2,
+
+    # Squeeze Release adds minor acceleration
+    "SQUEEZE_RELEASE_WEIGHT": 1,
+
+    # Liquidity traps (Bear Trap = bullish, Bull Trap = bearish)
+    "TRAP_WEIGHT": 2,
+
+    # Exhaustion (Bullish / Bearish)
+    "EXHAUSTION_WEIGHT": 2,
+
+    # Pattern Component (from pattern fusion):
+    # PatternComponent ∈ [-1, +1]
+    # PATTERN_WEIGHT scales it (e.g. 3 → [-3..+3])
+    # PATTERN_MIN_MAG ignores tiny noise (<0.2)
+    "PATTERN_WEIGHT": 3.0,
+    "PATTERN_MIN_MAG": 0.20,
+}
+
+
+def reversal_weights() -> dict:
+    """Return a copy of tactical reversal/confluence weights."""
+    return dict(REVERSAL_WEIGHTS)
+
+# ============================================================
+# 🎯 Tactical Fusion (RScore / VolX / LBX / PatternScore)
+# ============================================================
+
+# Component weights for Tactical Index
+# Keys must match metric names used in tactical core.
+TACTICAL_COMPONENT_WEIGHTS = {
+    "RScore": 0.40,        # Regime score
+    "VolX": 0.20,          # Volatility (Keltner/VolX)
+    "LBX": 0.20,           # Liquidity breadth index
+    "PatternScore": 0.20,  # PatternComponent / reversal fusion
+}
+
+# Normalization settings for Tactical Index
+TACTICAL_NORMALIZATION = {
+    "method": "minmax",    # 'minmax' or 'zscore'
+    "clip": (0.0, 1.0),    # clamp final Tactical_Index
+}
+
+
+def tactical_component_weights() -> dict[str, float]:
+    """Return a copy of Tactical meta-layer component weights."""
+    return dict(TACTICAL_COMPONENT_WEIGHTS)
+
+
+def tactical_normalization() -> dict:
+    """Return Tactical normalization config (method, clip)."""
+    return dict(TACTICAL_NORMALIZATION)

@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Dict, List
 
-
 from queen.helpers.logger import log
 from queen.settings.settings import PATHS
 from queen.helpers.market import MARKET_TZ, next_working_day
@@ -18,12 +17,11 @@ from queen.daemons.live_engine import MonitorConfig, _one_pass  # reuse indicato
 from queen.helpers.portfolio import position_for, compute_pnl
 
 RUNTIME_DIR: Path = PATHS["RUNTIME"]
-ARCHIVE_DIR: Path = PATHS.get("ARCHIVE", RUNTIME_DIR.parent / "archive")
+ARCHIVE_DIR: Path = PATHS["ARCHIVES"]
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
 PLAN_FILE = RUNTIME_DIR / "next_session_plan.json"
-
 
 @dataclass
 class ForecastOptions:

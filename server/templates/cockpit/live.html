@@ -1,174 +1,76 @@
+{# queen/server/templates/cockpit/live.html #}
 {% extends "_layouts/base.html" %}
 {% block title %}Queen Cockpit — Live{% endblock %}
 {% set page_id = "live" %}
 
 {% block top %}
-  <h1 class="title">Queen Cockpit — <span class="q-muted">Live</span></h1>
+  <h1 class="title">
+    Queen Cockpit — <span class="q-muted">Live</span>
+    <span id="sessionBadge" class="session-badge">—</span>
+  </h1>
 {% endblock %}
 
 {% block content %}
-  <div class="q-box p-4">
-    {# ONLY this include for now. If this file is missing/typo, page will blank. #}
-    {% include "_partials/panel_actionables.html" %}
-  </div>
-{% endblock %}
+<div class="q-box p-4">
 
+  <!-- Controls -->
+  <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+    <div class="is-flex is-align-items-center" style="gap:0.75rem; flex-wrap:wrap">
+
+      <input
+        id="symbols"
+        class="input mono"
+        style="width:300px"
+        placeholder="Symbols (comma) or ALL"
+      >
+
+      <div class="select">
+        <select id="interval">
+          <option value="5">5m</option>
+          <option value="15" selected>15m</option>
+          <option value="30">30m</option>
+          <option value="60">60m</option>
+        </select>
+      </div>
+
+      <div class="select">
+        <select id="book"></select>
+      </div>
+
+      <label class="ml-2">Sort by Early</label>
+      <label class="switch">
+        <input type="checkbox" id="sortEarlyToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="is-flex" style="gap:0.75rem">
+      <button id="startBtn" class="button q-primary">Start</button>
+      <button id="stopBtn" class="button is-light">Stop</button>
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div id="liveGrid" class="card-grid"></div>
+</div>
+{% endblock %}
 {% block scripts %}
 <script>
-let es=null, lastRows=[];
-let posMap = {}; // {SYM: {qty, avg_price}}
-
-function noStore(u){ const url=(u instanceof URL)?u:new URL(u,location.origin); url.searchParams.set('_',Date.now()); return fetch(url,{cache:'no-store'}); }
-function fmt(x){ if(x===null||x===undefined) return '—'; if(typeof x==='number') return x.toLocaleString(undefined,{maximumFractionDigits:1}); return x; }
-
-function badge(dec,score){
-  const map={BUY:'green',ADD:'green',HOLD:'amber',EXIT:'red',AVOID:'red'};
-  const strong=(dec==='BUY'||dec==='ADD') && Number(score||0)>=9;
-  const label=strong?'ENTER':(dec||'');
-  const c=map[dec]||'amber'; return `<span class="badge ${c}">${label}</span>`;
-}
-function normCtx(x){
-  if(!x) return 'Unknown';
-  const s = String(x);
-  return s.includes('/') ? s.split('/')[0].trim() : s; // 'At/Unknown' -> 'At'
-}
-/* ---- Pills & chips ---- */
-function pill(text,tone){ return `<span class="pill ${tone}">${text}</span>`; }
-function cprBadge(ctx){
-  const t=(ctx||'Unknown');
-  const tone=t==='Above'?'green':t==='At'?'gray':t==='Below'?'red':'amber';
-  return pill(t,tone);
-}
-function emaBadge(bias){
-  const b=(bias||'Neutral');
-  const tone=b==='Bullish'?'green':b==='Bearish'?'red':'gray';
-  return pill(b,tone);
-}
-function rsiBadge(v){
-  if(v==null || isNaN(v)) return pill('—','gray');
-  const n=Number(v);
-  const tone = n>=60 ? 'green' : (n>=45 ? 'amber' : 'red');
-  return pill(n.toFixed(1), tone);
-}
-
-/* ---- Positions → unrealized PnL chip ---- */
-async function loadPositions(book){
-  try{
-    const j = await (await fetch(`/portfolio/positions?book=${encodeURIComponent(book)}`, {cache:'no-store'})).json();
-    posMap = j && j.positions ? j.positions : {};
-  }catch{ posMap = {}; }
-}
-function computePnl(cmp, p){
-  if (!p || cmp==null) return null;
-  const qty = Number(p.qty||0), avg = Number(p.avg_price||0);
-  if (!(qty>0) || !(avg>0)) return null;
-  const abs = (cmp - avg) * qty;
-  return { abs };
-}
-function pnlChip(sym, cmp){
-  const p = posMap[sym];
-  if(!p) return '';
-  const res = computePnl(cmp, p);
-  if (!res) return `<span class="pnl-chip pnl-flat"><span class="pnl-val">—</span></span>`;
-  const cls = res.abs>1e-6 ? 'pnl-up' : (res.abs<-1e-6 ? 'pnl-dn' : 'pnl-flat');
-  const abs = res.abs.toLocaleString(undefined,{maximumFractionDigits:0});
-  return `<span class="pnl-chip ${cls}"><span class="pnl-val">₹${abs}</span></span>`;
-}
-
-/* ---- Render table ---- */
-function renderLeft(rows){
-  const sortEarly=document.getElementById('sortEarlyToggle')?.checked;
-  const tb=document.getElementById('leftBody');
-  if(!tb) return;
-
-  const pr={BUY:0,ADD:0,HOLD:1,EXIT:2,AVOID:3};
-  const sorted=[...rows].sort((a,b)=>{
-    if(sortEarly){
-      const ea=Number(a.early ?? a.early_score ?? 0);
-      const eb=Number(b.early ?? b.early_score ?? 0);
-      if(eb!==ea) return eb-ea;
+  window.addEventListener('load', () => {
+    if (window.qs && typeof qs.initLivePage === 'function') {
+      qs.initLivePage({
+        gridId: 'liveGrid',
+        intervalId: 'interval',
+        bookId: 'book',
+        symbolsId: 'symbols',
+        sortEarlyId: 'sortEarlyToggle',
+        startBtnId: 'startBtn',
+        stopBtnId: 'stopBtn',
+        tickSec: 12,
+      });
+    } else {
+      console.warn('qs.initLivePage missing');
     }
-    const da=pr[a.decision]??9, db=pr[b.decision]??9;
-    if(da!==db) return da-db;
-    return (b.score||0)-(a.score||0);
   });
-
-  tb.innerHTML = sorted.map(r=>{
-    const dec=r.decision||'';
-    const rowCls = dec==='BUY'||dec==='ADD' ? 'row-bull'
-                 : (dec==='EXIT'||dec==='AVOID' ? 'row-bear' : 'row-dim');
-    const held = !!r.held;
-    const heldBadge = held ? `<span class="badge held tag ml-1">HELD</span>` : '';
-    const pnl = pnlChip(r.symbol, r.cmp);
-    return `<tr class="${rowCls}">
-      <td class="sym"><strong>${r.symbol||''}</strong>${heldBadge} ${pnl}</td>
-      <td>${badge(dec, r.score)}</td>
-      <td class="num">${fmt(r.score)}</td>
-      <td class="num">${fmt(r.cmp)}</td>
-      <td>${cprBadge(normCtx(r.cpr_ctx))}</td>
-      <td>${emaBadge(r.ema_bias)}</td>
-      <td>${rsiBadge(r.rsi)}</td>
-      <td class="num mono">${fmt(r.early)}</td>
-      <td class="num mono">${fmt(r.entry)}</td>
-      <td class="num mono">${fmt(r.sl)}</td>
-      <td class="targets-cell">${(r.targets||[]).join(' • ')}</td>
-      <td>${r.notes||'—'}</td>
-    </tr>`;
-  }).join('');
-}
-
-/* ---- First paint and streaming ---- */
-async function paintOnce(){
-  const iv=document.getElementById('interval')?.value||'15';
-  const book=document.getElementById('book')?.value||'all';
-  await loadPositions(book); // so PnL chips show up
-  const url=new URL('/monitor/actionable', location.origin);
-  url.searchParams.set('interval', iv);
-  url.searchParams.set('book', book);
-  url.searchParams.set('limit', '250');
-  try{
-    const j = await (await noStore(url)).json();
-    const rows = Array.isArray(j.rows)?j.rows:[];
-    if(rows.length){ lastRows=rows; renderLeft(lastRows); }
-    else{
-      const tb=document.getElementById('leftBody');
-      if(tb) tb.innerHTML = `<tr><td colspan="12" class="q-muted has-text-centered">No items right now.</td></tr>`;
-    }
-  }catch(e){
-    const tb=document.getElementById('leftBody');
-    if(tb) tb.innerHTML = `<tr><td colspan="12" class="q-muted has-text-centered">Error: ${e}</td></tr>`;
-  }
-}
-
-function startStream(){
-  stopStream();
-  const raw=(document.getElementById('symbols')?.value||'').trim();
-  const iv=document.getElementById('interval')?.value||'15';
-  const book=document.getElementById('book')?.value||'all';
-  const syms = raw && raw.toUpperCase()!=='ALL' ? raw.split(',').map(s=>s.trim()).filter(Boolean) : [];
-  const url=new URL('/monitor/stream_actionable', location.origin);
-  if(syms.length) syms.forEach(s=>url.searchParams.append('symbols', s));
-  url.searchParams.set('interval', iv);
-  url.searchParams.set('book', book);
-  url.searchParams.set('tick_sec', '15');
-
-  es = new EventSource(url);
-  es.onmessage = (evt)=>{
-    try{
-      const payload = JSON.parse(evt.data);
-      if(Array.isArray(payload.rows)){ lastRows = payload.rows; renderLeft(lastRows); }
-    }catch(_){}
-  };
-  es.onerror = ()=>{ stopStream(); };
-}
-function stopStream(){ if(es){ es.close(); es=null; } }
-
-window.addEventListener('load', ()=>{
-  const startEl = document.getElementById('startBtn');
-  const stopEl  = document.getElementById('stopBtn');
-  if(startEl) startEl.onclick = ()=>{ paintOnce().then(startStream); };
-  if(stopEl)  stopEl.onclick  = stopStream;
-  paintOnce(); // first paint
-});
 </script>
 {% endblock %}

@@ -3,7 +3,7 @@
 **Project**: `queen/` (Quantitative Trading Platform)
 **Version**: v9.6+
 **Architecture**: Modular, Registry-Driven, Settings-First
-**Last Updated**: 2025-11-12
+**Last Updated**: 2025-11-13
 
 ---
 
@@ -91,8 +91,9 @@ Essential platform infrastructure
 |--------|---------------|---------|
 | `__init__.py` |  |  |
 | `fetch_router.py` | `_chunk_list`, `_generate_output_path`, `run_cli` |  |
+| `nse_fetcher.py` | `_quote_url`, `_referer_url`, `_read_cache` |  |
 | `upstox_fetcher.py` | `_min_rows_from_settings`, `_headers`, `_merge_unique_sort` |  |
-| `instruments.py` | `_instrument_paths_for`, `_all_instrument_paths`, `list_intraday_symbols` |  |
+| `instruments.py` | `_instrument_path_for`, `_all_instrument_paths`, `_read_instruments` |  |
 
 #### `queen/services/__init__.py`
 
@@ -199,6 +200,19 @@ Usage:
 - `def __getattr__(name: str)`
 - `def __dir__()`
 
+#### `queen/helpers/candle_adapter.py`
+
+**Classes:**
+- `class CandleAdapter`
+  - `def to_polars(candles: Iterable[Iterable[Any]], symbol: str, isin: str)`
+  - `def empty_df()`
+  - `def summary(df: pl.DataFrame, name: str='candles')`
+
+**Functions:**
+- `def to_polars(candles: Iterable[Iterable[Any]], symbol: str, isin: str)`
+- `def empty_df()`
+- `def summary(df: pl.DataFrame, name: str='candles')`
+
 #### `queen/helpers/common.py`
 
 **Functions:**
@@ -234,7 +248,7 @@ Usage:
 - `def parse_minutes(value: Tokenish)`
 - `def to_fetcher_interval(value: Tokenish)`
 - `def classify_unit(value: Tokenish)`
-- `def to_token(value: Tokenish)`
+- `def to_token(minutes: int)`
 - `def is_intraday(token: Tokenish)`
 
 #### `queen/helpers/io.py`
@@ -251,7 +265,7 @@ Usage:
 - `def read_parquet(path: str | Path)`
 - `def write_parquet(df: pl.DataFrame, path: str | Path, *, atomic: bool=True)`
 - `def append_jsonl(path: str | Path, record: dict)`
-- `def read_jsonl(path: str | Path, limit: Optional[int]=None)`
+- `def read_jsonl(path: str | Path, limit: int | None=None)`
 - `def tail_jsonl(path: str | Path, n: int=200)`
 - `def read_any(path: str | Path)`
 - `def read_text(path: str | Path, default: str='')`
@@ -294,32 +308,38 @@ Usage:
 - `def next_working_day(d: date)`
 - `def offset_working_day(start: date, offset: int)`
 - `def _t(hhmm: str)`
-- `def current_session(now: Optional[dt.datetime]=None)`
-- `def is_market_open(now: Optional[dt.datetime]=None)`
+- `def current_session(now: dt.datetime | None=None)`
+- `def is_market_open(now: dt.datetime | None=None)`
 - `def _intraday_available(now: dt.datetime)`
-- `def get_gate(now: Optional[dt.datetime]=None)`
+- `def get_gate(now: dt.datetime | None=None)`
 - `def current_historical_service_day(now: dt.datetime | None=None)`
 - `def get_market_state()`
 - `def is_trading_day(d: date)`
 - `def last_trading_day(ref: date | None=None)`
 - `def next_trading_day(d: date)`
+- `def compute_sleep_delay(now: dt.datetime, interval_minutes: int, jitter_ratio: float=0.3, *, jitter_value: float | None=None)`
 - `def __init__(self, mode: str='intraday')`
 - `def market_gate(mode: str='intraday')`
 - `def historical_available()`
+- `def sessions()`
 
-#### `queen/helpers/nse_fetcher.py`
+#### `queen/helpers/path_manager.py`
 
 **Functions:**
-- `def _read_cache()`
-- `def _write_cache(cache: Dict[str, dict])`
-- `def fetch_nse_bands(symbol: str, cache_refresh_minutes: int=30)`
+- `def repo_root()`
+- `def static_dir()`
+- `def runtime_dir()`
+- `def universe_dir()`
+- `def log_dir()`
+- `def positions_dir()`
+- `def position_file(stem: str)`
 
 #### `queen/helpers/pl_compat.py`
 
 **Functions:**
 - `def _s2np(s: pl.Series)`
 - `def ensure_float_series(s: pl.Series)`
-- `def safe_fill_null(s: pl.Series, value: float=0.0)`
+- `def safe_fill_null(s: pl.Series, value: float=0.0, *, forward: bool=True)`
 - `def safe_concat(dfs: list[pl.DataFrame])`
 
 #### `queen/helpers/portfolio.py`
@@ -327,8 +347,11 @@ Usage:
 **Functions:**
 - `def _finite(x: float)`
 - `def _sanitize_entry(sym: str, pos: dict)`
+- `def _book_path_candidates(book: str)`
 - `def list_books()`
 - `def _load_one(path: Path)`
+- `def _current_mtime_for_book_all()`
+- `def _current_mtime_for_book(book: str)`
 - `def load_positions(book: str)`
 - `def position_for(symbol: str, book: str='all')`
 - `def compute_pnl(cmp_price: float, pos: Optional[dict])`
@@ -336,20 +359,31 @@ Usage:
 
 #### `queen/helpers/rate_limiter.py`
 
-> Quant-Core — Async Token Bucket Rate Limiter.
-
-✅ Async-safe continuous token refill
-✅ Settings-integrated defaults (FETCH.MAX_REQ_PER_SEC)
-✅ Structured diagnostics via Queen logger
-✅ Desynchronized jitter to prevent bursts
-
 **Classes:**
 - `class AsyncTokenBucket`
-  - `def __init__(self, rate_per_second: Optional[float]=None, name: str='generic', diag: Optional[bool]=None)`
+  - `def __init__(self, rate_per_second: float | None=None, name: str='generic', diag: bool | None=None, *, jitter_min: float=0.002, jitter_max: float=0.01)`
+  - `def _refill_unlocked(self, now: float)`
+  - `def try_acquire(self, n: int=1)`
+- `class RateLimiterPool`
+  - `def __init__(self, default_qps: float | None=None, *, per_key: dict[str, float] | None=None, diag: bool | None=None)`
+  - `def try_acquire(self, key: str, n: int=1)`
+  - `def get(self, key: str)`
+  - `def stats(self)`
+  - `def keys(self)`
 
 **Functions:**
 - `def _get(d: dict, *keys, default=None)`
-- `def __init__(self, rate_per_second: Optional[float]=None, name: str='generic', diag: Optional[bool]=None)`
+- `def __init__(self, rate_per_second: float | None=None, name: str='generic', diag: bool | None=None, *, jitter_min: float=0.002, jitter_max: float=0.01)`
+- `def _refill_unlocked(self, now: float)`
+- `def try_acquire(self, n: int=1)`
+- `def __init__(self, default_qps: float | None=None, *, per_key: dict[str, float] | None=None, diag: bool | None=None)`
+- `def try_acquire(self, key: str, n: int=1)`
+- `def get(self, key: str)`
+- `def stats(self)`
+- `def keys(self)`
+- `def get_pool()`
+- `def rate_limited(key: str, n: int=1)`
+- `def limiter(key: str, n: int=1)`
 
 #### `queen/helpers/schema_adapter.py`
 
@@ -372,12 +406,12 @@ Usage:
 - `def _collect_historical_supported()`
 - `def get_supported_intervals(unit: str | None=None, *, intraday: bool | None=None)`
 - `def validate_interval(unit: str, interval: int, *, intraday: bool | None=None)`
-- `def _checksum(cols: list[str])`
 - `def _normalize(candles: list[list[Any]])`
 - `def _safe_select(df: pl.DataFrame, cols: list[str])`
 - `def _safe_parse(df: pl.DataFrame, column: str='timestamp')`
 - `def to_candle_df(candles: list[list[Any]], symbol: str)`
 - `def finalize_candle_df(df: pl.DataFrame, symbol: str, isin: str)`
+- `def _checksum(cols: list[str])`
 - `def _detect_drift(cols: list[str])`
 - `def _log_drift(cols: list[str])`
 - `def __init__(self, code: str, message: str | None=None)`
@@ -423,6 +457,14 @@ Cache-enabled with 24h TTL
 - `def describe(self)`
 - `def validate(self)`
 - `def active_config(self)`
+
+#### `queen/helpers/verify.py`
+
+**Functions:**
+- `def require_columns(df: pl.DataFrame, required: Sequence[str], *, ctx: str='', strict: bool=False)`
+- `def ensure_sorted(df: pl.DataFrame, by: str | Sequence[str], *, ctx: str='', ascending: bool=True)`
+- `def ensure_time_ordered(df: pl.DataFrame, ts_col: str='timestamp', *, ctx: str='')`
+- `def non_empty_symbols(symbols: Iterable[str | None])`
 
 ---
 
@@ -709,12 +751,13 @@ Notes:
 | `__init__.py` | `__getattr__` |  |
 | `advanced.py` | `bollinger_bands`, `supertrend`, `atr_channels` |  |
 | `adx_dmi.py` | `adx_dmi`, `adx_summary`, `lbx` |  |
-| `all.py` | `_safe_merge`, `_tf_from_context`, `attach_all_indicators` |  |
+| `all.py` | `_safe_merge`, `_tf_from_context`, `_attach_core_indicators` |  |
 | `breadth_cumulative.py` | `compute_breadth`, `summarize_breadth` |  |
 | `breadth_momentum.py` | `compute_breadth_momentum`, `summarize_breadth_momentum`, `compute_regime_strength` |  |
 | `core.py` | `sma`, `ema`, `_slope` |  |
 | `keltner.py` | `ema`, `true_range`, `compute_atr` |  |
 | `momentum_macd.py` | `ema`, `compute_macd`, `summarize_macd` |  |
+| `state.py` | `volume_delta`, `_compute_rsi_series`, `rsi_density` |  |
 | `volatility_fusion.py` | `compute_volatility_fusion`, `summarize_volatility` |  |
 | `volume_chaikin.py` | `_ema_np`, `chaikin`, `summarize_chaikin` |  |
 | `volume_mfi.py` | `_tf_from_context`, `mfi`, `compute_mfi` |  |
@@ -770,6 +813,16 @@ Notes:
 ## Testing & Validation
 
 Validation and test suites
+
+#### `queen/tests/__init__.py`
+
+> Run all smoke tests sequentially via `python -m queen.tests`.
+
+This aggregates lightweight sanity checks for helpers, IO, instruments,
+and market-time logic, ensuring basic functional integrity without pytest.
+
+**Functions:**
+- `def run_all()`
 
 #### `queen/tests/market_playback.py`
 
@@ -907,6 +960,11 @@ Now includes:
 - `def _gen_df(n: int=2000)`
 - `def test_latency(n: int=2000, rounds: int=3, cap_ms: float=5.0)`
 
+#### `queen/tests/smoke_fetch_utils.py`
+
+**Functions:**
+- `def main()`
+
 #### `queen/tests/smoke_fusion_all_latency.py`
 
 **Functions:**
@@ -962,29 +1020,27 @@ Now includes:
 - `def test_adx_dmi_columns_and_types()`
 - `def test_lbx_and_summary_contracts()`
 
-#### `queen/tests/smoke_intervals.py`
-
-> Ensures helpers.intervals <-> settings.timeframes stay in lockstep.
-
-Checks:
-- Normalization round-trips for intraday tokens (e.g., 5 -> "5m")
-- Canonical fetcher interval mapping matches TIMEFRAME_MAP / parse_tf
-- Unit classification is consistent
-- is_intraday() correctness
-- Reasonable errors for bad tokens
+#### `queen/tests/smoke_instruments.py`
 
 **Functions:**
+- `def _seed_instrument_sources()`
+- `def main()`
+
+#### `queen/tests/smoke_intervals.py`
+
+**Functions:**
+- `def _assert(cond, msg)`
 - `def test_intraday_roundtrip_minutes_to_token()`
 - `def test_parse_minutes_intraday_only()`
 - `def test_fetcher_interval_canonical()`
 - `def test_classify_unit_consistency()`
 - `def test_is_intraday_flag()`
-- `def test_bad_tokens_raise()`
+- `def run_all()`
 
 #### `queen/tests/smoke_io.py`
 
 **Functions:**
-- `def test()`
+- `def main()`
 
 #### `queen/tests/smoke_keltner.py`
 
@@ -1035,6 +1091,12 @@ Checks:
 - `def _build_df(n: int=2000)`
 - `def _best_of_3(fn)`
 - `def test_latency()`
+
+#### `queen/tests/smoke_market_sleep.py`
+
+**Functions:**
+- `def _assert(cond: bool, msg: str='assertion failed')`
+- `def test_compute_sleep_delay()`
 
 #### `queen/tests/smoke_market_time.py`
 
@@ -1139,6 +1201,31 @@ Checks:
 **Functions:**
 - `def test()`
 
+#### `queen/tests/smoke_rate_limited_decorator.py`
+
+**Functions:**
+- `def run_all()`
+
+#### `queen/tests/smoke_rate_limiter.py`
+
+**Functions:**
+- `def run_all()`
+
+#### `queen/tests/smoke_rate_limiter_context.py`
+
+**Functions:**
+- `def run_all()`
+
+#### `queen/tests/smoke_rate_limiter_global.py`
+
+**Functions:**
+- `def run_all()`
+
+#### `queen/tests/smoke_rate_limiter_pool.py`
+
+**Functions:**
+- `def run_all()`
+
 #### `queen/tests/smoke_registry.py`
 
 **Functions:**
@@ -1159,6 +1246,11 @@ Checks:
 **Functions:**
 - `def _mk(n=120)`
 - `def test_rsi_series()`
+
+#### `queen/tests/smoke_schema_adapter.py`
+
+**Functions:**
+- `def run_all()`
 
 #### `queen/tests/smoke_show_snapshot.py`
 
@@ -1293,8 +1385,8 @@ When asking an AI to modify or extend this system:
 ---
 
 ## File Count Summary
-- **Total Python Files**: 73
-- **Core Modules**: 133
+- **Total Python Files**: 83
+- **Core Modules**: 137
 - **Test Files**: 1
 - **Settings/Configs**: 1
 - **Helpers/Utilities**: 1

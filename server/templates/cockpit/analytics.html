@@ -1,6 +1,7 @@
 {% extends "_layouts/base.html" %}
 {% block title %}Queen Cockpit — Analytics{% endblock %}
 {% set page_id = "analytics" %}
+
 {% block top %}
   <h1 class="title">Queen Cockpit — <span class="q-muted">Analytics</span></h1>
 {% endblock %}
@@ -9,60 +10,102 @@
 <div class="q-box p-4">
   <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
     <div class="is-flex is-align-items-center">
-      <div class="select mr-2"><select id="interval">
-        <option value="5">5m</option><option value="15" selected>15m</option>
-        <option value="30">30m</option><option value="60">60m</option>
-      </select></div>
-      <div class="select mr-2"><select id="book"></select></div>
+      <div class="select mr-2">
+        <select id="interval">
+          <option value="5">5m</option>
+          <option value="15" selected>15m</option>
+          <option value="30">30m</option>
+          <option value="60">60m</option>
+        </select>
+      </div>
+      <div class="select mr-2">
+        <select id="book"></select>
+      </div>
     </div>
     <button id="refresh" class="button q-primary">Top 20</button>
   </div>
 
   <table class="q-table table is-fullwidth is-narrow">
     <thead>
-      <tr><th>#</th><th>Symbol</th><th>Decision</th><th>Score</th><th>Early</th><th>Drivers</th></tr>
+      <tr>
+        <th>#</th>
+        <th>Symbol</th>
+        <th>Decision</th>
+        <th>Score</th>
+        <th>Early</th>
+        <th>Drivers</th>
+      </tr>
     </thead>
-    <tbody id="anaBody"><tr><td colspan="6" class="q-muted has-text-centered">Loading...</td></tr></tbody>
+    <tbody id="anaBody">
+      <tr><td colspan="6" class="q-muted has-text-centered">Loading...</td></tr>
+    </tbody>
   </table>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function noStore(url){const u=new URL(url,window.location.origin);u.searchParams.set('_',Date.now());return fetch(u,{cache:'no-store'});}
-
-function badge(dec){const map={BUY:'green',ADD:'green',HOLD:'amber',EXIT:'red',AVOID:'red'};const c=map[dec]||'amber';return `<span class="badge ${c}">${dec||''}</span>`;}
-function fmt(x){if(x==null)return'—';return(typeof x==='number')?x.toLocaleString(undefined,{maximumFractionDigits:1}):x;}
-
-async function loadBooks(){
-  try{const r=await fetch('/portfolio/books');const j=await r.json();
-    const sel=document.getElementById('book');sel.innerHTML='';
-    (j.books||['all']).forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b;sel.appendChild(o);});
-  }catch(e){}
+function badge(dec){
+  const d = (dec || '').toUpperCase();
+  const map = {BUY:'green', ADD:'green', HOLD:'amber', EXIT:'red', AVOID:'red'};
+  const c = map[d] || 'amber';
+  return `<span class="badge ${c}">${d || ''}</span>`;
+}
+function fmt(x){
+  if (x == null) return '—';
+  return (typeof x === 'number')
+    ? x.toLocaleString(undefined, { maximumFractionDigits: 1 })
+    : x;
 }
 
-async function refresh(){
-  const tb=document.getElementById('anaBody');
-  tb.innerHTML=`<tr><td colspan="6" class="q-muted has-text-centered">Refreshing...</td></tr>`;
+async function refreshAnalytics(){
+  const tb = document.getElementById('anaBody');
+  tb.innerHTML = `<tr><td colspan="6" class="q-muted has-text-centered">Refreshing...</td></tr>`;
+
   try{
-    const iv=document.getElementById('interval').value||'15';
-    const book=document.getElementById('book').value||'all';
-    const url=`/monitor/actionable?interval=${iv}&book=${book}&limit=20`;
-    const r=await noStore(url); const j=await r.json();
-    const rows=j.rows||[];
-    tb.innerHTML=rows.length
-      ? rows.map((x,i)=>`
+    const iv   = document.getElementById('interval').value || '15';
+    const book = document.getElementById('book').value || 'all';
+
+    const url = new URL('/cockpit/api/summary', window.location.origin);
+    url.searchParams.set('interval', iv);
+    url.searchParams.set('book', book);
+
+    const r    = await qs.noStore(url);
+    const j    = await r.json();
+    const rows = Array.isArray(j.rows) ? j.rows : [];
+
+    const pr = {BUY:0, ADD:0, HOLD:1, EXIT:2, AVOID:3};
+    const top = rows.slice().sort((a,b) => {
+      const sa = Number(a.score || 0);
+      const sb = Number(b.score || 0);
+      if (sb !== sa) return sb - sa;
+      const ea = Number(a.early ?? a.early_score ?? 0);
+      const eb = Number(b.early ?? b.early_score ?? 0);
+      if (eb !== ea) return eb - ea;
+      const da = pr[(a.decision || '').toUpperCase()] ?? 9;
+      const db = pr[(b.decision || '').toUpperCase()] ?? 9;
+      return da - db;
+    }).slice(0, 20);
+
+    tb.innerHTML = top.length
+      ? top.map((x, i) => `
         <tr>
-          <td>${i+1}</td><td><strong>${x.symbol}</strong></td>
-          <td>${badge(x.decision)}</td><td>${fmt(x.score)}</td>
-          <td>${fmt(x.early_score??x.early)}</td>
-          <td>${(x.drivers||[]).join(' · ')||'—'}</td>
+          <td>${i + 1}</td>
+          <td><strong>${x.symbol}</strong>${x.held ? ' ⭐' : ''}</td>
+          <td>${badge(x.decision)}</td>
+          <td>${fmt(x.score)}</td>
+          <td>${fmt(x.early_score ?? x.early)}</td>
+          <td>${(x.drivers || []).join(' · ') || '—'}</td>
         </tr>`).join('')
       : `<tr><td colspan="6" class="q-muted has-text-centered">No actionable items found.</td></tr>`;
-  }catch{tb.innerHTML=`<tr><td colspan="6" class="q-muted has-text-centered">Error loading analytics</td></tr>`;}
+  } catch(e){
+    tb.innerHTML = `<tr><td colspan="6" class="q-muted has-text-centered">Error loading analytics</td></tr>`;
+  }
 }
 
-document.getElementById('refresh').onclick=refresh;
-loadBooks().then(refresh);
+window.addEventListener('load', () => {
+  document.getElementById('refresh').onclick = refreshAnalytics;
+  qs.loadBooks("book").then(refreshAnalytics);
+});
 </script>
 {% endblock %}

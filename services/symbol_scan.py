@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/symbol_scan.py — v1.2 (Rules-based multi-TF scan)
+# queen/services/symbol_scan.py — v1.3 (Rules-based multi-TF scan, TF-aware)
 # ============================================================
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import polars as pl
+
 from queen.alerts.evaluator import eval_rule
 from queen.alerts.rules import Rule
 from queen.fetchers.upstox_fetcher import fetch_unified
@@ -16,6 +17,11 @@ from queen.helpers.instruments import get_listing_date, validate_historical_rang
 from queen.helpers.market import MARKET_TZ
 from queen.settings.indicator_policy import min_bars_for_indicator
 from queen.settings.patterns import required_lookback as required_lookback_pattern
+from queen.settings.timeframes import (
+    context_to_token,
+    is_intraday,
+    window_days_for_tf,
+)
 
 
 # ---------- internal policy helpers ----------
@@ -52,24 +58,13 @@ def _min_bars_for(rule: Rule) -> int:
     return 30
 
 
-def _days_for_interval(interval: str, need_bars: int) -> int:
-    iv = (interval or "").lower()
-    if iv == "1d":
-        return max(need_bars + 20, 120)
-    if iv == "1w":
-        return max((need_bars + 6) * 7, 365)
-    if iv == "1mo":
-        return max((need_bars + 3) * 30, 720)
-    # intraday/hours (fetch_unified intraday path doesn’t need dates)
-    return max(need_bars + 20, 120)
-
-
 def _window(interval: str, need_bars: int) -> Tuple[Optional[str], Optional[str]]:
-    """Daily/weekly/monthly need a date window; intraday returns (None,None)."""
-    iv = (interval or "").lower()
-    if iv.endswith(("m", "h")):
+    """Daily/weekly/monthly need a date window; intraday returns (None, None)."""
+    token = context_to_token(interval or "1d")  # normalize token
+    if is_intraday(token):
         return None, None
-    days = _days_for_interval(iv, need_bars)
+
+    days = window_days_for_tf(token, need_bars)
     to_dt = datetime.now(MARKET_TZ).date()
     from_dt = to_dt - timedelta(days=days)
     return from_dt.isoformat(), to_dt.isoformat()
@@ -77,27 +72,22 @@ def _window(interval: str, need_bars: int) -> Tuple[Optional[str], Optional[str]
 
 async def _load_df(symbol: str, timeframe: str, need_bars: int) -> pl.DataFrame:
     """Fetch a dataframe with enough history for `need_bars` and trim tail."""
-    mode = "intraday" if timeframe.endswith(("m", "h")) else "daily"
-    from_date, to_date = _window(timeframe, need_bars)
+    token = context_to_token(timeframe or "1d")
+    mode = "intraday" if is_intraday(token) else "daily"
+    from_date, to_date = _window(token, need_bars)
 
     # listing/date guards
     if mode == "daily" and from_date and to_date:
         ldt = get_listing_date(symbol)
-        if (
-            ldt
-            and isinstance(ldt, datetime.date)
-            and ldt > datetime.fromisoformat(from_date).date()
-        ):  # type: ignore[attr-defined]
+        if ldt and isinstance(ldt, date) and ldt > datetime.fromisoformat(from_date).date():
             from_date = ldt.isoformat()
-        if not validate_historical_range(
-            symbol, datetime.fromisoformat(from_date).date()
-        ):
+        if not validate_historical_range(symbol, datetime.fromisoformat(from_date).date()):
             return pl.DataFrame()
 
     df = await fetch_unified(
         symbol,
         mode=mode,
-        interval=timeframe,
+        interval=token,
         from_date=from_date,
         to_date=to_date,
     )
@@ -114,6 +104,7 @@ async def run_symbol_scan(
     Returns a flat list of result dicts (stable for API/CLI/cron).
     """
     out: List[Dict[str, Any]] = []
+
     # group rules by symbol for efficient fetch
     rules_by_sym: Dict[str, List[Rule]] = {}
     for r in rules:

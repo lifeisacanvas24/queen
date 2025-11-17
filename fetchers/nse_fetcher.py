@@ -107,13 +107,15 @@ def _write_cache(cache: Dict[str, dict]) -> None:
 # 🌐 Fetch bands (UC/LC + prevClose)
 # ------------------------------------------------------------
 def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[dict]:
-    """Fetch NSE UC/LC + previous close for a symbol.
+    """Fetch NSE UC/LC + previous close + 52W high/low for a symbol.
 
     Returns:
         {
           "upper_circuit": float,
           "lower_circuit": float,
           "prev_close": float,
+          "year_high": float | None,  # 52W high
+          "year_low": float | None,   # 52W low
         }
     or None if nothing usable is available.
 
@@ -126,7 +128,7 @@ def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[di
     now = time.time()
     entry = cache.get(symbol)
 
-    # ✅ Fresh enough cache — return immediately
+    # ✅ Fresh enough cache — just reuse
     if entry and (now - float(entry.get("timestamp", 0))) < cache_refresh_minutes * 60:
         return entry.get("bands") or None
 
@@ -134,29 +136,49 @@ def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[di
 
     try:
         with requests.Session() as s:
-            # NSE requires a priming request
+            # NSE wants a priming request to BASE_URL
             s.get(_NSE_BASE_URL, headers=_HEADERS, timeout=5)
             r = s.get(
                 url,
-                headers={
-                    **_HEADERS,
-                    "Referer": _referer_url(symbol),
-                },
+                headers={**_HEADERS, "Referer": _referer_url(symbol)},
                 timeout=10,
             )
             r.raise_for_status()
             j = r.json() or {}
-            data = j.get("priceInfo", {}) or {}
+            price_info = j.get("priceInfo", {}) or {}
 
-        bands = {
-            "upper_circuit": float(data.get("upperCP") or 0.0),
-            "lower_circuit": float(data.get("lowerCP") or 0.0),
-            "prev_close": float(data.get("previousClose") or 0.0),
+        uc = float(price_info.get("upperCP") or 0.0)
+        lc = float(price_info.get("lowerCP") or 0.0)
+        pc = float(price_info.get("previousClose") or 0.0)
+
+        # 52W high/low: from priceInfo.weekHighLow.{max,min}
+        year_high = year_low = None
+        try:
+            whl = price_info.get("weekHighLow") or {}
+            if whl.get("max") not in (None, "", "-"):
+                year_high = float(whl["max"])
+            if whl.get("min") not in (None, "", "-"):
+                year_low = float(whl["min"])
+        except Exception:
+            pass
+
+        bands: dict = {
+            "upper_circuit": uc,
+            "lower_circuit": lc,
+            "prev_close": pc,
         }
+        if year_high is not None:
+            bands["year_high"] = year_high
+        if year_low is not None:
+            bands["year_low"] = year_low
 
-        if all(v == 0.0 for v in bands.values()):
-            log.warning(f"[NSE] Empty data for {symbol} → skipping cache write")
-            # fall back to previous cache if exists
+        if all(
+            v == 0.0
+            for k, v in bands.items()
+            if k in ("upper_circuit", "lower_circuit", "prev_close")
+        ):
+            # likely bad/empty payload; keep old cache if any
+            log.warning(f"[NSE] Empty bands for {symbol} → keeping old cache")
             return entry.get("bands") if entry else None
 
         cache[symbol] = {"timestamp": now, "bands": bands}
@@ -165,7 +187,6 @@ def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[di
 
     except Exception as e:
         log.warning(f"[NSE] fetch failed for {symbol}: {e}")
-        # graceful fallback: last-good bands if present
         return entry.get("bands") if entry else None
 
 

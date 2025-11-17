@@ -1,49 +1,35 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>{% block title %}Queen Cockpit{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#007aff" />
   {% include "_partials/head.html" %}
-  {% block head_extras %}{% endblock %}
-</head>
+  <body>
+    {% include "_partials/header.html" %}
 
-<body class="q-body fade-in">
-  <section class="section pt-4">
-    <div class="container">
-      {% block top %}{% endblock %}
-      {% include "_partials/header.html" %}
-      {% block content %}{% endblock %}
-    </div>
-  </section>
+    <main class="section">
+      <div class="container">
+        {% block top %}{% endblock %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
 
-  {% include "_partials/footer.html" %}
-  {% block scripts %}{% endblock %}
+    {% include "_partials/footer.html" %}
 
-  <script>
-    /* ----------------------------------------------------------------
-       Global startup sanity: ensures footer clock, health dot, and
-       universe count initialize smoothly on every page load
-       ---------------------------------------------------------------- */
-    document.addEventListener('DOMContentLoaded', () => {
-      try {
-        if (typeof qTickClock === 'function') qTickClock();
-        if (typeof updateSessionBadge === 'function') updateSessionBadge();
-        if (typeof updateUniverseCount === 'function') updateUniverseCount();
-        if (typeof qFillFooterNow === 'function') qFillFooterNow();
-      } catch (e) {
-        console.warn('Startup sequence partial error:', e);
-      }
-    });
+    <!-- Cockpit core JS (global namespaces: window.Cockpit + window.qs) -->
+    <script src="{{ url_for('static', path='js/cockpit_core.js') }}"></script>
+    <script src="{{ url_for('static', path='js/cockpit_portfolio.js') }}"></script>
+    <script src="{{ url_for('static', path='js/cockpit_cards.js') }}"></script>
+    <script src="{{ url_for('static', path='js/cockpit_session.js') }}"></script>
+    <script src="{{ url_for('static', path='js/cockpit_compat.js') }}"></script>
+    <script src="{{ url_for('static', path='js/cockpit_ui.js') }}"></script>
+<script src="{{ url_for('static', path='js/cockpit_live.js') }}"></script>  <!-- 👈 new -->
+    {# Page-specific scripts (live/summary/upcoming/history/analytics) #}
+    {% block scripts %}{% endblock %}
 
-    /* ----------------------------------------------------------------
-       Fade-in transition safeguard (prevents flash of unstyled content)
-       ---------------------------------------------------------------- */
-    window.addEventListener('load', () => {
-      document.body.classList.add('fade-in');
-    });
-  </script>
-</body>
+    <script>
+
+
+      window.addEventListener('load', () => {
+        document.body.classList.add('fade-in');
+      });
+    </script>
+  </body>
 </html>

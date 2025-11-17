@@ -1,9 +1,49 @@
-/*-- queen/server/static/queen.css --*/
-/* ============================================================
-   Queen Cockpit — Tables + Pills + PnL + Status (merged v1.6)
-   ============================================================ */
+/* queen/server/static/queen.css
+ * ============================================================
+ * Queen Cockpit UI — v1.7
+ * Tables + Pills + PnL + Status + Cards (DRY tokens)
+ * ============================================================
+ */
 
-/* === Actionables table: widen numeric columns === */
+/* ===================== Design Tokens ====================== */
+:root {
+  /* neuters */
+  --q-bg-soft: #f9fafb;
+  --q-bg-softer: #f3f4f6;
+  --q-border-soft: #e5e7eb;
+  --q-text-main: #111827;
+  --q-text-muted: #6b7280;
+  --q-text-soft: #9ca3af;
+
+  /* greens */
+  --q-green-bg: #d1fae5;
+  --q-green-border: #a7f3d0;
+  --q-green-text: #065f46;
+
+  /* ambers */
+  --q-amber-bg: #fef3c7;
+  --q-amber-border: #fde68a;
+  --q-amber-text: #92400e;
+
+  /* reds */
+  --q-red-bg: #fee2e2;
+  --q-red-border: #fecaca;
+  --q-red-text: #991b1b;
+
+  /* grays */
+  --q-gray-bg: #f3f4f6;
+  --q-gray-border: #e5e7eb;
+  --q-gray-text: #374151;
+
+  /* blues (for weekend / info) */
+  --q-blue-bg: #dbeafe;
+  --q-blue-border: #bfdbfe;
+  --q-blue-text: #1d4ed8;
+}
+
+/* ===================== Tables ====================== */
+
+/* widen numeric cols on actionables */
 .q-table th.col-entry,
 .q-table td.col-entry {
   min-width: 96px;
@@ -17,24 +57,24 @@
 .q-table th.col-targets,
 .q-table td.col-targets {
   min-width: 260px;
-  white-space: normal; /* allow wrapping on small screens */
+  white-space: normal;
   word-break: break-word;
   line-height: 1.25;
 }
 
-/* Keep numerics tight & readable */
+/* keep numerics aligned */
 .q-table td.num {
   font-variant-numeric: tabular-nums;
 }
 
-/* Slightly more breathing room between cells */
+/* slightly more breathing room */
 .q-table.table.is-narrow td,
 .q-table.table.is-narrow th {
   padding-left: 0.6rem;
   padding-right: 0.6rem;
 }
 
-/* Responsive: let targets shrink but not collapse */
+/* responsive targets column */
 @media (max-width: 1200px) {
   .q-table th.col-targets,
   .q-table td.col-targets {
@@ -49,6 +89,7 @@
 }
 
 /* ===================== Pills & Badges ====================== */
+
 .pill {
   display: inline-block;
   padding: 2px 8px;
@@ -62,94 +103,249 @@
   min-width: 52px;
   text-align: center;
 }
+
+/* tone variants */
 .pill.green {
-  color: #0b5134;
-  background: #d1fae5;
-  border-color: #a7f3d0;
+  color: var(--q-green-text);
+  background: var(--q-green-bg);
+  border-color: var(--q-green-border);
 }
 .pill.amber {
-  color: #92400e;
-  background: #fef3c7;
-  border-color: #fde68a;
+  color: var(--q-amber-text);
+  background: var(--q-amber-bg);
+  border-color: var(--q-amber-border);
 }
 .pill.red {
-  color: #991b1b;
-  background: #fee2e2;
-  border-color: #fecaca;
+  color: var(--q-red-text);
+  background: var(--q-red-bg);
+  border-color: var(--q-red-border);
 }
 .pill.gray {
-  color: #374151;
-  background: #f3f4f6;
-  border-color: #e5e7eb;
+  color: var(--q-gray-text);
+  background: var(--q-gray-bg);
+  border-color: var(--q-gray-border);
 }
 
-/* “HELD” tag */
+/* decision badges (small rectangles) */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.badge.green {
+  color: var(--q-green-text);
+  background: var(--q-green-bg);
+  border: 1px solid var(--q-green-border);
+}
+.badge.amber {
+  color: var(--q-amber-text);
+  background: var(--q-amber-bg);
+  border: 1px solid var(--q-amber-border);
+}
+.badge.red {
+  color: var(--q-red-text);
+  background: var(--q-red-bg);
+  border: 1px solid var(--q-red-border);
+}
+
+/* HELD tag */
 .badge.held {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--q-amber-bg);
+  color: var(--q-amber-text);
   border-radius: 6px;
   padding: 2px 6px;
   font-size: 0.7rem;
   font-weight: 600;
+  border: 1px solid var(--q-amber-border);
   vertical-align: middle;
 }
 
+/* session badges (Pre-Open / Live / Post-Market / Weekend / Holiday) */
+.pill.session {
+  font-size: 0.7rem;
+  padding: 1px 8px;
+  min-width: auto;
+}
+
+/* map sessions → tones */
+.pill.session-live {
+  color: var(--q-green-text);
+  background: var(--q-green-bg);
+  border-color: var(--q-green-border);
+}
+.pill.session-preopen {
+  color: var(--q-amber-text);
+  background: var(--q-amber-bg);
+  border-color: var(--q-amber-border);
+}
+.pill.session-post {
+  color: var(--q-gray-text);
+  background: var(--q-gray-bg);
+  border-color: var(--q-gray-border);
+}
+.pill.session-weekend {
+  color: var(--q-blue-text);
+  background: var(--q-blue-bg);
+  border-color: var(--q-blue-border);
+}
+.pill.session-holiday {
+  color: var(--q-red-text);
+  background: var(--q-red-bg);
+  border-color: var(--q-red-border);
+}
+
 /* ===================== PnL chip ====================== */
+
 .pnl-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  padding: 1px 6px; /* compact & consistent with pills */
+  padding: 1px 6px;
   margin-left: 4px;
   font-size: 0.75rem;
   font-weight: 600;
   border: 1px solid transparent;
-  background: rgba(0, 0, 0, 0.04); /* fallback neutral */
+  background: rgba(0, 0, 0, 0.04);
 }
 .pnl-val {
   font-variant-numeric: tabular-nums;
 }
 
-/* Tones */
 .pnl-up {
-  color: #065f46;
-  background: #d1fae5;
-  border-color: #a7f3d0;
+  color: var(--q-green-text);
+  background: var(--q-green-bg);
+  border-color: var(--q-green-border);
 }
 .pnl-dn {
-  color: #991b1b;
-  background: #fee2e2;
-  border-color: #fecaca;
+  color: var(--q-red-text);
+  background: var(--q-red-bg);
+  border-color: var(--q-red-border);
 }
 .pnl-flat {
-  color: #374151;
-  background: #f3f4f6;
-  border-color: #e5e7eb;
+  color: var(--q-gray-text);
+  background: var(--q-gray-bg);
+  border-color: var(--q-gray-border);
 }
 
 /* Hover polish */
 .pnl-chip:hover,
-.pill:hover {
+.pill:hover,
+.badge:hover {
   opacity: 0.85;
   transition: opacity 0.15s ease-in-out;
 }
 
-/* ===================== Row moods ====================== */
+/* ===================== Row moods (tables) ====================== */
+
 .row-bull td {
-  background: #f0fdf4;
+  background: #f0fdf4; /* light green */
 }
 .row-bear td {
-  background: #fef2f2;
+  background: #fef2f2; /* light red */
 }
 .row-dim td {
-  background: #f9fafb;
+  background: #f9fafb; /* very soft gray */
+}
+
+/* ===================== Symbol Cards ====================== */
+/* Used for card-style cockpit rows (Summary / Upcoming / Live) */
+
+.symbol-card {
+  border-radius: 10px;
+  border: 1px solid var(--q-border-soft);
+  background: #ffffff;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.symbol-card.row-bull {
+  background: #f0fdf4;
+}
+.symbol-card.row-bear {
+  background: #fef2f2;
+}
+.symbol-card.row-dim {
+  background: var(--q-bg-soft);
+}
+
+/* top line: symbol + held + pnl + session badge */
+.symbol-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.symbol-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.symbol-card-header-left .sym {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* mid line: CMP / decision / score / CPR / EMA / RSI */
+.symbol-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.symbol-card-main .pair {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.symbol-card-main .label {
+  color: var(--q-text-soft);
+}
+
+/* bottom line: entry / SL / targets / notes */
+.symbol-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-size: 0.78rem;
+  color: var(--q-text-muted);
+}
+.symbol-card-footer .field-label {
+  font-weight: 600;
+  color: var(--q-text-soft);
+}
+.symbol-card-footer .targets {
+  font-variant-numeric: tabular-nums;
+}
+
+/* make cards breathe a bit on small screens */
+@media (max-width: 768px) {
+  .symbol-card {
+    padding: 0.6rem 0.7rem;
+  }
+  .symbol-card-main,
+  .symbol-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 /* ===================== Status strip ====================== */
+
 .q-status {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--q-text-muted);
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.5rem 1rem;
@@ -161,10 +357,10 @@
   flex-wrap: wrap;
 }
 .q-status .key {
-  color: #9ca3af;
+  color: var(--q-text-soft);
 }
 .q-status .val {
-  color: #374151;
+  color: var(--q-text-main);
   font-variant-numeric: tabular-nums;
 }
 .q-status .dot {
@@ -175,19 +371,222 @@
   display: inline-block;
 }
 .q-status .dot.live {
-  background: #10b981;
-} /* green */
+  background: #10b981; /* green */
+}
 .q-status .dot.idle {
-  background: #f59e0b;
-} /* amber */
+  background: #f59e0b; /* amber */
+}
 .q-status .dot.down {
-  background: #ef4444;
-} /* red */
+  background: #ef4444; /* red */
+}
 .q-status .rank {
   display: inline-flex;
   gap: 0.5rem;
   font-variant-numeric: tabular-nums;
 }
 .q-status .rank b {
+  color: var(--q-text-main);
+}
+
+/* ===================== Symbol Cards ====================== */
+
+.symbol-card {
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  font-size: 0.85rem;
+}
+
+.symbol-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
+.symbol-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.symbol-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.symbol-card .sym {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+}
+
+.symbol-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.symbol-card-footer {
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 0.35rem;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.8rem;
+}
+
+.symbol-card .pair {
+  display: flex;
+  gap: 0.25rem;
+  align-items: baseline;
+}
+
+.symbol-card .label {
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.symbol-card .value,
+.symbol-card .field-value {
   color: #111827;
+}
+
+.symbol-card .value.strong {
+  font-weight: 700;
+}
+
+.symbol-card .field-label {
+  color: #9ca3af;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.symbol-card .field-value {
+  font-size: 0.8rem;
+}
+
+.symbol-card .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.symbol-card-strip {
+  margin-top: 0.35rem;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+/* ============================================================
+   Q-CARD GRID (TradingView + Apple hybrid layout)
+   ============================================================ */
+
+.q-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.q-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: 0.15s ease;
+}
+
+.q-card.row-bull {
+  background: #f0fdf4;
+}
+.q-card.row-bear {
+  background: #fef2f2;
+}
+.q-card.row-dim {
+  background: #fafafa;
+}
+
+/* Top line */
+.q-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.q-card-top .sym {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-right: 6px;
+}
+
+/* Middle metrics */
+.q-card-mid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.2rem;
+}
+
+.q-card-mid .metric {
+  min-width: 80px;
+}
+
+.q-card-mid label {
+  font-size: 0.7rem;
+  color: #6b7280;
+  display: block;
+}
+
+.q-card-mid span {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Pills row */
+.q-card-pills {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Targets */
+.q-card-targets {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Notes */
+.q-card-notes {
+  font-size: 0.8rem;
+  color: #6b7280;
+  line-height: 1.2;
+}
+
+/* Drivers */
+.q-card-drivers {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+/* Container for symbol cards (all pages) */
+.symbol-card-grid,
+.q-card-grid,
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  padding: 0.2rem;
 }

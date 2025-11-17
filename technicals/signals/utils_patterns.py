@@ -1,24 +1,34 @@
+#!/usr/bin/env python3
+# ============================================================
 # queen/technicals/signals/utils_patterns.py
 # ------------------------------------------------------------
-# 🧩 Pattern Utilities — integrates queen.settings.patterns into cockpit
-# ------------------------------------------------------------
+# 🧩 Pattern Utilities — integrates queen.settings.patterns.PATTERNS
+# into cockpit / signal layers.
+#
+# Expects queen.settings.patterns to expose:
+#   PATTERNS: Dict[str, Dict[str, Dict]]
+#
+# Example shape:
+# PATTERNS = {
+#   "japanese": {
+#       "hammer": {
+#           "contexts": {"intraday_15m": {...}, "daily": {...}},
+#           ...
+#       },
+#       ...
+#   },
+#   "cumulative": { ... },
+#   ...
+# }
+#
+# ❗ Strict: if PATTERNS is missing or malformed, import will fail.
+# ============================================================
+
 from __future__ import annotations
 
-import random
 from typing import Dict, List, Tuple
 
-try:
-    # expected to expose: PATTERNS: Dict[str, Dict[str, Dict]], e.g.
-    # PATTERNS = {
-    #   "japanese": {
-    #       "hammer": {"contexts": {"intraday_15m": {...}, "daily": {...}}},
-    #       ...
-    #   },
-    #   ...
-    # }
-    from queen.settings.patterns import PATTERNS as _PATTERNS  # canonical
-except Exception:
-    _PATTERNS: Dict[str, Dict[str, Dict]] = {}
+from queen.settings.patterns import PATTERNS as _PATTERNS
 
 FAMILY_ICONS: Dict[str, str] = {
     "japanese": "🕯️",
@@ -28,7 +38,6 @@ FAMILY_ICONS: Dict[str, str] = {
 
 __all__ = [
     "get_patterns_for_timeframe",
-    "get_random_pattern_label",
     "get_deterministic_pattern_label",
     "get_patterns_grouped_by_family",
 ]
@@ -38,7 +47,7 @@ __all__ = [
 # Internal helpers
 # ----------------------------
 def _catalog() -> Dict[str, Dict[str, Dict]]:
-    return _PATTERNS or {}
+    return _PATTERNS
 
 
 def _norm_tf(s: str) -> str:
@@ -55,9 +64,6 @@ def _titleize(name: str) -> str:
 def get_patterns_for_timeframe(timeframe: str) -> List[Tuple[str, str]]:
     """Return [(label, family_icon), ...] applicable to a given timeframe key."""
     cat = _catalog()
-    if not cat:
-        return []
-
     tf = _norm_tf(timeframe)
     out: List[Tuple[str, str]] = []
 
@@ -75,15 +81,8 @@ def get_patterns_for_timeframe(timeframe: str) -> List[Tuple[str, str]]:
     return out
 
 
-def get_random_pattern_label(timeframe: str) -> str:
-    items = get_patterns_for_timeframe(timeframe)
-    if not items:
-        return "—"
-    label, icon = random.choice(items)
-    return f"{icon} {label}"
-
-
 def get_deterministic_pattern_label(timeframe: str, index: int) -> str:
+    """Return a deterministic label+icon for a given timeframe and index."""
     items = get_patterns_for_timeframe(timeframe)
     if not items:
         return "—"
@@ -95,9 +94,6 @@ def get_deterministic_pattern_label(timeframe: str, index: int) -> str:
 def get_patterns_grouped_by_family(timeframe: str) -> Dict[str, List[Tuple[str, str]]]:
     """Return { family_name: [(label, icon), ...] } filtered by timeframe."""
     cat = _catalog()
-    if not cat:
-        return {}
-
     tf = _norm_tf(timeframe)
     grouped: Dict[str, List[Tuple[str, str]]] = {}
 

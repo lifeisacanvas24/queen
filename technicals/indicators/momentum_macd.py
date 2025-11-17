@@ -1,104 +1,128 @@
+#!/usr/bin/env python3
 # ============================================================
-# queen/technicals/indicators/momentum_macd.py
+# queen/technicals/indicators/momentum_macd.py — v3.1 (Bible v10.5)
 # ------------------------------------------------------------
-# ⚙️ MACD (Moving Average Convergence Divergence)
-# Config-driven, NaN-safe, headless for Quant-Core 4.x
+# • Config-driven MACD (reads settings/indicator_policy)
+# • Uses timeframe tokens ('5m', '15m', '1h', '1d', ...)
+# • Outputs:
+#     MACD_line, MACD_signal, MACD_hist,
+#     MACD_norm, MACD_slope, MACD_crossover
+# • Includes:
+#     - macd_config()     → active params (for introspection)
+#     - summarize_macd()  → cockpit / fusion snapshot
+#
+# No file I/O, no legacy helpers — pure forward-only.
 # ============================================================
 
 from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from queen.helpers.io import write_json_atomic  # optional
+
+from queen.helpers.logger import log
+from queen.helpers.pl_compat import ensure_float_series
+from queen.helpers.ta_math import (
+    ema as _ema_np,
+)
+from queen.helpers.ta_math import (
+    gradient_norm as _grad_norm,
+)
+from queen.helpers.ta_math import (
+    normalize_symmetric as _norm_sym,
+)
 from queen.settings.indicator_policy import params_for as _params_for
-from queen.settings.settings import dev_snapshot_path
+
+__all__ = ["compute_macd", "summarize_macd", "macd_config"]
 
 
-# ============================================================
-# 🔧 Exponential Moving Average Helper
-# ============================================================
-def ema(series: np.ndarray, span: int) -> np.ndarray:
-    """Compute Exponential Moving Average (EMA)."""
-    if len(series) < span:
-        return np.full_like(series, np.nan, dtype=float)
-    alpha = 2 / (span + 1)
-    ema_vals = np.zeros_like(series, dtype=float)
-    ema_vals[0] = series[0]
-    for i in range(1, len(series)):
-        ema_vals[i] = alpha * series[i] + (1 - alpha) * ema_vals[i - 1]
-    return ema_vals
-
-
-# ============================================================
-# 🧠 Core MACD Computation
-# ============================================================
-def compute_macd(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.DataFrame:
+# ------------------------------------------------------------
+# ⚙️ Config helper
+# ------------------------------------------------------------
+def macd_config(timeframe: str = "15m") -> dict:
+    """Return the MACD configuration resolved from settings for a timeframe token."""
     p = _params_for("MACD", timeframe) or {}
     fast_period = int(p.get("fast_period", 12))
     slow_period = int(p.get("slow_period", 26))
     signal_period = int(p.get("signal_period", 9))
+    return {
+        "timeframe": timeframe,
+        "fast_period": fast_period,
+        "slow_period": slow_period,
+        "signal_period": signal_period,
+    }
 
-    df = df.clone()
-    if "close" not in df.columns:
-        _log_indicator_warning(
-            "MACD", context, "Missing 'close' column — skipping computation."
-        )
+
+# ------------------------------------------------------------
+# 🧠 Core MACD Computation
+# ------------------------------------------------------------
+def compute_macd(df: pl.DataFrame, timeframe: str = "15m") -> pl.DataFrame:
+    """Compute MACD and derived fields, driven by settings/indicator_policy.
+
+    Args:
+        df: Polars DataFrame with at least 'close' column.
+        timeframe: Short token like '5m', '15m', '1h', '1d', ...
+
+    Returns:
+        DataFrame with MACD_* columns appended.
+
+    """
+    if not isinstance(df, pl.DataFrame) or df.height == 0:
         return df
 
-    # --- Safe extraction
-    try:
-        close = df["close"].to_numpy().astype(float, copy=False)
-    except Exception:
-        close = np.array(df["close"], dtype=float)
+    if "close" not in df.columns:
+        log.warning("[MACD] Missing 'close' column — skipping computation.")
+        return df
 
-    if len(close) < slow_period:
-        _log_indicator_warning(
-            "MACD", context, f"Insufficient data (<{slow_period}) for MACD computation."
+    cfg = macd_config(timeframe)
+    fast_period = cfg["fast_period"]
+    slow_period = cfg["slow_period"]
+    signal_period = cfg["signal_period"]
+
+    out = df.clone()
+
+    # Safe extraction via pl_compat (float, null-safe)
+    close_series = ensure_float_series(out["close"])
+    close = close_series.to_numpy()
+
+    n = close.size
+    if n < slow_period:
+        log.warning(
+            f"[MACD] Insufficient data (<{slow_period}) for MACD (tf={timeframe}); "
+            "filling zeros."
         )
-        zeros = np.zeros_like(close)
-        return df.with_columns(
+        zeros = np.zeros_like(close, dtype=float)
+        return out.with_columns(
             [
                 pl.Series("MACD_line", zeros),
                 pl.Series("MACD_signal", zeros),
                 pl.Series("MACD_hist", zeros),
                 pl.Series("MACD_norm", zeros),
                 pl.Series("MACD_slope", zeros),
-                pl.Series("MACD_crossover", np.full(len(close), False)),
+                pl.Series("MACD_crossover", np.full(n, False)),
             ]
         )
 
-    # --- EMA computation
-    macd_fast = ema(close, fast_period)
-    macd_slow = ema(close, slow_period)
+    # EMA-based MACD via shared ta_math EMA
+    macd_fast = _ema_np(close, fast_period)
+    macd_slow = _ema_np(close, slow_period)
     macd_line = macd_fast - macd_slow
-    signal_line = ema(macd_line, signal_period)
+    signal_line = _ema_np(macd_line, signal_period)
     macd_hist = macd_line - signal_line
 
-    macd_hist = np.nan_to_num(macd_hist, nan=0.0)
     macd_line = np.nan_to_num(macd_line, nan=0.0)
     signal_line = np.nan_to_num(signal_line, nan=0.0)
+    macd_hist = np.nan_to_num(macd_hist, nan=0.0)
 
-    # --- Normalization (safe)
-    with np.errstate(all="ignore"):
-        max_abs = np.nanmax(np.abs(macd_hist))
-    if not np.isfinite(max_abs) or max_abs == 0:
-        max_abs = 1.0
-        _log_indicator_warning(
-            "MACD", context, "All-NaN slice encountered — normalization skipped."
-        )
-    macd_norm = np.clip(macd_hist / max_abs, -1, 1)
+    # Histogram normalization ([-1, 1]) via ta_math
+    macd_norm = _norm_sym(macd_hist)
 
-    # --- Slope normalization
-    slope = np.gradient(macd_line)
-    with np.errstate(all="ignore"):
-        slope_max = np.nanmax(np.abs(slope))
-    slope_max = slope_max if np.isfinite(slope_max) and slope_max != 0 else 1.0
-    slope_norm = np.clip(slope / slope_max, -1, 1)
+    # Slope normalization (gradient of MACD_line) via ta_math
+    slope_norm = _grad_norm(macd_line)
 
-    # --- Crossovers
+    # Crossovers (boolean)
     crossover = macd_line > signal_line
 
-    return df.with_columns(
+    return out.with_columns(
         [
             pl.Series("MACD_line", macd_line),
             pl.Series("MACD_signal", signal_line),
@@ -110,13 +134,17 @@ def compute_macd(df: pl.DataFrame, timeframe: str = "intraday_15m") -> pl.DataFr
     )
 
 
-# ============================================================
-# 📊 Summary
-# ============================================================
+# ------------------------------------------------------------
+# 📊 Summary (for cockpit/fusion)
+# ------------------------------------------------------------
 def summarize_macd(df: pl.DataFrame) -> dict:
     """Return structured MACD summary for cockpit/fusion layers."""
-    if df.height == 0 or "MACD_line" not in df.columns:
+    if not isinstance(df, pl.DataFrame) or df.height == 0:
         return {"status": "empty"}
+
+    required = {"MACD_line", "MACD_signal", "MACD_hist"}
+    if not required.issubset(set(df.columns)):
+        return {"status": "missing", "missing": sorted(required - set(df.columns))}
 
     last_val = float(df["MACD_line"][-1])
     last_signal = float(df["MACD_signal"][-1])
@@ -124,6 +152,7 @@ def summarize_macd(df: pl.DataFrame) -> dict:
     bias = "bullish" if last_val > last_signal else "bearish"
 
     return {
+        "status": "ok",
         "MACD_line": round(last_val, 3),
         "MACD_signal": round(last_signal, 3),
         "MACD_hist": round(hist, 3),
@@ -131,19 +160,19 @@ def summarize_macd(df: pl.DataFrame) -> dict:
     }
 
 
-# ============================================================
-# 🧪 Local Dev Diagnostic (Headless Snapshot)
-# ============================================================
+# ------------------------------------------------------------
+# 🧪 Local Dev Diagnostic (Headless, no filesystem)
+# ------------------------------------------------------------
 if __name__ == "__main__":
+    # Simple synthetic sine-wave test
     np.random.seed(42)
     n = 200
     x = np.linspace(0, 8 * np.pi, n)
     close = 100 + np.sin(x) * 5 + np.random.normal(0, 0.5, n)
 
     df = pl.DataFrame({"close": close})
-    df = compute_macd(df, context="intraday_15m")
-    summary = summarize_macd(df)
+    df_macd = compute_macd(df, timeframe="15m")
+    snap = summarize_macd(df_macd)
 
-    # ✅ Write headless diagnostic snapshot via config path
-    write_json_atomic(dev_snapshot_path("macd"), summary)
-    print("📊 [Headless] MACD snapshot written → queen/data/dev_snapshots/macd.json")
+    print("📊 [Headless] MACD snapshot:", snap)
+    print("Config:", macd_config("15m"))
