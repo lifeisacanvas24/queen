@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/daemons/live_engine.py — v1.8
-# Cockpit-row powered live loop (DRY + interval-aware)
+# queen/daemons/live_engine.py — v2.1
+# Cockpit-row powered live loop
+# ✅ CMP from pure intraday (today-only, matches old engine)
+# ✅ Indicators/targets from backfilled DF (via services.live)
 # ============================================================
 from __future__ import annotations
 
@@ -14,12 +16,23 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
+# 👇 NEW: for CMP we always use the pure intraday endpoint
 from queen.fetchers.upstox_fetcher import fetch_intraday
 from queen.helpers.candles import ensure_sorted
 from queen.helpers.candles import last_close as candle_last_close
 from queen.helpers.logger import log
 from queen.helpers.market import get_market_state, sleep_until_next_candle
 from queen.services.cockpit_row import build_cockpit_row
+from queen.services.live import _intraday_with_backfill, structure_and_targets
+
+# Indicator cores (same as services.live)
+from queen.technicals.indicators.core import (
+    atr_last,
+    cpr_from_prev_day,
+    obv_trend,
+    rsi_last,
+    vwap_last,
+)
 
 DEFAULT_INTERVAL_MIN = 15
 
@@ -35,55 +48,119 @@ class MonitorConfig:
     limit_bars: int = 200  # keep memory low
 
 
-# --------------------- data fetch ---------------------
-async def _fetch_intraday(symbol: str, interval: str, limit: int) -> pl.DataFrame:
-    """Thin wrapper over fetch_intraday → Polars frame, tail-capped."""
-    df = await fetch_intraday(symbol, interval)
-    return df.tail(limit) if limit and not df.is_empty() else df
+# --------------------- helpers ---------------------
+async def _today_intraday_df(symbol: str, interval_min: int, limit: int) -> pl.DataFrame:
+    """Pure intraday fetch for *today only*, used to anchor CMP.
+
+    This mirrors the old v1.6 behaviour:
+      - fetch_intraday("15m") → tail(limit) → last close.
+    """
+    iv = f"{interval_min}m"
+    df = await fetch_intraday(symbol, iv)
+    if not df.is_empty() and limit:
+        df = df.tail(limit)
+    return ensure_sorted(df) if not df.is_empty() else df
 
 
-# --------------------- Core One-Pass (DRY with cockpit) ---------------------
+def _fmt(x) -> str:
+    if x is None:
+        return "—"
+    if isinstance(x, float):
+        return f"{x:,.1f}"
+    return str(x)
+
+
+# --------------------- Core One-Pass ---------------------
 async def _one_pass(cfg: MonitorConfig) -> List[Dict]:
     """Build one snapshot of rows for all symbols.
 
-    Important:
-      • Uses the same build_cockpit_row() as /cockpit/api/summary
-      • Interval is cfg.interval_min (no hard-coded 15m)
-      • CMP is normalized via helpers.candles.last_close(df) if needed
-
+    🔹 CMP is always from *pure intraday today* (matches old engine).
+    🔹 Indicators (CPR / VWAP / RSI / ATR / OBV / targets / SL)
+       use the richer backfilled DF via _intraday_with_backfill.
     """
     rows: List[Dict] = []
     interval_str = f"{cfg.interval_min}m"
 
     for sym in cfg.symbols:
         try:
-            df = await _fetch_intraday(sym, interval_str, cfg.limit_bars)
-            if df.is_empty():
-                log.warning(f"[Live] No data for {sym} ({interval_str})")
+            # A) CMP anchor — today-only intraday (old behaviour)
+            df_today: pl.DataFrame = await _today_intraday_df(
+                sym, cfg.interval_min, cfg.limit_bars
+            )
+            if df_today.is_empty():
+                log.warning(f"[Live] No intraday data for {sym} ({interval_str})")
+                # we still try backfilled DF below for structure, but CMP will be None
+                cmp_val = None
+            else:
+                cmp_val = candle_last_close(df_today)
+                if cmp_val is None:
+                    log.warning(f"[Live] No close series for {sym} on today-only DF")
+
+            # B) Rich context DF — with backfill for ATR / CPR etc.
+            df_ctx: pl.DataFrame = await _intraday_with_backfill(sym, cfg.interval_min)
+            if df_ctx.is_empty():
+                # If backfill failed, fall back to today DF for indicators as well.
+                df_ctx = df_today
+
+            if df_ctx.is_empty():
+                # nothing to work with at all
                 continue
 
-            df = ensure_sorted(df)
+            df_ctx = ensure_sorted(df_ctx)
 
-            # Canonical cockpit row (same as Summary API)
+            # 2) Indicator core (same as cmp_snapshot / live.cmp_snapshot)
+            cpr = cpr_from_prev_day(df_ctx)
+            vwap = vwap_last(df_ctx)
+            close_series = df_ctx["close"]
+            rsi = rsi_last(close_series, 14)
+            atr = atr_last(df_ctx, 14)
+            obv = obv_trend(df_ctx)
+
+            # 3) Structure + targets based on CMP + indicator context
+            # If for some reason CMP is None, fall back to contextual DF last close.
+            eff_cmp = cmp_val
+            if eff_cmp is None:
+                eff_cmp = candle_last_close(df_ctx)
+            if eff_cmp is None:
+                log.warning(f"[Live] Unable to resolve CMP for {sym}")
+                continue
+
+            summary, targets, sl = structure_and_targets(
+                last_close_val=eff_cmp,
+                cpr=cpr,
+                vwap=vwap,
+                rsi=rsi,
+                atr=atr,
+                obv=obv,
+            )
+
+            # 4) Optional cockpit_row enrichment (PnL, Bible meta, strip)
             row = build_cockpit_row(
                 sym,
-                df,
+                df_ctx,
                 interval=interval_str,
-                book="all",      # CLI is book-agnostic; 'all' mirrors summary default
-                tactical=None,   # tactical/pattern/reversal/volatility can be wired later
+                book="all",
+                tactical=None,
                 pattern=None,
                 reversal=None,
                 volatility=None,
-            )
-            if not row:
-                continue
+            ) or {}
 
-            # CMP: prefer cockpit_row; else force from candles
-            cmp_val = row.get("cmp")
-            if cmp_val is None:
-                cmp_val = candle_last_close(df)
-                if cmp_val is not None:
-                    row["cmp"] = cmp_val
+            # 5) Fill / override the fields the TUI cares about
+            row.update(
+                {
+                    "symbol": sym,
+                    "cmp": eff_cmp,  # ✅ CMP from today-only intraday
+                    "cpr": cpr,
+                    "vwap": vwap,
+                    "atr": atr,
+                    "rsi": rsi,
+                    "obv": obv,
+                    "summary": summary,
+                    "targets": targets,
+                    "sl": sl,
+                }
+            )
 
             rows.append(row)
 
@@ -95,7 +172,7 @@ async def _one_pass(cfg: MonitorConfig) -> List[Dict]:
 
 # --------------------- Console Rendering ---------------------
 async def run_live_console(cfg: MonitorConfig):
-    """Rich live console dashboard, now driven by cockpit rows."""
+    """Rich live console dashboard, now driven by cockpit rows + core indicators."""
     meta = get_market_state()
     head = Panel.fit(
         f"✅ Live {cfg.interval_min}-min | Gate: {meta['gate']} | "
@@ -105,8 +182,10 @@ async def run_live_console(cfg: MonitorConfig):
 
     rows = await _one_pass(cfg)
     comp, expd = _compact_table(rows), _expanded_table(rows)
-    body = comp if cfg.view == "compact" else expd if cfg.view == "expanded" else Group(
-        comp, expd
+    body = (
+        comp
+        if cfg.view == "compact"
+        else expd if cfg.view == "expanded" else Group(comp, expd)
     )
 
     with Live(Group(head, body), refresh_per_second=4, screen=False) as live:
@@ -116,8 +195,12 @@ async def run_live_console(cfg: MonitorConfig):
             )
             rows = await _one_pass(cfg)
             comp, expd = _compact_table(rows), _expanded_table(rows)
-            body = comp if cfg.view == "compact" else expd if cfg.view == "expanded" else Group(
-                comp, expd
+            body = (
+                comp
+                if cfg.view == "compact"
+                else expd
+                if cfg.view == "expanded"
+                else Group(comp, expd)
             )
             meta = get_market_state()
             head = Panel.fit(
@@ -128,17 +211,9 @@ async def run_live_console(cfg: MonitorConfig):
             live.update(Group(head, body))
 
 
-# --------------------- Helpers ---------------------
-def _fmt(x) -> str:
-    if x is None:
-        return "—"
-    if isinstance(x, float):
-        return f"{x:,.1f}"
-    return str(x)
-
-
+# --------------------- Tables ---------------------
 def _compact_table(rows: List[Dict]) -> Table:
-    """Compact table — keep the old feel, but drive from cockpit rows."""
+    """Compact table — keep the old feel, driven by enriched rows."""
     t = Table(title="Live Intraday (Compact)", expand=True)
     for c in ["Symbol", "CPR", "VWAP", "ATR", "RSI", "OBV", "Summary", "Targets", "SL"]:
         t.add_column(c)
@@ -146,13 +221,13 @@ def _compact_table(rows: List[Dict]) -> Table:
     for r in rows:
         t.add_row(
             r.get("symbol", "—"),
-            _fmt(r.get("cpr")),                     # from build_cockpit_row / indicators
-            _fmt(r.get("vwap") or r.get("avg_price")),
+            _fmt(r.get("cpr")),
+            _fmt(r.get("vwap")),
             _fmt(r.get("atr")),
             _fmt(r.get("rsi")),
             _fmt(r.get("obv")),
             r.get("summary") or r.get("notes", "—"),
-            " • ".join(r.get("targets", [])),
+            " • ".join(r.get("targets", []) or []),
             _fmt(r.get("sl")),
         )
     return t
@@ -180,12 +255,12 @@ def _expanded_table(rows: List[Dict]) -> Table:
             r.get("symbol", "—"),
             _fmt(r.get("cmp")),
             _fmt(r.get("cpr")),
-            _fmt(r.get("vwap") or r.get("avg_price")),
+            _fmt(r.get("vwap")),
             _fmt(r.get("atr")),
             _fmt(r.get("rsi")),
             _fmt(r.get("obv")),
             r.get("summary") or r.get("notes", "—"),
-            " → ".join(r.get("targets", [])),
+            " → ".join(r.get("targets", []) or []),
             _fmt(r.get("sl")),
         )
     return t

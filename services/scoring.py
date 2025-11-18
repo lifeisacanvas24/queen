@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/scoring.py — v2.1
-# Actionable scoring + early-signal fusion (cockpit-ready)
+# queen/services/scoring.py — v2.2 (Daily-ATR aware, Bible-ready)
+# ------------------------------------------------------------
+# Actionable scoring + early-signal fusion (cockpit / TUI ready)
 #
 # Responsibilities:
 #   • Quick indicator snapshot from OHLCV (RSI / ATR / VWAP / CPR / OBV / EMAs)
+#   • Daily ATR + risk snapshot derived from intraday bars
 #   • Early signal fusion (registry signals + price-action fallback)
 #   • Position-aware decision ("BUY", "ADD", "HOLD", "EXIT", "AVOID")
 #   • Cockpit row builder with optional Pattern / Tactical fields
@@ -25,6 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import polars as pl
 
 from queen.fetchers.nse_fetcher import fetch_nse_bands
+from queen.helpers.market import MARKET_TZ
 from queen.helpers.portfolio import compute_pnl, position_for
 from queen.technicals.indicators import core as ind
 
@@ -50,6 +53,89 @@ def _ema_last(
         return None
 
 
+# --------------- daily risk snapshot -----------------
+def _daily_ohlc_from_intraday(df: pl.DataFrame) -> pl.DataFrame:
+    """Compress intraday bars into 1 bar per session (IST date).
+
+    Expects columns: timestamp, open, high, low, close.
+    """
+    if df.is_empty() or "timestamp" not in df.columns:
+        # empty but well-typed frame to keep callers safe
+        return pl.DataFrame(
+            {
+                "d": pl.Series([], dtype=pl.Date),
+                "open": pl.Series([], dtype=pl.Float64),
+                "high": pl.Series([], dtype=pl.Float64),
+                "low": pl.Series([], dtype=pl.Float64),
+                "close": pl.Series([], dtype=pl.Float64),
+            }
+        )
+
+    dated = df.with_columns(
+        pl.col("timestamp")
+        .dt.convert_time_zone(MARKET_TZ.key)
+        .dt.date()
+        .alias("d")
+    )
+
+    daily = (
+        dated.sort("timestamp")
+        .group_by("d")  # 👈 Polars 1.x API (group_by, not groupby)
+        .agg(
+            pl.col("open").first().alias("open"),
+            pl.col("high").max().alias("high"),
+            pl.col("low").min().alias("low"),
+            pl.col("close").last().alias("close"),
+        )
+        .sort("d")
+    )
+
+    return daily
+
+def _daily_risk_snapshot(
+    df: pl.DataFrame,
+    period: int = 14,
+) -> Tuple[Optional[float], Optional[float], Optional[str], Optional[str]]:
+    """Return (daily_atr, daily_atr_pct, risk_rating, sl_zone)."""
+    daily = _daily_ohlc_from_intraday(df)
+    if daily.is_empty() or daily.height < period + 1:
+        return None, None, None, None
+
+    try:
+        atr_val = ind.atr_last(daily, period)
+    except Exception:
+        atr_val = None
+
+    if atr_val is None:
+        return None, None, None, None
+
+    try:
+        close_ser = daily["close"].drop_nulls()
+        if close_ser.is_empty():
+            return None, None, None, None
+        ref_close = float(close_ser.tail(1).item())
+    except Exception:
+        return None, None, None, None
+
+    if ref_close <= 0:
+        return None, None, None, None
+
+    atr_pct = float(atr_val) / ref_close * 100.0
+
+    # Simple, explainable buckets — this is your "Bible risk scale"
+    if atr_pct < 1.0:
+        risk = "Low"
+        sl_zone = "Tight"
+    elif atr_pct <= 2.5:
+        risk = "Medium"
+        sl_zone = "Normal"
+    else:
+        risk = "High"
+        sl_zone = "Wide"
+
+    return float(atr_val), float(atr_pct), risk, sl_zone
+
+
 # --------------- indicators snapshot -----------------
 def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
     """Lightweight indicator snapshot for a single timeframe.
@@ -59,7 +145,8 @@ def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
     Keys:
       CMP, RSI, ATR, VWAP, CPR, OBV,
       EMA20, EMA50, EMA200, EMA_BIAS,
-      _df  (the raw DataFrame, for early-signal engines)
+      Daily_ATR, Daily_ATR_Pct, Risk_Rating, SL_Zone,
+      _df  (the raw DataFrame, for early-signal engines / Bible)
     """
     if df.is_empty() or df.height < 12:
         return None
@@ -83,6 +170,9 @@ def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
         elif ema20 < ema50 < ema200:
             ema_bias = "Bearish"
 
+    # ---- Daily ATR / risk, derived from intraday bars ----
+    daily_atr, daily_atr_pct, risk_rating, sl_zone = _daily_risk_snapshot(df)
+
     return {
         "CMP": close_last,
         "RSI": rsi_val,
@@ -94,7 +184,12 @@ def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
         "EMA50": ema50,
         "EMA200": ema200,
         "EMA_BIAS": ema_bias,
-        # Let early-signal engines see full context
+        # Daily risk lens (used by Bible / ladders)
+        "Daily_ATR": daily_atr,
+        "Daily_ATR_Pct": daily_atr_pct,
+        "Risk_Rating": risk_rating,
+        "SL_Zone": sl_zone,
+        # Let early-signal engines + Bible see full context
         "_df": df,
     }
 
@@ -183,7 +278,7 @@ def _early_bundle(
 
     Note:
       • Uses pre_breakout + squeeze_pulse if available.
-      • ReversalStack / Tactical stack are handled separately in Bible v10.5.
+      • ReversalStack / Tactical stack are handled separately in Bible engine.
 
     """
     total = 0
@@ -262,7 +357,11 @@ def score_symbol(indd: Dict[str, Any]) -> Tuple[float, List[str]]:
 
 # --------------- ladders & entries -----------------
 def _ladder_from_base(base: float, atr: Optional[float]) -> Tuple[float, List[str]]:
-    """Return (SL, [T1, T2, T3]) strings."""
+    """Return (SL, [T1, T2, T3]) strings using ATR for spacing.
+
+    ATR here is *preferably* Daily_ATR (session volatility),
+    but will gracefully fall back to intraday ATR.
+    """
     atr_val = atr or max(1.0, base * 0.01)
     t1 = round(base + 0.5 * atr_val, 1)
     t2 = round(base + 1.0 * atr_val, 1)
@@ -295,6 +394,7 @@ def action_for(
 
     `indd` may contain:
       • Base indicators (CMP / RSI / ATR / VWAP / CPR / OBV / EMA*)
+      • Daily risk snapshot (Daily_ATR / Daily_ATR_Pct / Risk_Rating / SL_Zone)
       • _df              → for early-signal fusion
       • Optional advanced metrics:
           - PatternScore / PatternComponent / PatternBias / TopPattern
@@ -303,7 +403,11 @@ def action_for(
           - RScore_norm / VolX_norm / LBX_norm
     """
     cmp_ = float(indd["CMP"])
-    atr = indd.get("ATR")
+    atr_intraday = indd.get("ATR")
+    daily_atr = indd.get("Daily_ATR")
+    # Prefer daily ATR for ladders; fall back to intraday ATR
+    atr_for_ladder = daily_atr or atr_intraday
+
     vwap = indd.get("VWAP")
     cpr = indd.get("CPR")
     ema20 = indd.get("EMA20")
@@ -348,12 +452,12 @@ def action_for(
 
     # --- Targets & SL
     if held:
-        base = float(pos.get("avg_price") or cmp_)
-        entry = round(base, 1)
-        sl, targets = _ladder_from_base(base, atr)
+        base_px = float(pos.get("avg_price") or cmp_)
+        entry = round(base_px, 1)
+        sl, targets = _ladder_from_base(base_px, atr_for_ladder)
     else:
-        entry = _non_position_entry(cmp_, vwap, ema20, cpr, atr)
-        sl, targets = _ladder_from_base(entry, atr)
+        entry = _non_position_entry(cmp_, vwap, ema20, cpr, atr_for_ladder)
+        sl, targets = _ladder_from_base(entry, atr_for_ladder)
 
     # --- UC/LC notes
     notes: List[str] = []
@@ -392,7 +496,6 @@ def action_for(
         notes.append("Drivers: " + " ".join(drivers))
 
     # --- Optional advanced metrics (Pattern / Tactical / Volatility)
-    # Pattern fusion / reversal stack
     pattern_score = (
         indd.get("PatternScore")
         if indd.get("PatternScore") is not None
@@ -424,6 +527,32 @@ def action_for(
     volx_norm = indd.get("VolX_norm")
     lbx_norm = indd.get("LBX_norm")
 
+    # --- Bible Trend fields (from tactical_pipeline / bible_engine)
+    trend_score = indd.get("Trend_Score")
+    trend_bias = indd.get("Trend_Bias")
+    trend_label = indd.get("Trend_Label")
+
+    trend_bias_d = indd.get("Trend_Bias_D")
+    trend_bias_w = indd.get("Trend_Bias_W")
+    trend_bias_m = indd.get("Trend_Bias_M")
+
+    # Preformat a compact trend line for UI (cards, TUI)
+    trend_line = None
+    try:
+        if trend_score is not None and trend_bias:
+            # safe float
+            ts = float(trend_score)
+                        # small shorthand for D/W/M parts
+            d = (trend_bias_d or "Range")[0].upper()
+            w = (trend_bias_w or "Range")[0].upper()
+            m = (trend_bias_m or "Range")[0].upper()
+            trend_line = f"Trend: {ts:.1f}/10 ({trend_bias} D:{d} W:{w} M:{m})"
+        elif trend_label:
+                trend_line = f"Trend: {trend_label}"
+    except Exception:
+            # keep it optional; don't break the row
+            trend_line = None
+
     # --- Base cockpit row
     row: Dict[str, Any] = {
         "symbol": symbol,
@@ -438,7 +567,11 @@ def action_for(
         "targets": targets,
         "vwap_zone": vwap_zone,
         "cpr_ctx": cpr_ctx,
-        "atr": atr,
+        "atr": atr_intraday,
+        "daily_atr": daily_atr,
+        "daily_atr_pct": indd.get("Daily_ATR_Pct"),
+        "risk_rating": indd.get("Risk_Rating"),
+        "sl_zone": indd.get("SL_Zone"),
         "obv": indd.get("OBV"),
         "ema_bias": indd.get("EMA_BIAS"),
         "ema50": indd.get("EMA50"),
@@ -487,6 +620,22 @@ def action_for(
         row["volx_norm"] = float(volx_norm)
     if lbx_norm is not None:
         row["lbx_norm"] = float(lbx_norm)
+
+    # --- Attach Trend fields so UI can show them
+    if trend_score is not None:
+        row["trend_score"] = float(trend_score)
+    if trend_bias is not None:
+        row["trend_bias"] = trend_bias
+    if trend_label is not None:
+        row["trend_label"] = trend_label
+    if trend_bias_d is not None:
+        row["trend_bias_d"] = trend_bias_d
+    if trend_bias_w is not None:
+        row["trend_bias_w"] = trend_bias_w
+    if trend_bias_m is not None:
+        row["trend_bias_m"] = trend_bias_m
+    if trend_line is not None:
+        row["trend_line"] = trend_line
 
     # --- PnL (if position exists)
     pnl = compute_pnl(cmp_, pos) if pos else None

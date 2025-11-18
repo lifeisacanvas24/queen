@@ -12,6 +12,10 @@
     "isin": "NSE_EQ|INE0Z4F01028"
   },
   {
+    "symbol": "DATAPATTNS",
+    "isin": "NSE_EQ|INE0IX101010"
+  },
+  {
     "symbol": "GROWW",
     "isin": "NSE_EQ|INE0HOQ01053",
     "listing_date": "2025-11-12"

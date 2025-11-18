@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/cockpit_row.py — v1.0
-# Canonical cockpit row builder (back-end contract)
+# queen/services/cockpit_row.py — v2.3
+# Canonical cockpit row builder (CMP via candles, tactical via scoring)
 # ============================================================
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any, Dict, Optional
 
 import polars as pl
 
+from queen.helpers.candles import ensure_sorted, last_close
 from queen.services.enrich_instruments import enrich_instrument_snapshot
-from queen.services.enrich_tactical import enrich_indicators as enrich_tactical
 from queen.services.scoring import action_for, compute_indicators
 
 # Keys we promise to expose to the front-end instrument strip
@@ -34,55 +34,88 @@ def build_cockpit_row(
     *,
     interval: str = "15m",
     book: str = "all",
-    tactical: Optional[Dict[str, Any]] = None,
+    tactical: Optional[Dict[str, Any]] = None,   # kept for signature compatibility
     pattern: Optional[Dict[str, Any]] = None,
     reversal: Optional[Dict[str, Any]] = None,
     volatility: Optional[Dict[str, Any]] = None,
+    pos: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Construct a fully enriched cockpit row for `symbol`.
 
-    Pipeline:
-      1) compute_indicators(df)           → base indicators (CMP, RSI, ATR, CPR, EMA…)
-      2) enrich_instrument_snapshot(...)  → OHLC + volume + UC/LC + 52W band
-      3) enrich_tactical(...)             → Tactical_Index / Pattern / VolX dicts (optional)
-      4) action_for(...)                  → decision, score, ladders
-      5) bubble instrument keys into row
+    Single sources of truth:
+      • Indicators / targets / entry / SL → services.scoring.action_for()
+      • CMP (bar close)                   → helpers.candles.last_close(df)
+      • OHLC / Vol / avg_price            → intraday DF (Upstox)
+      • PrevClose / UC / LC / 52w bands   → NSE bands (enrich_instrument_snapshot)
     """
     if not isinstance(df, pl.DataFrame) or df.is_empty():
         return {}
 
-    base = compute_indicators(df)
-    if not base:
+    # 0) Ensure time-ordered bars
+    df = ensure_sorted(df)
+
+    # 1) Indicator snapshot (RSI / ATR / VWAP / CPR / OBV / EMAs …)
+    ind = compute_indicators(df)
+    if not ind:
         return {}
 
-    # Keep DF for early-signal fusion in scoring.action_for
-    base["_df"] = df
+    # Let scoring’s early-engine see the full DF
+    ind["_df"] = df
 
-    # 1) Instrument snapshot strip (Upstox-style)
-    base = enrich_instrument_snapshot(symbol, base, df=df)
+    # 2) Tactical row from the scoring engine
+    #    This already computes: cmp, score, early, decision, entry, sl, targets, notes, advice, held, position, …
+    row = action_for(symbol, ind, book=book, use_uc_lc=False)
 
-    # 2) Tactical / pattern / volatility (can be None for now; forward-only)
-    enriched = enrich_tactical(
-        base,
-        tactical=tactical,
-        pattern=pattern,
-        reversal=reversal,
-        volatility=volatility,
-    )
+    # 3) Instrument snapshot (OHLC / volume / avg_price / prev_close / UC-LC / 52w)
+    row = enrich_instrument_snapshot(symbol, row, df=df)
 
-    # 3) Decision + ladders
-    row = action_for(symbol, enriched, book=book, use_uc_lc=True)
-
-    # CMP sanity
-    if "CMP" in enriched and "cmp" not in row:
+    # 4) Canonical CMP override via candles helper
+    cmp_val: Optional[float] = last_close(df)
+    if cmp_val is None:
+        # very defensive fallback to anything cmp-like the scoring row had
         try:
-            row["cmp"] = float(enriched["CMP"])
+            raw = row.get("cmp") or row.get("CMP") or ind.get("CMP")
+            if raw is not None:
+                cmp_val = float(raw)
         except Exception:
-            pass
+            cmp_val = None
 
-    # 4) Propagate instrument keys so cockpit JSON has them
+    row["cmp"] = cmp_val
+    row["interval"] = interval
+    row["symbol"] = symbol  # make sure symbol is set
+
+    # 5) Bubble instrument keys explicitly (in case scoring added its own keys)
     for k in _INSTRUMENT_KEYS:
-        if k in enriched and k not in row:
-            row[k] = enriched[k]
+        v = row.get(k)
+        if v is not None:
+            row[k] = v
+
+    # 6) Optional external pos override (e.g. when caller already loaded positions)
+    #    If 'pos' is not provided, we keep whatever action_for() already computed.
+    if pos and pos.get("qty", 0) > 0:
+        try:
+            qty = float(pos["qty"])
+            avg = float(pos["avg_price"])
+            px = cmp_val
+            if px is not None:
+                pnl_abs = (px - avg) * qty
+                pnl_pct = (px - avg) / avg * 100.0
+            else:
+                pnl_abs = None
+                pnl_pct = None
+
+            row["position"] = {
+                "side": "LONG",
+                "qty": qty,
+                "avg": avg,
+                "pnl_abs": pnl_abs,
+                "pnl_pct": pnl_pct,
+            }
+            row["held"] = True
+        except Exception:
+            # fall back to whatever scoring gave us
+            row.setdefault("held", True)
+    else:
+        row.setdefault("held", bool(row.get("position")))
 
     return row

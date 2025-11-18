@@ -56,7 +56,7 @@ MIN_ROWS_AUTO_BACKFILL = {
 
 # If caller doesn’t specify a window, use this for the intraday historical bridge
 DEFAULT_BACKFILL_DAYS_INTRADAY = 2
-
+DAILY_ATR_BACKFILL_DAYS_INTRADAY = 25
 # ------------------------------------------------------------
 # 🧩 Token parsing + conversions
 # ------------------------------------------------------------

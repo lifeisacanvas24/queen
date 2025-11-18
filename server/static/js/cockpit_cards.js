@@ -6,11 +6,19 @@
 // ============================================================
 
 window.Cockpit = window.Cockpit || {};
+window.qs = window.qs || {};
 
-(function (C) {
+(function (C, qs) {
   // ------------------------------------------------------------
   // 1. Pills & badges
   // ------------------------------------------------------------
+  //
+  // Ensure container is a CSS grid container
+  C.makeGrid = function (el) {
+    if (!el) return;
+    el.classList.add("q-grid");
+  };
+
   C.pill = function (text, tone) {
     const t = tone || "gray";
     return `<span class="pill ${t}">${text}</span>`;
@@ -238,22 +246,114 @@ window.Cockpit = window.Cockpit || {};
   // ------------------------------------------------------------
   // 6. Grid renderers
   // ------------------------------------------------------------
+  function renderCard(row) {
+    const C = window.Cockpit;
+    const sym = row.symbol;
+    const dec = row.decision;
+    const score = row.score;
+
+    // --- NEW meta fields ---
+    const pos = row.position || {};
+    const hasPos = pos && (pos.qty || pos.pnl);
+
+    const posLine = hasPos
+      ? `Qty ${pos.qty || 0} @ ₹${C.fmtNumGeneric(pos.avg, 1)} · PnL ₹${C.fmtNumGeneric(pos.pnl, 0)}`
+      : "";
+
+    const action = row.action_text || row.action || "";
+    const conf = row.confidence != null ? `${row.confidence}/10` : "";
+    const urg = row.urgency || row.bible_urgency || "";
+    const urgNote = row.urgency_note || row.bible_urgency_note || "";
+
+    // Prefer row.trend_line → trend_label → trend/bible_trend
+    const trendLine = row.trend_line || row.trend_label || "";
+    const trend =
+      trendLine || row.trend_context || row.bible_trend || row.trend || "";
+
+    return `
+      <div class="q-card ${C.rowClass ? C.rowClass(dec) : dec === "BUY" || dec === "ADD" ? "row-bull" : dec === "EXIT" || dec === "AVOID" ? "row-bear" : "row-dim"}">
+        ${C.buildCardHtml ? C.buildCardHtml(row) : ""}
+        <div class="card-meta mt-2">
+
+          ${
+            posLine
+              ? `
+          <div class="meta-line">
+            <span class="meta-key">Position</span>
+            <span class="meta-val">${posLine}</span>
+          </div>`
+              : ""
+          }
+
+          ${
+            action || conf
+              ? `
+          <div class="meta-line">
+            <span class="meta-key">Action</span>
+            <span class="meta-val">${C.htmlEscape(action)}${conf ? ` · Conf ${conf}` : ""}</span>
+          </div>`
+              : ""
+          }
+
+          ${
+            urg || urgNote
+              ? `
+          <div class="meta-line">
+            <span class="meta-key">Urgency</span>
+            <span class="meta-val">${C.htmlEscape(urg)}${urgNote ? ` · ${C.htmlEscape(urgNote)}` : ""}</span>
+          </div>`
+              : ""
+          }
+
+          ${
+            trend
+              ? (() => {
+                  const t = String(trend).toLowerCase();
+                  let tone = "amber";
+                  let emoji = "⚖️";
+
+                  if (t.includes("bull")) {
+                    tone = "green";
+                    emoji = "📈";
+                  } else if (t.includes("bear")) {
+                    tone = "red";
+                    emoji = "📉";
+                  }
+
+                  return `
+                  <div class="meta-line">
+                    <span class="meta-key">Trend</span>
+                    <span class="meta-val" style="color:var(--q-${tone})">
+                      ${emoji} ${C.htmlEscape(trend)}
+                    </span>
+                  </div>`;
+                })()
+              : ""
+          }
+
+        </div>
+      </div>
+    `;
+  }
+
   C.renderCards = function (containerId, rows) {
     const el = document.getElementById(containerId);
     if (!el) return;
+
     C.makeGrid(el);
 
     if (!rows || !rows.length) {
       el.innerHTML = `
         <div class="q-card row-dim">
           <div class="q-card-top">
-            <span class="sym q-muted">No items.</span>
+            <span class="sym q-muted">No actionable symbols.</span>
           </div>
         </div>`;
       return;
     }
 
-    el.innerHTML = rows.map(C.buildCardHtml).join("");
+    const html = rows.map((r) => renderCard(r)).join("");
+    el.innerHTML = html;
   };
 
   C.renderHistoryCards = function (containerId, rows) {
@@ -277,4 +377,14 @@ window.Cockpit = window.Cockpit || {};
       .map((r) => C.buildHistoryCard(r))
       .join("");
   };
-})(window.Cockpit);
+
+  // ------------------------------------------------------------
+  // 7. Backwards-compat: expose helpers on window.qs as well
+  // ------------------------------------------------------------
+  qs.renderCards = C.renderCards;
+  qs.spinGrid = C.spinGrid;
+  qs.errorGrid = C.errorGrid;
+  qs.sortByDecisionScore = C.sortByDecisionScore;
+  qs.sortByEarly = C.sortByEarly;
+  qs.fetchSummaryRows = C.fetchSummaryRows;
+})(window.Cockpit, window.qs);

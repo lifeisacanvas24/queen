@@ -32,14 +32,35 @@ qs.fetchSessionState = async function () {
    ----------------------------- */
 qs.sessionBadge = function (session) {
   if (!session) session = "UNKNOWN";
-  const key = String(session).toUpperCase();
+
+  // Normalise the raw session string to a small set of keys
+  let raw = String(session).toUpperCase().trim();
+
+  // Collapse spaces / pipes / hyphens
+  raw = raw.replace(/\s+/g, " ").replace(/[|]/g, " ");
+
+  let key = "UNKNOWN";
+
+  if (raw.includes("PRE") && raw.includes("OPEN")) {
+    key = "PREOPEN";
+  } else if (
+    raw.includes("LIVE") ||
+    raw.includes("INTRADAY") ||
+    raw.includes("REGULAR")
+  ) {
+    key = "LIVE";
+  } else if (raw.includes("CLOSE") || raw.includes("POST")) {
+    key = "POST";
+  } else if (raw.includes("WEEKEND")) {
+    key = "WEEKEND";
+  } else if (raw.includes("HOLIDAY")) {
+    key = "HOLIDAY";
+  }
 
   const map = {
     LIVE: { cls: "pill session session-live", text: "LIVE" },
     PREOPEN: { cls: "pill session session-preopen", text: "PRE-OPEN" },
-    REGULAR: { cls: "pill session session-live", text: "REGULAR" },
-    POST: { cls: "pill session session-post", text: "POST-MARKET" },
-    CLOSED: { cls: "pill session session-post", text: "CLOSED" },
+    POST: { cls: "pill session session-post", text: "POST-MKT" },
     WEEKEND: { cls: "pill session session-weekend", text: "WEEKEND" },
     HOLIDAY: { cls: "pill session session-holiday", text: "HOLIDAY" },
     UNKNOWN: { cls: "pill session session-post", text: "UNKNOWN" },

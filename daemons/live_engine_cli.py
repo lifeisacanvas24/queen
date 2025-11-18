@@ -4,29 +4,28 @@
 # ============================================================
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import polars as pl
-from rich.table import Table
+from rich.console import Group
 from rich.live import Live
 from rich.panel import Panel
-from rich.console import Group
+from rich.table import Table
 from zoneinfo import ZoneInfo
 
-from queen.helpers.logger import log
-from queen.helpers.market import sleep_until_next_candle, get_market_state
 from queen.fetchers.upstox_fetcher import fetch_intraday
+from queen.helpers.logger import log
+from queen.helpers.market import get_market_state, sleep_until_next_candle
 
 # ✅ DRY: shared core indicators
 from queen.technicals.indicators.core import (
-    cpr_from_prev_day,   # preferred (calendar-aware via day grouping when prior-day bars exist)
-    vwap_last,
-    rsi_last,
     atr_last,
+    cpr_from_prev_day,  # preferred (calendar-aware via day grouping when prior-day bars exist)
     obv_trend,
+    rsi_last,
+    vwap_last,
 )
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -58,8 +57,7 @@ async def fetch_intraday_60m(symbol: str, limit: int = 240) -> pl.DataFrame:
 
 # --------------------- CPR fallback (calendar-aware) ---------------------
 def _cpr_from_last_completed_session(df: pl.DataFrame) -> Optional[float]:
-    """
-    Calendar-aware CPR from the last *completed* session present in df.
+    """Calendar-aware CPR from the last *completed* session present in df.
 
     Logic:
       - Build a date column from timestamp in IST.
@@ -109,8 +107,7 @@ def _cpr_from_last_completed_session(df: pl.DataFrame) -> Optional[float]:
 
 
 async def _ensure_prev_day_cpr(symbol: str, df15: pl.DataFrame, limit_bars: int) -> Optional[float]:
-    """
-    Try canonical CPR first; if missing, compute calendar-aware fallback.
+    """Try canonical CPR first; if missing, compute calendar-aware fallback.
     If still missing (e.g., broker returned only a few bars for today),
     enrich once with 60m history and retry.
     """

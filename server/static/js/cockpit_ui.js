@@ -5,6 +5,7 @@
 // ============================================================
 
 window.Cockpit = window.Cockpit || {};
+window.qs = window.qs || {};
 
 (function (C) {
   /* ---------- Number formatting ---------- */
@@ -142,6 +143,7 @@ window.Cockpit = window.Cockpit || {};
 
 // Adapter to window.qs
 window.qs = window.qs || {};
+// adapter -> qs
 (function (qs, C) {
   qs.fmt = qs.fmt || C.fmt;
   qs.pill = qs.pill || C.pill;
@@ -152,4 +154,8 @@ window.qs = window.qs || {};
   qs.pnlChip = qs.pnlChip || C.pnlChip;
   qs.sessionBadge = qs.sessionBadge || C.sessionBadge;
   qs.rowClass = qs.rowClass || C.rowClass;
+
+  // 🔴 Missing today — add these:
+  qs.noStore = qs.noStore || C.noStore;
+  qs.safeFetchJson = qs.safeFetchJson || C.safeFetchJson;
 })(window.qs, window.Cockpit);

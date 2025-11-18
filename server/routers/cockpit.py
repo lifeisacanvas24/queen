@@ -14,16 +14,19 @@ from pydantic import BaseModel, Field
 from queen.alerts.rules import load_rules
 from queen.helpers.instruments import filter_to_active_universe
 from queen.helpers.instruments import list_symbols as _list_symbols
+from queen.helpers.logger import log
 from queen.helpers.market import MARKET_TZ
 from queen.helpers.portfolio import load_positions
 from queen.services.cockpit_row import build_cockpit_row
 from queen.services.history import load_history
 from queen.services.live import _intraday_with_backfill
+from queen.services.scoring import compute_indicators
 from queen.services.symbol_scan import run_symbol_scan
 from queen.services.tactical_pipeline import (
     pattern_block,
     reversal_block,
     tactical_block,
+    trend_block,
     volatility_block,
 )
 from starlette.requests import Request
@@ -182,49 +185,70 @@ async def summary_api(
     interval: int = Query(15, ge=1, le=120),
     book: str = Query("all"),
 ) -> Dict[str, Any]:
-    """Rollup for Summary page: one enriched cockpit row per symbol."""
+    """Rollup for Summary page: one enriched cockpit row per symbol.
+
+    Pipeline (same as LIVE):
+      fetch intraday → compute_indicators → pattern / reversal / vol →
+      tactical_block → build_cockpit_row
+    """
     syms = _universe(symbols)
-    pos_map = load_positions(book)
+    pos_map = load_positions(book) or {}
     tf_str = f"{interval}m"
 
     rows: List[Dict[str, Any]] = []
+
     for sym in syms:
-        df = await _fetch_latest_df(sym, interval)
-        if df.is_empty():
+        try:
+            df = await _fetch_latest_df(sym, interval)
+            if df.is_empty():
+                continue
+
+            # --- base indicator snapshot (RSI / ATR / VWAP / CPR / OBV / EMAs)
+            base_ind = compute_indicators(df)
+            if not base_ind:
+                continue
+
+            # let downstream blocks see the raw DF
+            base_ind["_df"] = df
+
+            # --- pattern / reversal / volatility blocks
+            pt  = pattern_block(df, base_ind)
+            rv  = reversal_block(df, base_ind)
+            vol = volatility_block(df, base_ind)
+            tr  = trend_block(df, base_ind)
+
+            # --- tactical Bible block (fuse all metrics)
+            tac_input = {**base_ind, **pt, **rv, **vol, **tr}
+            tc = tactical_block(tac_input, interval=tf_str)
+
+            # --- canonical cockpit row
+            row = build_cockpit_row(
+                sym,
+                df,
+                interval=tf_str,
+                book=book,
+                tactical=tc,
+                pattern=pt,
+                reversal=rv,
+                volatility=vol,
+                pos=pos_map.get(sym),
+            )
+            if not row:
+                continue
+
+            # held flag for cards
+            row["held"] = sym in pos_map or bool(row.get("position"))
+            rows.append(row)
+
+        except Exception as e:
+            log.exception(f"[cockpit.summary] {sym} failed → {e}")
             continue
-
-        # ---- Tactical / Pattern / Volatility blocks (currently stubbed) ----
-        # pattern_block / reversal_block / volatility_block / tactical_block
-        # are safe stubs: they currently return {} until you wire the real math.
-        pat_dict = pattern_block(df)
-        rev_dict = reversal_block(df)
-        vol_dict = volatility_block(df)
-
-        # For now, we don't yet have concrete metrics to feed tactical_block;
-        # we pass an empty dict, meaning tactical_block() will return {}.
-        tac_dict = tactical_block(metrics={}, interval=tf_str)
-
-        row = build_cockpit_row(
-            sym,
-            df,
-            interval=tf_str,
-            book=book,
-            tactical=tac_dict,
-            pattern=pat_dict,
-            reversal=rev_dict,
-            volatility=vol_dict,
-        )
-        if not row:
-            continue
-        row["held"] = sym in pos_map
-        rows.append(row)
 
     prio = {"BUY": 0, "ADD": 0, "HOLD": 1}
     rows.sort(
-        key=lambda x: (-(x.get("score") or 0), prio.get(x.get("decision", ""), 2))
+        key=lambda x: (-(x.get("score") or 0), prio.get((x.get("decision") or "").upper(), 2))
     )
     return {"count": len(rows), "rows": rows}
-
 
 @router_api.get("/upcoming/next")
 async def upcoming_next(

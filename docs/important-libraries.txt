@@ -2,7 +2,10 @@ pip install nsetools
 pip install NSEDownload
 https://github.com/0xramm/Indian-Stock-Market-API
 https://indianapi.in/indian-stock-market
-
+https://github.com/firecrawl/firecrawl
+https://github.com/scrapy/scrapy?tab=readme-ov-file
+https://github.com/gocolly/colly
+https://github.com/apify/crawlee-python
 # Rust Re-implementations of Python Libraries for Performance
 
 ## ⚡ Copy-Paste Version for Documentation
