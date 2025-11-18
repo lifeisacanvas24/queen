@@ -49,6 +49,31 @@ window.qs = window.qs || {};
     const tone = n >= 60 ? "green" : n >= 45 ? "amber" : "red";
     return C.pill(n.toFixed(1), tone);
   };
+  C.trendBadge = function (bias) {
+    const raw = (bias || "").toString();
+    if (!raw) return C.pill("TREND", "gray");
+
+    const b = raw.toLowerCase();
+    let tone = "gray";
+    let label = raw.toUpperCase();
+
+    if (b.includes("bull")) {
+      tone = "green";
+      label = "BULL TREND";
+    } else if (b.includes("bear")) {
+      tone = "red";
+      label = "BEAR TREND";
+    } else if (
+      b.includes("range") ||
+      b.includes("sideways") ||
+      b.includes("flat")
+    ) {
+      tone = "amber";
+      label = "RANGE";
+    }
+
+    return C.pill(label, tone);
+  };
 
   C.decisionBadge = function (dec, score) {
     const d = (dec || "").toUpperCase();
@@ -94,9 +119,26 @@ window.qs = window.qs || {};
   C.sortByDecisionScore = function (rows) {
     const pr = C.PR_MAP;
     return rows.slice().sort((a, b) => {
+      const ta = Number(
+        a.trend_score ??
+          a.trend_strength ??
+          a.trend_score_10 ??
+          a.trendIndex ??
+          0,
+      );
+      const tb = Number(
+        b.trend_score ??
+          b.trend_strength ??
+          b.trend_score_10 ??
+          b.trendIndex ??
+          0,
+      );
+      if (tb !== ta) return tb - ta; // 🔥 trend strength desc
+
       const da = pr[(a.decision || "").toUpperCase()] ?? 9;
       const db = pr[(b.decision || "").toUpperCase()] ?? 9;
       if (da !== db) return da - db;
+
       const sa = Number(a.score || 0);
       const sb = Number(b.score || 0);
       return sb - sa; // score desc
@@ -108,10 +150,28 @@ window.qs = window.qs || {};
     return rows.slice().sort((a, b) => {
       const ea = Number(a.early ?? a.early_score ?? 0);
       const eb = Number(b.early ?? b.early_score ?? 0);
-      if (eb !== ea) return eb - ea; // early desc
+      if (eb !== ea) return eb - ea; // EARLY desc first
+
+      const ta = Number(
+        a.trend_score ??
+          a.trend_strength ??
+          a.trend_score_10 ??
+          a.trendIndex ??
+          0,
+      );
+      const tb = Number(
+        b.trend_score ??
+          b.trend_strength ??
+          b.trend_score_10 ??
+          b.trendIndex ??
+          0,
+      );
+      if (tb !== ta) return tb - ta; // then trend strength desc
+
       const da = pr[(a.decision || "").toUpperCase()] ?? 9;
       const db = pr[(b.decision || "").toUpperCase()] ?? 9;
       if (da !== db) return da - db;
+
       const sa = Number(a.score || 0);
       const sb = Number(b.score || 0);
       return sb - sa;
@@ -136,7 +196,34 @@ window.qs = window.qs || {};
     const rows = Array.isArray(j.rows) ? j.rows : [];
     return rows;
   };
+  C.renderTargets = function (row) {
+    const targets = Array.isArray(row.targets) ? row.targets : [];
+    if (!targets.length) return "";
 
+    const state = row.targets_state || {};
+    const zone = state.zone || "";
+
+    const parts = targets.map((label, idx) => {
+      const key = `t${idx + 1}`; // t1 / t2 / t3
+      const st = state[key] || {};
+      const hit = !!st.hit;
+      const extended = !!st.extended;
+
+      let cls = "t-normal";
+      if (hit) cls = "t-hit";
+      else if (extended) cls = "t-extended";
+
+      const tick = hit ? " ✓" : "";
+      return `<span class="${cls}">${C.htmlEscape(label)}${tick}</span>`;
+    });
+
+    if (zone) {
+      // e.g. "Above T3 (Extended)"
+      parts.unshift(`<span class="t-zone">${C.htmlEscape(zone)}</span>`);
+    }
+
+    return parts.join(" · ");
+  };
   // ------------------------------------------------------------
   // 5. Single card / history card builders
   // ------------------------------------------------------------
@@ -151,7 +238,7 @@ window.qs = window.qs || {};
           : "q-card row-dim";
 
     const cmp = r.cmp ?? r.CMP;
-    const targets = (r.targets || []).join(" · ");
+    const targets = C.renderTargets(r);
 
     const heldTag = r.held ? `<span class="badge held ml-1">HELD</span>` : "";
     const pnl = C.pnlChip(sym, cmp);
@@ -195,6 +282,13 @@ window.qs = window.qs || {};
         <div class="q-card-pills">
           ${C.cprBadge(r.cpr_ctx)}
           ${C.emaBadge(r.ema_bias)}
+          ${C.trendBadge(
+            r.trend_bias ||
+              r.bible_trend_bias ||
+              r.trend_context ||
+              r.bible_trend ||
+              r.trend,
+          )}
           ${C.rsiBadge(r.rsi || r.RSI)}
         </div>
 
@@ -212,6 +306,16 @@ window.qs = window.qs || {};
           <span>L ${C.fmtNum(r.low, 1)}</span>
           <span>Prev ${C.fmtNum(r.prev_close, 1)}</span>
           <span>Vol ${C.fmtKMB(r.volume)}</span>
+          ${r.upper_circuit ? `<span>UC ${C.fmtNum(r.upper_circuit, 1)}</span>` : ""}
+          ${r.lower_circuit ? `<span>LC ${C.fmtNum(r.lower_circuit, 1)}</span>` : ""}
+          ${r.high_52w ? `<span>52W H ${C.fmtNum(r.high_52w, 1)}</span>` : ""}
+          ${r.low_52w ? `<span>52W L ${C.fmtNum(r.low_52w, 1)}</span>` : ""}
+        </div>
+
+        <div class="q-card-bottom mt-1">
+          ${C.tradeSummary(r)}
+          ${C.dynLadderSummary(r)}
+          ${C.range52wSummary(r)}
         </div>
       </div>
     `;
@@ -243,7 +347,106 @@ window.qs = window.qs || {};
     `;
   };
 
-  // ------------------------------------------------------------
+  C.trendLabel = function (row) {
+    const bias = (
+      row.trend_basis ||
+      row.trend_bias ||
+      row.bible_trend ||
+      ""
+    ).toString();
+    const score = Number(row.trend_score ?? row.trend_strength ?? 0);
+    if (!bias && !score) return "";
+
+    const b = bias || "Neutral";
+    const s = score ? ` · ${C.fmtNum(score, 1)}/10` : "";
+    let emoji = "⚖️";
+    if (b.toLowerCase().includes("bull")) emoji = "📈";
+    else if (b.toLowerCase().includes("bear")) emoji = "📉";
+
+    return `${emoji} ${b}${s}`;
+  };
+
+  C.trendMeter = function (row) {
+    const score = Number(row.trend_score ?? row.trend_strength ?? 0);
+    if (!score || isNaN(score)) return "";
+    const pct = Math.max(0, Math.min(100, (score / 10) * 100));
+    let tone = "amber";
+    if (score >= 7) tone = "green";
+    else if (score <= 3) tone = "red";
+    return `<span class="trend-meter trend-${tone}">
+      <span class="trend-meter-bar" style="width:${pct}%"></span>
+    </span>`;
+  };
+
+  C.tradeSummary = function (r) {
+    const ts = r.targets_state || {};
+    const label = ts.label || r.targets_label;
+    if (!label) return "";
+    const ref = ts.ref_interval || r.interval;
+    const refStr = ref ? ` · ${ref}` : "";
+    return `
+      <div class="meta-line trade-line">
+        <span class="meta-key">Trade</span>
+        <span class="meta-val">
+          ${C.htmlEscape(label)}${refStr}
+        </span>
+      </div>
+    `;
+  };
+
+  C.dynLadderSummary = function (r) {
+    const ts = r.targets_state || {};
+    const dyn = ts.dynamic;
+    if (!dyn) return "";
+
+    const hits = ts.hits || {};
+    const hitT1 = !!hits.T1;
+    const hitT2 = !!hits.T2;
+    const hitT3 = !!hits.T3;
+
+    const fmt = (lvl, hit) => {
+      if (lvl == null) return "—";
+      const n = C.fmtNum(lvl, 1);
+      return hit ? `${n} ✓` : n;
+    };
+
+    return `
+      <div class="meta-line dyn-line">
+        <span class="meta-key">Dyn</span>
+        <span class="meta-val">
+          T1 ${fmt(dyn.t1, hitT1)} ·
+          T2 ${fmt(dyn.t2, hitT2)} ·
+          T3 ${fmt(dyn.t3, hitT3)}
+        </span>
+      </div>
+    `;
+  };
+
+  C.range52wSummary = function (r) {
+    const hi = r.high_52w ?? r["52w_high"];
+    const lo = r.low_52w ?? r["52w_low"];
+    if (hi == null && lo == null) return "";
+
+    if (hi != null && lo != null) {
+      return `
+        <div class="meta-line range52w-line">
+          <span class="meta-key">52W</span>
+          <span class="meta-val">${C.fmtNum(lo, 1)} – ${C.fmtNum(hi, 1)}</span>
+        </div>
+      `;
+    }
+
+    // only one side available
+    const parts = [];
+    if (lo != null) parts.push(`L ${C.fmtNum(lo, 1)}`);
+    if (hi != null) parts.push(`H ${C.fmtNum(hi, 1)}`);
+    return `
+      <div class="meta-line range52w-line">
+        <span class="meta-key">52W</span>
+        <span class="meta-val">${parts.join(" · ")}</span>
+      </div>
+    `;
+  }; // ------------------------------------------------------------
   // 6. Grid renderers
   // ------------------------------------------------------------
   function renderCard(row) {
@@ -257,7 +460,10 @@ window.qs = window.qs || {};
     const hasPos = pos && (pos.qty || pos.pnl);
 
     const posLine = hasPos
-      ? `Qty ${pos.qty || 0} @ ₹${C.fmtNumGeneric(pos.avg, 1)} · PnL ₹${C.fmtNumGeneric(pos.pnl, 0)}`
+      ? `Qty ${pos.qty || 0} @ ₹${C.fmtNumGeneric(pos.avg, 1)} · PnL ₹${C.fmtNumGeneric(
+          pos.pnl,
+          0,
+        )}`
       : "";
 
     const action = row.action_text || row.action || "";
@@ -265,14 +471,52 @@ window.qs = window.qs || {};
     const urg = row.urgency || row.bible_urgency || "";
     const urgNote = row.urgency_note || row.bible_urgency_note || "";
 
-    // Prefer row.trend_line → trend_label → trend/bible_trend
-    const trendLine = row.trend_line || row.trend_label || "";
-    const trend =
-      trendLine || row.trend_context || row.bible_trend || row.trend || "";
+    // --- Trend helpers (label + mini-meter) ---
+    const trendLabel = C.trendLabel ? C.trendLabel(row) : "";
+    const trendMeter = C.trendMeter ? C.trendMeter(row) : "";
+
+    // --- Dynamic trade ladder (from targets_state.dynamic) ---
+    let dynamicLine = "";
+    const ts = row.targets_state || {};
+    const dyn = ts.dynamic || null;
+
+    if (dyn && (dyn.t1 || dyn.t2 || dyn.t3)) {
+      const dir = (ts.direction || "LONG").toUpperCase();
+
+      const chip = (item, label) => {
+        if (!item || item.level == null) return "";
+        const lvl = C.fmtNum(item.level, 1);
+        return item.hit ? `${label} ${lvl} ✓` : `${label} ${lvl}`;
+      };
+
+      const parts = [
+        chip(dyn.t1, "T1"),
+        chip(dyn.t2, "T2"),
+        chip(dyn.t3, "T3"),
+      ].filter(Boolean);
+
+      if (parts.length) {
+        dynamicLine = `${dir === "LONG" ? "Dyn" : "Dyn"}: ${parts.join(" · ")}`;
+      }
+    }
+
+    // --- 52-week range (if present) ---
+    const hi52 = row.high_52w;
+    const lo52 = row.low_52w;
+    const has52w = hi52 != null && lo52 != null;
 
     return `
-      <div class="q-card ${C.rowClass ? C.rowClass(dec) : dec === "BUY" || dec === "ADD" ? "row-bull" : dec === "EXIT" || dec === "AVOID" ? "row-bear" : "row-dim"}">
+      <div class="q-card ${
+        C.rowClass
+          ? C.rowClass(dec)
+          : dec === "BUY" || dec === "ADD"
+            ? "row-bull"
+            : dec === "EXIT" || dec === "AVOID"
+              ? "row-bear"
+              : "row-dim"
+      }">
         ${C.buildCardHtml ? C.buildCardHtml(row) : ""}
+
         <div class="card-meta mt-2">
 
           ${
@@ -290,7 +534,9 @@ window.qs = window.qs || {};
               ? `
           <div class="meta-line">
             <span class="meta-key">Action</span>
-            <span class="meta-val">${C.htmlEscape(action)}${conf ? ` · Conf ${conf}` : ""}</span>
+            <span class="meta-val">
+              ${C.htmlEscape(action)}${conf ? ` · Conf ${conf}` : ""}
+            </span>
           </div>`
               : ""
           }
@@ -300,34 +546,48 @@ window.qs = window.qs || {};
               ? `
           <div class="meta-line">
             <span class="meta-key">Urgency</span>
-            <span class="meta-val">${C.htmlEscape(urg)}${urgNote ? ` · ${C.htmlEscape(urgNote)}` : ""}</span>
+            <span class="meta-val">
+              ${C.htmlEscape(urg)}${
+                urgNote ? ` · ${C.htmlEscape(urgNote)}` : ""
+              }
+            </span>
           </div>`
               : ""
           }
 
           ${
-            trend
-              ? (() => {
-                  const t = String(trend).toLowerCase();
-                  let tone = "amber";
-                  let emoji = "⚖️";
+            trendLabel
+              ? `
+          <div class="meta-line meta-trend">
+            <span class="meta-key">Trend</span>
+            <span class="meta-val">
+              ${trendLabel}${trendMeter ? ` ${trendMeter}` : ""}
+            </span>
+          </div>`
+              : ""
+          }
 
-                  if (t.includes("bull")) {
-                    tone = "green";
-                    emoji = "📈";
-                  } else if (t.includes("bear")) {
-                    tone = "red";
-                    emoji = "📉";
-                  }
+          ${
+            dynamicLine
+              ? `
+          <div class="meta-line">
+            <span class="meta-key">Trade</span>
+            <span class="meta-val">
+              ${dynamicLine}
+            </span>
+          </div>`
+              : ""
+          }
 
-                  return `
-                  <div class="meta-line">
-                    <span class="meta-key">Trend</span>
-                    <span class="meta-val" style="color:var(--q-${tone})">
-                      ${emoji} ${C.htmlEscape(trend)}
-                    </span>
-                  </div>`;
-                })()
+          ${
+            has52w
+              ? `
+          <div class="meta-line">
+            <span class="meta-key">52W</span>
+            <span class="meta-val">
+              ${C.fmtNum(lo52, 1)} – ${C.fmtNum(hi52, 1)}
+            </span>
+          </div>`
               : ""
           }
 
@@ -336,11 +596,11 @@ window.qs = window.qs || {};
     `;
   }
 
-  C.renderCards = function (containerId, rows) {
+  Cockpit.renderCards = function (containerId, rows) {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    C.makeGrid(el);
+    Cockpit.makeGrid(el);
 
     if (!rows || !rows.length) {
       el.innerHTML = `

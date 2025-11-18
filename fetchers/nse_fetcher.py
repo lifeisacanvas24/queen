@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/nse_fetcher.py — v2.1
-# UC/LC + prevClose (cached, settings-aware)
-# ------------------------------------------------------------
-#  • Reads cache path via SETTINGS.PATHS["CACHE"]
-#  • NSE HTTP endpoints come from settings.EXTERNAL_APIS["NSE"]
-#    with safe defaults if missing (no hard-coded URLs in logic)
-#  • Safe fallback to last-good cache on NSE failure
-#  • Simple in-process + file-based cache
+# queen/fetchers/nse_fetcher.py — v2.2
+# UC/LC + prevClose + O/H/L/VWAP/52W (cached, settings-aware)
 # ============================================================
 from __future__ import annotations
 
@@ -27,20 +21,23 @@ from queen.settings import settings as SETTINGS
 CACHE_FILE: Path = SETTINGS.PATHS["CACHE"] / "nse_bands_cache.json"
 CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-# tiny in-process cache
 __MEM_CACHE: Dict[str, dict] = {}
 __CACHE_MTIME: float | None = None
+
+
+def _clean_price(v) -> Optional[float]:
+    """Cast to float, treat 0 / empty as None."""
+    if v in (None, "", "-", "--"):
+        return None
+    try:
+        f = float(v)
+        return f if f != 0.0 else None
+    except Exception:
+        return None
 
 # ------------------------------------------------------------
 # 🌐 NSE HTTP config (settings-backed)
 # ------------------------------------------------------------
-# EXTERNAL_APIS = {
-#     "NSE": {
-#         "BASE_URL": "https://www.nseindia.com",
-#         "QUOTE_EQUITY": "/api/quote-equity?symbol={symbol}",
-#         "QUOTE_REFERER": "/get-quotes/equity?symbol={symbol}",
-#     },
-# }
 _ext = getattr(SETTINGS, "EXTERNAL_APIS", {}) or {}
 _nse_cfg = _ext.get("NSE", {}) or {}
 
@@ -80,7 +77,6 @@ def _read_cache() -> Dict[str, dict]:
 
         mtime = CACHE_FILE.stat().st_mtime
         if __CACHE_MTIME is not None and mtime == __CACHE_MTIME and __MEM_CACHE:
-            # in-process cache still valid
             return __MEM_CACHE
 
         data = json.loads(CACHE_FILE.read_text() or "{}")
@@ -104,21 +100,25 @@ def _write_cache(cache: Dict[str, dict]) -> None:
 
 
 # ------------------------------------------------------------
-# 🌐 Fetch bands (UC/LC + prevClose)
+# 🌐 Fetch bands (UC/LC + prevClose + O/H/L/VWAP/52W)
 # ------------------------------------------------------------
 def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[dict]:
-    """Fetch NSE UC/LC + previous close + 52W high/low for a symbol.
+    """Fetch NSE UC/LC + previous close + intraday O/H/L/VWAP + 52W.
 
-    Returns:
+    Returns (when available):
         {
           "upper_circuit": float,
           "lower_circuit": float,
           "prev_close": float,
-          "year_high": float | None,  # 52W high
-          "year_low": float | None,   # 52W low
+          "open": float,
+          "last_price": float,
+          "vwap": float,
+          "day_high": float,
+          "day_low": float,
+          "year_high": float | None,
+          "year_low": float | None,
         }
-    or None if nothing usable is available.
-
+    or None on failure.
     """
     symbol = (symbol or "").strip().upper()
     if not symbol:
@@ -147,37 +147,57 @@ def fetch_nse_bands(symbol: str, cache_refresh_minutes: int = 30) -> Optional[di
             j = r.json() or {}
             price_info = j.get("priceInfo", {}) or {}
 
-        uc = float(price_info.get("upperCP") or 0.0)
-        lc = float(price_info.get("lowerCP") or 0.0)
-        pc = float(price_info.get("previousClose") or 0.0)
+        # Core bands
+        uc = _clean_price(price_info.get("lowerCP" if False else "upperCP"))
+        lc = _clean_price(price_info.get("lowerCP"))
+        pc = _clean_price(price_info.get("previousClose"))
 
-        # 52W high/low: from priceInfo.weekHighLow.{max,min}
-        year_high = year_low = None
+        # Intraday fields
+        open_ = _clean_price(price_info.get("open"))
+        last_price = _clean_price(price_info.get("lastPrice"))
+        vwap = _clean_price(price_info.get("vwap"))
+
+        day_high = day_low = None
         try:
-            whl = price_info.get("weekHighLow") or {}
-            if whl.get("max") not in (None, "", "-"):
-                year_high = float(whl["max"])
-            if whl.get("min") not in (None, "", "-"):
-                year_low = float(whl["min"])
+            intraday = price_info.get("intraDayHighLow") or {}
+            day_high = _clean_price(intraday.get("max"))
+            day_low = _clean_price(intraday.get("min"))
         except Exception:
             pass
 
-        bands: dict = {
-            "upper_circuit": uc,
-            "lower_circuit": lc,
-            "prev_close": pc,
-        }
+        # 52W high/low
+        year_high = year_low = None
+        try:
+            whl = price_info.get("weekHighLow") or {}
+            year_high = _clean_price(whl.get("max"))
+            year_low = _clean_price(whl.get("min"))
+        except Exception:
+            pass
+
+        bands: dict = {}
+        if uc is not None:
+            bands["upper_circuit"] = uc
+        if lc is not None:
+            bands["lower_circuit"] = lc
+        if pc is not None:
+            bands["prev_close"] = pc
+        if open_ is not None:
+            bands["open"] = open_
+        if last_price is not None:
+            bands["last_price"] = last_price
+        if vwap is not None:
+            bands["vwap"] = vwap
+        if day_high is not None:
+            bands["day_high"] = day_high
+        if day_low is not None:
+            bands["day_low"] = day_low
         if year_high is not None:
             bands["year_high"] = year_high
         if year_low is not None:
             bands["year_low"] = year_low
 
-        if all(
-            v == 0.0
-            for k, v in bands.items()
-            if k in ("upper_circuit", "lower_circuit", "prev_close")
-        ):
-            # likely bad/empty payload; keep old cache if any
+        # completely empty → keep old cache if any
+        if not bands:
             log.warning(f"[NSE] Empty bands for {symbol} → keeping old cache")
             return entry.get("bands") if entry else None
 

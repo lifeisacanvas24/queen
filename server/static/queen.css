@@ -613,3 +613,12 @@
   text-align: right;
   color: #333;
 }
+.t-hit {
+  font-weight: 600;
+}
+.t-extended {
+  opacity: 0.7;
+}
+.t-zone {
+  font-weight: 600;
+}

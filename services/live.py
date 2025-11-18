@@ -11,9 +11,12 @@ import polars as pl
 
 from queen.fetchers.upstox_fetcher import fetch_intraday
 from queen.helpers.candles import ensure_sorted, last_close
+from queen.helpers.instruments import get_instrument_meta
 from queen.helpers.logger import log
+from queen.helpers.market import MARKET_TZ
 from queen.helpers.portfolio import load_positions
 from queen.services.cockpit_row import build_cockpit_row
+from queen.services.ladder_state import augment_targets_state  # at top
 from queen.settings.timeframes import DAILY_ATR_BACKFILL_DAYS_INTRADAY as _ATR_DAYS
 
 # Indicator cores (for cmp_snapshot + daemon reuse)
@@ -230,12 +233,18 @@ async def cmp_snapshot(symbols: List[str], interval_min: int) -> List[Dict]:
 
     return out
 
-# -------------------------------------------------------------------
-# Live actionables — canonical rows for /monitor/actionable + Live UI
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Live actionables — canonical rows for /monitor/actionable + Live UI
-# -------------------------------------------------------------------
+async def _today_intraday_df(symbol: str, interval_min: int, limit: int) -> pl.DataFrame:
+    """Pure intraday snapshot for *today only* (no backfill).
+
+    Upstox intraday endpoint without days/bars returns today's data,
+    so we just fetch + sort + tail(limit).
+    """
+    iv = f"{interval_min}m"
+    df = await fetch_intraday(symbol, iv)
+    if df.is_empty():
+        return df
+    return ensure_sorted(df).tail(limit)
+
 # -------------------------------------------------------------------
 # Live actionables — canonical rows for /monitor/actionable + Live UI
 # -------------------------------------------------------------------
@@ -263,7 +272,11 @@ async def actionables_for(
         try:
             # A) CMP anchor from pure intraday today
             df_today = await _today_intraday_df(sym, interval_min, limit=need)
-            cmp_today = last_close(df_today) if not df_today.is_empty() else None
+            if not df_today.is_empty():
+                df_today = ensure_sorted(df_today)
+                cmp_today = last_close(df_today)
+            else:
+                cmp_today = None
 
             # B) Context DF with backfill for indicators / Bible
             df = await _intraday_with_backfill(sym, interval_min)
@@ -274,6 +287,7 @@ async def actionables_for(
 
             df = ensure_sorted(df)
 
+            # C) Base cockpit row (indicators, Bible ladders, instrument meta)
             row = build_cockpit_row(
                 sym,
                 df,
@@ -283,23 +297,23 @@ async def actionables_for(
                 pattern=None,
                 reversal=None,
                 volatility=None,
-                pos=pos_map.get(sym),   # 👈 let cockpit_row compute PnL
+                pos=pos_map.get(sym),
             )
             if not row:
                 continue
 
-            # --- CMP: prefer today-only intraday, then row.cmp, then DF close ---
-            eff_cmp = cmp_today
-            if eff_cmp is None:
-                eff_cmp = row.get("cmp")
-            if eff_cmp is None:
-                eff_cmp = last_close(df)
-
+            # D) CMP: prefer today-only intraday, then row.cmp, then DF close
+            eff_cmp = cmp_today or row.get("cmp") or last_close(df)
             if eff_cmp is not None:
                 row["cmp"] = eff_cmp
 
+            # 🔹 DO NOT override O/H/L/Prev now — they come from enrich_instrument_snapshot (NSE).
+
+            # F) Hybrid ladder using final CMP
+            row = augment_targets_state(row, interval=tf_str)
+
             # mark held if a position exists
-            row["held"] = sym in pos_map
+            row["held"] = sym in pos_map or bool(row.get("position"))
 
             rows.append(row)
         except Exception as e:

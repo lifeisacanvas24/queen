@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-# ============================================================
-# queen/services/cockpit_row.py — v2.3
-# Canonical cockpit row builder (CMP via candles, tactical via scoring)
-# ============================================================
+#queen/services/cockpit_row.py
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -10,21 +6,22 @@ from typing import Any, Dict, Optional
 import polars as pl
 
 from queen.helpers.candles import ensure_sorted, last_close
+from queen.helpers.market import MARKET_TZ  # or queen.settings.market
 from queen.services.enrich_instruments import enrich_instrument_snapshot
+from queen.services.ladder_state import augment_targets_state
 from queen.services.scoring import action_for, compute_indicators
 
-# Keys we promise to expose to the front-end instrument strip
 _INSTRUMENT_KEYS = (
     "open",
     "high",
     "low",
+    "close",
     "prev_close",
     "volume",
-    "avg_price",
     "upper_circuit",
     "lower_circuit",
-    "52w_high",
-    "52w_low",
+    "fifty_two_week_high",
+    "fifty_two_week_low",
 )
 
 
@@ -34,64 +31,61 @@ def build_cockpit_row(
     *,
     interval: str = "15m",
     book: str = "all",
-    tactical: Optional[Dict[str, Any]] = None,   # kept for signature compatibility
+    tactical: Optional[Dict[str, Any]] = None,
     pattern: Optional[Dict[str, Any]] = None,
     reversal: Optional[Dict[str, Any]] = None,
     volatility: Optional[Dict[str, Any]] = None,
     pos: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Construct a fully enriched cockpit row for `symbol`.
+    """Construct a fully enriched *base* cockpit row for `symbol`.
 
     Single sources of truth:
-      • Indicators / targets / entry / SL → services.scoring.action_for()
-      • CMP (bar close)                   → helpers.candles.last_close(df)
-      • OHLC / Vol / avg_price            → intraday DF (Upstox)
-      • PrevClose / UC / LC / 52w bands   → NSE bands (enrich_instrument_snapshot)
+      • Indicators / score / entry / SL / Bible ladder → services.scoring.action_for()
+      • CMP (bar close)                               → helpers.candles.last_close(df)
+      • O/H/L/Prev/VWAP/UC/LC/52W                     → queen.fetchers.nse_fetcher (via enrich_instrument_snapshot)
+      • Volume + avg_price                            → intraday DF
+      • Hybrid dynamic ladder                         → services.ladder_state.augment_targets_state()
+                                                        (called by the live/summary services, not here)
     """
     if not isinstance(df, pl.DataFrame) or df.is_empty():
         return {}
 
-    # 0) Ensure time-ordered bars
     df = ensure_sorted(df)
 
-    # 1) Indicator snapshot (RSI / ATR / VWAP / CPR / OBV / EMAs …)
+    # 1) Indicator snapshot
     ind = compute_indicators(df)
     if not ind:
         return {}
 
-    # Let scoring’s early-engine see the full DF
     ind["_df"] = df
 
-    # 2) Tactical row from the scoring engine
-    #    This already computes: cmp, score, early, decision, entry, sl, targets, notes, advice, held, position, …
+    # 2) Tactical row from scoring engine
     row = action_for(symbol, ind, book=book, use_uc_lc=False)
+    if not row:
+        return {}
 
-    # 3) Instrument snapshot (OHLC / volume / avg_price / prev_close / UC-LC / 52w)
-    row = enrich_instrument_snapshot(symbol, row, df=df)
-
-    # 4) Canonical CMP override via candles helper
-    cmp_val: Optional[float] = last_close(df)
-    if cmp_val is None:
-        # very defensive fallback to anything cmp-like the scoring row had
-        try:
-            raw = row.get("cmp") or row.get("CMP") or ind.get("CMP")
-            if raw is not None:
-                cmp_val = float(raw)
-        except Exception:
-            cmp_val = None
+    # 3) Canonical CMP from latest close (strict intraday)
+    cmp_val = last_close(df)
+    try:
+        if cmp_val is not None:
+            cmp_val = float(cmp_val)
+    except Exception:
+        cmp_val = None
 
     row["cmp"] = cmp_val
+    row["symbol"] = symbol.upper()
     row["interval"] = interval
-    row["symbol"] = symbol  # make sure symbol is set
 
-    # 5) Bubble instrument keys explicitly (in case scoring added its own keys)
-    for k in _INSTRUMENT_KEYS:
-        v = row.get(k)
-        if v is not None:
-            row[k] = v
+    # intraday ATR hint for ladder_state
+    row.setdefault(
+        "atr_intraday",
+        ind.get("atr_intraday") or ind.get("atr_15m") or ind.get("atr"),
+    )
 
-    # 6) Optional external pos override (e.g. when caller already loaded positions)
-    #    If 'pos' is not provided, we keep whatever action_for() already computed.
+    # 4) Instrument snapshot: NSE + DF
+    row = enrich_instrument_snapshot(symbol, row, df=df)
+
+    # 5) Position override (PnL)
     if pos and pos.get("qty", 0) > 0:
         try:
             qty = float(pos["qty"])
@@ -108,14 +102,20 @@ def build_cockpit_row(
                 "side": "LONG",
                 "qty": qty,
                 "avg": avg,
+                "pnl": pnl_abs,
                 "pnl_abs": pnl_abs,
                 "pnl_pct": pnl_pct,
             }
             row["held"] = True
         except Exception:
-            # fall back to whatever scoring gave us
             row.setdefault("held", True)
     else:
         row.setdefault("held", bool(row.get("position")))
+
+    # 6) Bubble instrument keys explicitly
+    for k in _INSTRUMENT_KEYS:
+        v = row.get(k)
+        if v is not None:
+            row[k] = v
 
     return row

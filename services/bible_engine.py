@@ -357,6 +357,7 @@ def compute_trend_block(indicators: Dict[str, Any]) -> Dict[str, Any]:
         "Trend_Label": label,
     }
 
+
 if __name__ == "__main__":
     # lightweight self-test hook
 
