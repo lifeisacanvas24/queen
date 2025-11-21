@@ -16,6 +16,14 @@
     "isin": "NSE_EQ|INE0IX101010"
   },
   {
+    "symbol": "ABB",
+    "isin": "NSE_EQ|INE117A01022"
+  },
+  {
+    "symbol": "360ONE",
+    "isin": "NSE_EQ|INE466L01038"
+  },
+  {
     "symbol": "FORCEMOT",
     "isin": "NSE_EQ|INE451A01017"
   },

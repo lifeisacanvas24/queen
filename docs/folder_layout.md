@@ -14,11 +14,13 @@ queen/
 │   │   ├── list_signals.py
 │   │   ├── list_technicals.py
 │   │   ├── live_monitor.py
+│   │   ├── live_monitor_cli.py
 │   │   ├── monitor_stream.py
 │   │   ├── morning_intel.py
 │   │   ├── run_strategy.py
 │   │   ├── show_snapshot.py
 │   │   ├── symbol_scan.py
+│   │   ├── universe_scanner.py
 │   │   └── validate_registry.py
 ├── configs/
 │   │   ├── alert_1d_rules.yaml
@@ -32,35 +34,72 @@ queen/
 │   │   ├── alert_v2 copy.py
 │   │   ├── alert_v2.py
 │   │   ├── live_engine.py
+│   │   ├── live_engine_cli.py
 │   │   ├── morning_intel.py
 │   │   └── scheduler.py
 ├── data/
 │   └── [runtime files...]
+├── demos/
+│   │   ├── __init__.py
+│   │   └── pattern_tactical_chain.py
 ├── docs/
+│   │   ├── core_docs/
+│   │   │   │   │   ├── bible-flow.txt
+│   │   │   │   │   ├── master-todo.txt
+│   │   │   │   │   ├── quant.md
+│   │   │   │   │   ├── todo-index-20-11-2025-nov.txt
+│   │   │   │   │   └── upcoming-todo-20-11-2025-nov.txt
+│   │   ├── ai_documentation.md
 │   │   ├── alerts-fastapi.txt
+│   │   ├── ATR-DYNAMIC.png
+│   │   ├── Breakout_Bible_v10.pdf
+│   │   ├── Breakout_Bible_v10_4_FULL.pdf
+│   │   ├── Breakout_Bible_v10_5_FULL.pdf
 │   │   ├── changelog.md
 │   │   ├── cockpit.txt
 │   │   ├── curl-test.txt
 │   │   ├── daemons-todo.txt
 │   │   ├── developers_commands.md
+│   │   ├── documentation.md
+│   │   ├── folder_layout.md
 │   │   ├── git_commands.md
+│   │   ├── image.png
+│   │   ├── important-libraries.txt
+│   │   ├── indicators-bible.txt
 │   │   ├── intraday_cockpit.txt
+│   │   ├── key-indicators.txt
 │   │   ├── pending-to-bedone.txt
 │   │   ├── queen_todo.py
 │   │   ├── release.md
 │   │   ├── router-upstox-todo.txt
 │   │   ├── Screenshot 2025-11-04 at 1.48.45 PM.png
 │   │   ├── tactical-blueprint.txt
+│   │   ├── temp-settings-feedback.txt
 │   │   ├── to-do-for-25th.txt
 │   │   ├── todo-for-24.txt
 │   │   └── transfering-chat.txt
+├── dustbin/
+│   │   ├── all_symbols.json
+│   │   ├── from_kiwi_bible.py
+│   │   ├── fundamental_data.csv
+│   │   ├── fundamental_data.parquet
+│   │   ├── fundamentals_scraper_v2.py
+│   │   ├── google_gemini_upstox.py
+│   │   ├── google_gemini_upstox_v2.py
+│   │   └── symbols.json
 ├── fetchers/
+│   │   ├── universe/
+│   │   │   │   │   ├── build_monthly_universe.py
+│   │   │   │   │   └── convert_instruments_to_master.py
 │   │   ├── __init__.py
-│   │   ├── fetch_router-copy.py
 │   │   ├── fetch_router.py
+│   │   ├── nse_fetcher.py
+│   │   ├── nse_meta_cache.py
 │   │   └── upstox_fetcher.py
 ├── helpers/
 │   │   ├── __init__.py
+│   │   ├── candle_adapter.py
+│   │   ├── candles.py
 │   │   ├── common.py
 │   │   ├── fetch_utils.py
 │   │   ├── instruments.py
@@ -68,13 +107,24 @@ queen/
 │   │   ├── io.py
 │   │   ├── logger.py
 │   │   ├── market.py
-│   │   ├── nse_fetcher.py
+│   │   ├── path_manager.py
 │   │   ├── pl_compat.py
 │   │   ├── portfolio.py
 │   │   ├── rate_limiter.py
 │   │   ├── schema_adapter.py
-│   │   ├── settings_proxy.py
-│   │   └── tactical_regime_adapter.py
+│   │   ├── shareholding_fetcher.py
+│   │   ├── ta_math.py
+│   │   ├── tactical_regime_adapter.py
+│   │   └── verify.py
+├── runtime/
+│   └── [runtime files...]
+├── scrapers/
+│   │   ├── bse_batch_processor.py
+│   │   ├── bse_scraper.py
+│   │   ├── fundamental_data.csv
+│   │   ├── fundamental_data.json
+│   │   ├── fundamental_data.parquet
+│   │   └── fundamentals_scraper.py
 ├── server/
 │   │   ├── routers/
 │   │   │   │   │   ├── alerts.py
@@ -89,6 +139,15 @@ queen/
 │   │   │   │   │   ├── portfolio.py
 │   │   │   │   │   └── services.py
 │   │   ├── static/
+│   │   │   │   │   ├── js/
+│   │   │   │   │   │   │   │   │   ├── cockpit_cards.js
+│   │   │   │   │   │   │   │   │   ├── cockpit_compat.js
+│   │   │   │   │   │   │   │   │   ├── cockpit_core.js
+│   │   │   │   │   │   │   │   │   ├── cockpit_live.js
+│   │   │   │   │   │   │   │   │   ├── cockpit_portfolio.js
+│   │   │   │   │   │   │   │   │   ├── cockpit_session.js
+│   │   │   │   │   │   │   │   │   └── cockpit_ui.js
+│   │   │   │   │   ├── positions/
 │   │   │   │   │   └── queen.css
 │   │   ├── templates/
 │   │   │   │   │   ├── _layouts/
@@ -115,14 +174,22 @@ queen/
 │   │   └── state.py
 ├── services/
 │   │   ├── __init__.py
+│   │   ├── bible_engine.py
+│   │   ├── cockpit_row.py
+│   │   ├── enrich_instruments.py
+│   │   ├── enrich_tactical.py
 │   │   ├── forecast.py
 │   │   ├── history.py
+│   │   ├── ladder_state copy.py
+│   │   ├── ladder_state.py
 │   │   ├── live.py
 │   │   ├── morning.py
 │   │   ├── scoring.py
-│   │   └── symbol_scan.py
+│   │   ├── symbol_scan.py
+│   │   └── tactical_pipeline.py
 ├── settings/
 │   │   ├── __init__.py
+│   │   ├── cockpit_schema.py
 │   │   ├── formulas.py
 │   │   ├── indicator_policy.py
 │   │   ├── indicators.py
@@ -154,6 +221,7 @@ queen/
 │   │   │   │   │   ├── core.py
 │   │   │   │   │   ├── keltner.py
 │   │   │   │   │   ├── momentum_macd.py
+│   │   │   │   │   ├── state.py
 │   │   │   │   │   ├── volatility_fusion.py
 │   │   │   │   │   ├── volume_chaikin.py
 │   │   │   │   │   └── volume_mfi.py
@@ -194,6 +262,7 @@ queen/
 │   │   │   │   │   │   │   │   │   ├── __init__.py
 │   │   │   │   │   │   │   │   │   └── indicator_template.py
 │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── pattern_fusion.py
 │   │   │   │   │   ├── pre_breakout.py
 │   │   │   │   │   ├── registry.py
 │   │   │   │   │   ├── reversal_summary.py
@@ -204,6 +273,7 @@ queen/
 │   │   ├── master_index.py
 │   │   └── registry.py
 ├── tests/
+│   │   ├── __init__.py
 │   │   ├── market_playback.py
 │   │   ├── market_test.py
 │   │   ├── smoke_absorption.py
@@ -224,6 +294,7 @@ queen/
 │   │   ├── smoke_divergence_latency.py
 │   │   ├── smoke_event_log.py
 │   │   ├── smoke_exhaustion_latency.py
+│   │   ├── smoke_fetch_utils.py
 │   │   ├── smoke_fusion_all_latency.py
 │   │   ├── smoke_fusion_latency.py
 │   │   ├── smoke_fusion_lbx.py
@@ -231,6 +302,8 @@ queen/
 │   │   ├── smoke_fusion_overall.py
 │   │   ├── smoke_helpers.py
 │   │   ├── smoke_indicators.py
+│   │   ├── smoke_instruments.py
+│   │   ├── smoke_intervals.py
 │   │   ├── smoke_io.py
 │   │   ├── smoke_keltner.py
 │   │   ├── smoke_lbx_latency.py
@@ -240,6 +313,7 @@ queen/
 │   │   ├── smoke_live_supervisor.py
 │   │   ├── smoke_macd.py
 │   │   ├── smoke_market_regime_latency.py
+│   │   ├── smoke_market_sleep.py
 │   │   ├── smoke_market_time.py
 │   │   ├── smoke_master_index.py
 │   │   ├── smoke_meta_controller.py
@@ -258,10 +332,16 @@ queen/
 │   │   ├── smoke_patterns_latency.py
 │   │   ├── smoke_patterns_runner.py
 │   │   ├── smoke_pre_breakout.py
+│   │   ├── smoke_rate_limited_decorator.py
+│   │   ├── smoke_rate_limiter.py
+│   │   ├── smoke_rate_limiter_context.py
+│   │   ├── smoke_rate_limiter_global.py
+│   │   ├── smoke_rate_limiter_pool.py
 │   │   ├── smoke_registry.py
 │   │   ├── smoke_reversal_stack.py
 │   │   ├── smoke_reversal_summary.py
 │   │   ├── smoke_rsi.py
+│   │   ├── smoke_schema_adapter.py
 │   │   ├── smoke_show_snapshot.py
 │   │   ├── smoke_signals_registry.py
 │   │   ├── smoke_squeeze_pulse.py
@@ -281,6 +361,7 @@ queen/
 ├── intraday_cockpit.py
 ├── intraday_cockpit_expanded.py
 ├── intraday_cockpit_final.py
-├── pyproject.toml
-└── README.md
+├── pytest.ini
+├── README.md
+└── test_scanner.py
 ```

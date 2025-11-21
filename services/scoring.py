@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/scoring.py — v2.2 (Daily-ATR aware, Bible-ready)
+# queen/services/scoring.py — v2.3 (Bible-integrated)
 # ------------------------------------------------------------
 # Actionable scoring + early-signal fusion (cockpit / TUI ready)
 #
@@ -9,7 +9,7 @@
 #   • Daily ATR + risk snapshot derived from intraday bars
 #   • Early signal fusion (registry signals + price-action fallback)
 #   • Position-aware decision ("BUY", "ADD", "HOLD", "EXIT", "AVOID")
-#   • Cockpit row builder with optional Pattern / Tactical fields
+#   • Cockpit row builder with optional Pattern / Tactical / Bible fields
 #
 # Forward-only:
 #   • No legacy reversal_stack.evaluate
@@ -18,6 +18,9 @@
 #       - Reversal_Score / Reversal_Stack_Alert
 #       - Tactical_Index / regime
 #       - RScore_norm / VolX_norm / LBX_norm
+#   • Bible integration:
+#       - compute_indicators_plus_bible → bible_engine.compute_indicators_plus_bible
+#       - Trade_Status / Trade_Status_Label / Trade_Reason surfaced in cockpit row
 # ============================================================
 
 from __future__ import annotations
@@ -29,6 +32,9 @@ import polars as pl
 from queen.fetchers.nse_fetcher import fetch_nse_bands
 from queen.helpers.market import MARKET_TZ
 from queen.helpers.portfolio import compute_pnl, position_for
+from queen.services.bible_engine import (
+    compute_indicators_plus_bible as bible_compute_plus,
+)
 from queen.technicals.indicators import core as ind
 
 
@@ -80,7 +86,7 @@ def _daily_ohlc_from_intraday(df: pl.DataFrame) -> pl.DataFrame:
 
     daily = (
         dated.sort("timestamp")
-        .group_by("d")  # 👈 Polars 1.x API (group_by, not groupby)
+        .group_by("d")  # Polars 1.x API
         .agg(
             pl.col("open").first().alias("open"),
             pl.col("high").max().alias("high"),
@@ -91,6 +97,7 @@ def _daily_ohlc_from_intraday(df: pl.DataFrame) -> pl.DataFrame:
     )
 
     return daily
+
 
 def _daily_risk_snapshot(
     df: pl.DataFrame,
@@ -122,7 +129,7 @@ def _daily_risk_snapshot(
 
     atr_pct = float(atr_val) / ref_close * 100.0
 
-    # Simple, explainable buckets — this is your "Bible risk scale"
+    # Simple, explainable buckets — your "Bible risk scale"
     if atr_pct < 1.0:
         risk = "Low"
         sl_zone = "Tight"
@@ -140,7 +147,7 @@ def _daily_risk_snapshot(
 def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
     """Lightweight indicator snapshot for a single timeframe.
 
-    Returns a dict that can be fed into `action_for()`.
+    Returns a dict that can be fed into `action_for()` or Bible engine.
 
     Keys:
       CMP, RSI, ATR, VWAP, CPR, OBV,
@@ -278,7 +285,7 @@ def _early_bundle(
 
     Note:
       • Uses pre_breakout + squeeze_pulse if available.
-      • ReversalStack / Tactical stack are handled separately in Bible engine.
+      • Reversal/Tactical stacks are handled separately (Bible).
 
     """
     total = 0
@@ -302,6 +309,32 @@ def _early_bundle(
         reasons += fb_reasons
 
     return total, reasons
+
+
+# --------------- Bible mega indd wrapper -----------------
+def compute_indicators_plus_bible(
+    df: pl.DataFrame,
+    interval: str = "15m",
+    *,
+    symbol: Optional[str] = None,
+    pos: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Core indicators + Bible blocks + Trade validity in one dict.
+
+    This is a thin wrapper over bible_engine.compute_indicators_plus_bible,
+    using this module's compute_indicators() as the base snapshot.
+    """
+    base = compute_indicators(df)
+    if not base:
+        return {}
+
+    return bible_compute_plus(
+        df,
+        base_indicators=base,
+        symbol=symbol,
+        interval=interval,
+        pos=pos,
+    )
 
 
 # --------------- base tactical score -----------------
@@ -382,6 +415,24 @@ def _non_position_entry(
     buffer = max((atr or 0) * 0.10, cmp_ * 0.0025)  # 0.1×ATR or 0.25%
     return round(base + buffer, 1)
 
+def compute_indicators_plus_bible(
+    df: pl.DataFrame,
+    interval: str = "15m",
+    *,
+    symbol: Optional[str] = None,
+    pos: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    base = compute_indicators(df)
+    if not base:
+        return {}
+
+    return bible_compute_plus(
+        df,
+        base_indicators=base,
+        symbol=symbol,
+        interval=interval,
+        pos=pos,
+    )
 
 # --------------- main action function -----------------
 def action_for(
@@ -401,6 +452,8 @@ def action_for(
           - Reversal_Score / Reversal_Stack_Alert
           - Tactical_Index / regime
           - RScore_norm / VolX_norm / LBX_norm
+          - Trend_Bias / Trend_Score / Trend_Label
+          - Bible Trade fields: Trade_Status / Trade_Status_Label / Trade_Reason / Trade_Score / Trade_Flags
     """
     cmp_ = float(indd["CMP"])
     atr_intraday = indd.get("ATR")
@@ -411,6 +464,8 @@ def action_for(
     vwap = indd.get("VWAP")
     cpr = indd.get("CPR")
     ema20 = indd.get("EMA20")
+    ema50 = indd.get("EMA50")
+    ema200 = indd.get("EMA200")
 
     # --- Base indicator-driven score
     base_score, drivers = score_symbol(indd)
@@ -425,7 +480,7 @@ def action_for(
 
     total_score = min(10, int(round(base_score + early_score)))
 
-    # --- Position-aware decision
+    # --- Position-aware decision (legacy tactical decision)
     pos = position_for(symbol, book=book)
     held = bool(pos)
 
@@ -511,7 +566,7 @@ def action_for(
     reversal_score = indd.get("Reversal_Score")
     reversal_alert = indd.get("Reversal_Stack_Alert")
 
-    # Tactical core outputs (if caller ran TacticalCore)
+    # Tactical core outputs (if caller ran TacticalCore / Bible Tactical)
     tactical_index = indd.get("Tactical_Index")
     regime = indd.get("regime")  # may be dict or simple label
     if isinstance(regime, dict):
@@ -527,7 +582,7 @@ def action_for(
     volx_norm = indd.get("VolX_norm")
     lbx_norm = indd.get("LBX_norm")
 
-    # --- Bible Trend fields (from tactical_pipeline / bible_engine)
+    # --- Bible Trend fields (from bible_engine / tactical_pipeline)
     trend_score = indd.get("Trend_Score")
     trend_bias = indd.get("Trend_Bias")
     trend_label = indd.get("Trend_Label")
@@ -540,25 +595,30 @@ def action_for(
     trend_line = None
     try:
         if trend_score is not None and trend_bias:
-            # safe float
             ts = float(trend_score)
-                        # small shorthand for D/W/M parts
             d = (trend_bias_d or "Range")[0].upper()
             w = (trend_bias_w or "Range")[0].upper()
             m = (trend_bias_m or "Range")[0].upper()
             trend_line = f"Trend: {ts:.1f}/10 ({trend_bias} D:{d} W:{w} M:{m})"
         elif trend_label:
-                trend_line = f"Trend: {trend_label}"
+            trend_line = f"Trend: {trend_label}"
     except Exception:
-            # keep it optional; don't break the row
-            trend_line = None
+        # keep it optional; don't break the row
+        trend_line = None
+
+    # --- Bible Trade Validity fields (if Bible mega indd was used)
+    trade_status = indd.get("Trade_Status")
+    trade_status_label = indd.get("Trade_Status_Label")
+    trade_reason = indd.get("Trade_Reason")
+    trade_score = indd.get("Trade_Score")
+    trade_flags = indd.get("Trade_Flags")
 
     # --- Base cockpit row
     row: Dict[str, Any] = {
         "symbol": symbol,
         "cmp": round(cmp_, 1),
         "score": int(total_score),
-        "early": int(early_score),  # 0–6
+        "early": int(early_score),
         "decision": decision,
         "bias": bias,
         "drivers": drivers,
@@ -573,8 +633,22 @@ def action_for(
         "risk_rating": indd.get("Risk_Rating"),
         "sl_zone": indd.get("SL_Zone"),
         "obv": indd.get("OBV"),
-        "ema_bias": indd.get("EMA_BIAS"),
+
+        # -------------------------------
+        # ⭐ ADD THESE LINES
+        # -------------------------------
+        "EMA20": indd.get("EMA20"),
+        "EMA50": indd.get("EMA50"),
+        "EMA200": indd.get("EMA200"),
+
+        # lower-case mirrors (good for UI/backcompat)
+        "ema20": indd.get("EMA20"),
         "ema50": indd.get("EMA50"),
+        "ema200": indd.get("EMA200"),
+
+        # still include old bias
+        "ema_bias": indd.get("EMA_BIAS"),
+
         "cpr": cpr,
         "held": held,
         "advice": (
@@ -591,6 +665,21 @@ def action_for(
         "notes": " | ".join(notes) if notes else "—",
         "position": pos or {},
     }
+
+    # --- Attach Trade Validity fields if present (pure intraday classification)
+    if trade_status is not None:
+        row["trade_status"] = trade_status
+    if trade_status_label is not None:
+        row["trade_status_label"] = trade_status_label
+    if trade_reason is not None:
+        row["trade_reason"] = trade_reason
+    if trade_score is not None:
+        try:
+            row["trade_score"] = float(trade_score)
+        except Exception:
+            row["trade_score"] = trade_score
+    if trade_flags is not None:
+        row["trade_flags"] = trade_flags
 
     # --- Attach optional advanced fields (only if present)
     if pattern_score is not None:

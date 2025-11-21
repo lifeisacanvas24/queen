@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
+from queen.services.live import actionables_for
 import polars as pl
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -22,7 +22,9 @@ from queen.services.history import load_history
 from queen.services.live import _intraday_with_backfill
 from queen.services.scoring import compute_indicators
 from queen.services.symbol_scan import run_symbol_scan
+from queen.services.ladder_state import augment_targets_state  # at top
 from queen.services.tactical_pipeline import (
+    compute_bible_blocks,
     pattern_block,
     reversal_block,
     tactical_block,
@@ -184,70 +186,35 @@ async def summary_api(
     symbols: Optional[List[str]] = Query(None),
     interval: int = Query(15, ge=1, le=120),
     book: str = Query("all"),
+    limit: Optional[int] = Query(None, ge=1),
 ) -> Dict[str, Any]:
-    """Rollup for Summary page: one enriched cockpit row per symbol.
+    """
+    Rollup for Summary page: one enriched cockpit row per symbol.
 
-    Pipeline (same as LIVE):
-      fetch intraday → compute_indicators → pattern / reversal / vol →
-      tactical_block → build_cockpit_row
+    Uses the same engine as /monitor/actionable (actionables_for) so:
+      • CMP logic is identical
+      • Bible blocks (STRUCTURE / TREND / ALIGN / VOL / REVERSAL) are shared
+      • Targets / SL / ladder state stay in sync.
     """
     syms = _universe(symbols)
-    pos_map = load_positions(book) or {}
-    tf_str = f"{interval}m"
 
-    rows: List[Dict[str, Any]] = []
+    # Reuse live engine → guarantees CMP & Bible overlays match /monitor/actionable 1:1
+    rows = await actionables_for(
+        syms,
+        interval_min=interval,
+        book=book,
+    )
 
-    for sym in syms:
-        try:
-            df = await _fetch_latest_df(sym, interval)
-            if df.is_empty():
-                continue
+    # Optionally limit rows at the router level (like /monitor/actionable)
+    if limit is not None and limit > 0:
+        rows = rows[:limit]
 
-            # --- base indicator snapshot (RSI / ATR / VWAP / CPR / OBV / EMAs)
-            base_ind = compute_indicators(df)
-            if not base_ind:
-                continue
-
-            # let downstream blocks see the raw DF
-            base_ind["_df"] = df
-
-            # --- pattern / reversal / volatility blocks
-            pt  = pattern_block(df, base_ind)
-            rv  = reversal_block(df, base_ind)
-            vol = volatility_block(df, base_ind)
-            tr  = trend_block(df, base_ind)
-
-            # --- tactical Bible block (fuse all metrics)
-            tac_input = {**base_ind, **pt, **rv, **vol, **tr}
-            tc = tactical_block(tac_input, interval=tf_str)
-
-            # --- canonical cockpit row
-            row = build_cockpit_row(
-                sym,
-                df,
-                interval=tf_str,
-                book=book,
-                tactical=tc,
-                pattern=pt,
-                reversal=rv,
-                volatility=vol,
-                pos=pos_map.get(sym),
-            )
-            if not row:
-                continue
-
-            # held flag for cards
-            row["held"] = sym in pos_map or bool(row.get("position"))
-            rows.append(row)
-
-        except Exception as e:
-            log.exception(f"[cockpit.summary] {sym} failed → {e}")
-            continue
-
+    # actionables_for already sorts by score + decision, but this is idempotent.
     prio = {"BUY": 0, "ADD": 0, "HOLD": 1}
     rows.sort(
         key=lambda x: (-(x.get("score") or 0), prio.get((x.get("decision") or "").upper(), 2))
     )
+
     return {"count": len(rows), "rows": rows}
 
 @router_api.get("/upcoming/next")

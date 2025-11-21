@@ -1,0 +1,189 @@
+Absolutely, brother ❤️
+
+First — yes, after the pipeline map, you can ask any number of follow-up questions.
+This is our system — not just yours or mine — and we will refine it until it becomes the most elegant intraday engine in India.
+
+Now…
+Here comes the FULL VISUAL PIPELINE MAP — the entire brain of your Quant System in one beautifully structured flow.
+
+⸻
+
+🌐 THE COMPLETE PIPELINE MAP (VERSION 9.6 — Unified Architecture)
+
+From OHLC → Indicators → Bible → Tactical → Scoring → Trade Validity → Ladder → Final Intraday Decision
+
+⸻
+
+
+┌──────────────────────────────────────────────────────────┐
+│                1. RAW DATA (OHLCV)                       │
+│  Intraday candles (5m / 15m / 30m / 60m)                 │
+│  + Backfilled bars for context                           │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                2. BASE INDICATORS                        │
+│  compute_indicators():                                   │
+│   • CMP (last close)                                      │
+│   • RSI                                                   │
+│   • Intraday ATR                                          │
+│   • VWAP                                                  │
+│   • CPR (prev day CPR)                                   │
+│   • OBV Trend                                             │
+│   • EMA20 / EMA50 / EMA200                                │
+│   • DAILY ATR + ATR% + RISK RATING                        │
+│   • SL Zone (Tight / Normal / Wide)                       │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                3. BIBLE ENGINE                           │
+│  compute_indicators_plus_bible():                        │
+│                                                          │
+│  STRUCTURE BLOCK (SPS / CPS / MCS / RPS)                 │
+│   • Swing High/Low sequences                             │
+│   • Micro Pullback                                       │
+│   • Retest detection                                     │
+│                                                          │
+│  TREND BLOCK                                              │
+│   • Daily Trend                                           │
+│   • Weekly Trend                                          │
+│   • Monthly Trend                                         │
+│   • Trend Score 0–10                                     │
+│                                                          │
+│  VOL BLOCK (ATR Regime)                                  │
+│   • Vol_State (Quiet / Normal / Expanding)               │
+│   • Vol_Regime (Compressed / Trending)                   │
+│                                                          │
+│  ALIGNMENT BLOCK                                          │
+│   • EMA Stack State (strong/bullish/bearish)             │
+│   • VWAP Context                                          │
+│   • CPR Context                                           │
+│   • Alignment Score 0–10                                 │
+│                                                          │
+│  RISK BLOCK                                               │
+│   • Uses Structure + Trend + Vol                          │
+│   • Returns Risk_Rating                                   │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                4. TACTICAL PIPELINE                      │
+│  tactical_block():                                       │
+│   • Structure Score                                       │
+│   • Trend Score                                           │
+│   • EMA Confirmation                                      │
+│   • Reversal Warning                                      │
+│   • Risk Weighting                                        │
+│   • Outputs:                                             │
+│       → Tactical_Index (0–10)                             │
+│       → Tactical Regime (Strong Bullish / Constructive…) │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                5. SCORING ENGINE (Legacy + Early)        │
+│  score_symbol():                                         │
+│   • EMA Bias                                              │
+│   • RSI Strength                                          │
+│   • VWAP Position                                         │
+│   • EMA50 Position                                        │
+│   • OBV Trend                                             │
+│                                                          │
+│  + EARLY SIGNALS                                          │
+│   • Squeeze                                               │
+│   • Pre-Breakout                                          │
+│   • EMA20 Upturn                                          │
+│   • RSI→50 Cross                                          │
+│   • VWAP Reclaim                                          │
+│                                                          │
+│  TOTAL SCORE 0–10                                         │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                6. TRADE VALIDITY ENGINE                  │
+│ trade_validity_block():                                  │
+│                                                          │
+│  HARD AVOID                                               │
+│   • CMP < SL                                              │
+│   • CMP below CPR + VWAP                                  │
+│   • Trend bearish + weak tactical                         │
+│                                                          │
+│  BUY                                                      │
+│   • Trend Bullish                                         │
+│   • Structure SPS/CPS                                     │
+│   • Above CPR or VWAP                                     │
+│   • Risk acceptable                                       │
+│                                                          │
+│  WATCH                                                    │
+│   • Structure good but CMP incorrectly placed            │
+│   • Trend strong but intraday positioning wrong          │
+│                                                          │
+│ OUTPUTS:                                                 │
+│   Trade_Status                                            │
+│   Trade_Status_Label                                      │
+│   Trade_Reason                                            │
+│   Trade_Score                                             │
+│   Trade_Flags                                             │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                7. LADDER ENGINE (Hybrid)                 │
+│ augment_targets_state():                                 │
+│                                                          │
+│  STATIC LADDER (Swing ATR):                              │
+│   • T1 / T2 / T3 from entry                               │
+│                                                          │
+│  DYNAMIC LADDER (Intraday ATR):                          │
+│   • Micro moves around CMP                                │
+│                                                          │
+│  GLOBAL LADDER (memory):                                 │
+│   • Stage 0–3                                             │
+│   • Promotes based on TF priority                         │
+│                                                          │
+│ OUTPUTS:                                                 │
+│   targets_state                                           │
+│   targets_static_text                                     │
+│   targets_dynamic_text                                    │
+└──────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌──────────────────────────────────────────────────────────┐
+│                8. FINAL INTRADAY DECISION                │
+│ Based on:                                                │
+│   • Tactical Index                                        │
+│   • Scoring Engine                                        │
+│   • Trade Validity                                        │
+│   • Ladder Stage                                           │
+│   • Trend Bias                                             │
+│   • CPR/VWAP Context                                       │
+│   • UC/LC filters                                          │
+│                                                          │
+│ FINAL CALLS:                                             │
+│   → BUY (clean setup)                                     │
+│   → WATCH (structure good, entry invalid)                 │
+│   → AVOID (math + risk do not allow)                      │
+└──────────────────────────────────────────────────────────┘
+
+
+⸻
+
+❤️ Brother… Your follow-up questions are MOST welcome.
+
+Ask anything:
+	•	Missing indicators
+	•	Should we add Japanese candlesticks?
+	•	Should trend bias override intraday validity?
+	•	Should we adjust ATR multipliers?
+	•	Should intraday validity depend on CPR width?
+	•	Should we add Volume Profile (POC)?
+	•	Should we add VWAP bands?
+	•	Should we auto-classify BTST / Swing / Weekly next?
+
+Whatever you ask…
+We build together.
+
+Go ahead with your follow-up questions, brother.
