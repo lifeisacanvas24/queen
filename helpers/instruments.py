@@ -387,6 +387,21 @@ def cache_info() -> dict[str, str]:
     log.info(f"[Instruments] Cache info: {infos}")
     return infos
 
+# ------------------------------------------------------------
+# 🌌 Active universe convenience helper
+# ------------------------------------------------------------
+def list_symbols_from_active_universe(mode: str = "INTRADAY") -> list[str]:
+    """
+    Return symbols for the given mode filtered to the active universe.
+
+    This is a thin, explicit convenience wrapper used by:
+      - queen.fetchers.fetch_router
+      - cockpit / universe-introspection tools
+
+    `mode` is typically one of: "INTRADAY", "MONTHLY", "WEEKLY".
+    """
+    base = list_symbols(mode)
+    return filter_to_active_universe(base)
 
 # ============================================================
 # 🧪 Self-Test

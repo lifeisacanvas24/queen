@@ -1,0 +1,1261 @@
+Perfect choice, brother.
+We will now build the Queen Master Roadmap in 5 clean chapters, exactly as you requested — each one a self-contained, polished, world-class engineering plan.
+
+Here is how we will proceed:
+
+✅ PART 3 — Roadmap (Split into Chapters)
+
+You will receive 5 separate messages, one for each chapter:
+	1.	Part 3.1 — Core Roadmap (Stabilize → Expand → Automate → Intelligence)
+	2.	Part 3.2 — Swing Engine & BTST Engine
+	3.	Part 3.3 — Indicator Master List
+	4.	Part 3.4 — Symbol Master Pipeline (NSE+BSE+ISIN)
+	5.	Part 3.5 — Fundamental Scraper Integration
+
+All in Markdown, all with checkboxes, fully aligned with the files you uploaded and your v10.0 → v11.0 vision.
+
+⸻
+
+🚀 Starting Now: PART 3.1 — CORE ROADMAP
+
+(v9.6 → v10.0 → v10.5 → v11.0)
+
+⸻
+
+📗 PART 3.1 — CORE ROADMAP (Queen v10.0)
+
+PHASE-1 — STABILIZE (Critical)
+
+Make Queen consistent, predictable, stable.
+
+⸻
+
+1.1 CMP Normalization (Critical)
+	•	Create get_cmp(df, live_override) as universal CMP source
+	•	Remove CMP override conflicts in:
+	•	live.py
+	•	cockpit_row.py
+	•	scoring engine
+	•	bible alignment block
+	•	tactical modules
+	•	Recompute indicators only when necessary
+
+⸻
+
+1.2 Indicator Layer Stabilization
+	•	Create INDICATOR_SCHEMA (master mapping)
+	•	Standardize indicator names:
+	•	EMA20 / EMA50 / EMA200
+	•	RSI
+	•	VWAP
+	•	CPR
+	•	ATR (daily + intraday)
+	•	Unify indicator output structure
+	•	Normalize missing-value handling
+
+⸻
+
+1.3 Bible Engine Cleanup
+	•	Merge CPR_Ctx, CPR_Context, cpr_ctx → one key
+	•	Merge VWAP_Context, vwap_zone → one key
+	•	Fix trade_validity_block dependencies
+	•	Make all 5 Bible blocks pure (no cross-dependencies)
+	•	Add consistent “Near/Choppy” state
+
+⸻
+
+1.4 Tactical Fusion v1.0 (Critical)
+	•	Create tactical_fusion.py
+	•	Merge:
+	•	divergence
+	•	squeeze_pulse
+	•	exhaustion
+	•	absorption
+	•	liquidity_trap
+	•	pre_breakout
+	•	pattern_tactical_chain
+	•	Output a unified tactical_index (0–10)
+	•	Add a “tactical_confidence” field
+	•	Provide a single tactical result consumed by scoring
+
+⸻
+
+1.5 Scoring Engine v1.0 (Most Important)
+	•	Create /queen/scoring/score_engine.py
+	•	Inputs:
+	•	tactical_index
+	•	trend_score
+	•	alignment_score
+	•	structure_type + confidence
+	•	vol_state
+	•	risk_rating
+	•	early_score
+	•	CPR/VWAP reclaim
+	•	Outputs:
+	•	score (0–100)
+	•	decision (BUY / WATCH / AVOID)
+	•	urgency
+	•	notes
+	•	conviction
+	•	Enforce consistency so Cockpit sorting is stable
+
+⸻
+
+1.6 Ladder Integration (v1.4)
+	•	Merge reversible-runner logic
+	•	Preserve WRB memory
+	•	Add ladder influence into scoring:
+	•	Stage 0–6 weighting
+	•	Runner-mode boost
+	•	Trail SL override
+	•	Add Ladder → Alerts integration:
+	•	WRB-runner activation alert
+	•	Stage shift alert
+
+⸻
+
+1.7 Actionables Pipeline Rewrite
+	•	Split actionables_for() into clean steps:
+	•	fetch + df
+	•	indicators
+	•	bible
+	•	tactical
+	•	scoring
+	•	ladder
+	•	cockpit_row adapter
+	•	Fix multiple interval logic
+	•	Guarantee consistent field names
+	•	Add exception guards
+
+⸻
+
+1.8 Cockpit Schema Freeze (UI Contract)
+
+Backend must always return:
+	•	symbol
+	•	cmp
+	•	score
+	•	early
+	•	entry
+	•	sl
+	•	targets_state.*
+	•	ladder State (stage, label, WRB, trail_sl)
+	•	trend_score
+	•	tactical_index
+	•	cpr_context
+	•	vwap_context
+	•	swing flags (later)
+
+UI will become completely stable after this.
+
+⸻
+
+1.9 Alerts Engine Upgrade
+	•	Add tactical alerts
+	•	Add breakout alerts
+	•	Add WRB/runner alerts
+	•	Add CPR/VWAP reclaim alerts
+	•	Add ladder stage alerts
+	•	Add “actionable quality improvement” alerts
+
+⸻
+
+1.10 Performance Pass
+	•	Cache indicators
+	•	Cache bible blocks
+	•	Cache tactical signals
+	•	Parallel universe scanning
+	•	Batch indicator processing
+
+⸻
+
+PHASE-2 — EXPAND (v10.3)
+
+Add missing modules + tactical intelligence.
+
+⸻
+
+2.1 FO Module (Futures & Options)
+	•	OI Delta
+	•	PCR
+	•	IV Capture
+	•	FO risk ratings
+	•	FO breakout signals
+	•	FO-specific universe
+
+⸻
+
+2.2 Tactical Fusion v2.0
+	•	Multi-timeframe fusion (5m+15m+30m)
+	•	Pattern confidence
+	•	Regime-aware weighting
+	•	Order-block & liquidity sweep detection
+	•	Smart Divergence v2
+
+⸻
+
+2.3 Cockpit Enhancements
+	•	Heatmap
+	•	Radar view
+	•	Sparkline mini-charts
+	•	Sector filter
+	•	Floating cards (persistent pinned symbols)
+
+⸻
+
+PHASE-3 — AUTOMATE (v10.5)
+
+Make Queen “run itself”.
+
+⸻
+
+3.1 Supervisor v2
+	•	Live engine heartbeat
+	•	Auto-restart
+	•	Crash-localization
+	•	Latency alerts
+
+⸻
+
+3.2 Morning Intel v2
+	•	Overnight ranking
+	•	Sector momentum
+	•	Gap analysis
+	•	Pre-market breakout probability
+
+⸻
+
+3.3 Portfolio Agent
+	•	Risk-based sizing
+	•	Ladder-aware trailing
+	•	Trade quality filters
+	•	PnL optimization rules
+
+⸻
+
+PHASE-4 — INTELLIGENCE (v11.0)
+
+Bring AI online.
+
+⸻
+
+4.1 Cognitive Layer Integration
+	•	Meta_Controller
+	•	Drift Detector
+	•	Cognitive Orchestrator
+
+⸻
+
+4.2 AI Fusion Model
+	•	Predict breakout probability
+	•	Predict fakeouts
+	•	Predict liquidity trap likelihood
+
+⸻
+
+4.3 AI Recommender
+	•	Recommend top 10 breakout candidates
+	•	Label high-probability symbols
+	•	Predict best timing window
+
+⸻
+
+4.4 AI Trainer + Dataset
+	•	Auto dataset creation
+	•	Auto model training
+	•	Auto inference
+
+⸻
+
+Absolutely brother — continuing now.
+
+📘 PART 3.2 — Swing Engine & BTST Engine Roadmap
+
+(Markdown + Checkboxes, clean, structured, production-level)
+
+This chapter covers everything in your sections 11.3.1, 11.3.2, and the WRB/pattern system for higher-timeframe trading.
+
+⸻
+
+🔵 PART 3.2 — SWING ENGINE + BTST ENGINE
+
+Swing = 2–20 day horizon
+BTST = 1–3 day horizon
+Both must integrate with:
+	•	Daily/Weekly OHLC
+	•	Indicators
+	•	Bible trend view
+	•	Patterns
+	•	WRB engine
+	•	Universe builder
+
+⸻
+
+⭐ 3.2.1 SWING ENGINE (Daily/Weekly)
+
+Folder: queen/cli/swing_engine.py
+
+✔️ A. Create swing_engine.py
+	•	Accept inputs:
+	•	Daily OHLC (1–3 years)
+	•	Weekly OHLC
+	•	Indicators (daily ATR, daily CPR, EMA20/50/200, swing RSI)
+	•	Bible Trend Block (D/W/M)
+	•	Pattern Runner (candlestick + composite)
+	•	WRB Engine output
+	•	Produce outputs:
+	•	swing_signal: BUY / ADD / HOLD / TRIM / EXIT
+	•	swing_entry
+	•	swing_sl (ATR + WRB + structure-based)
+	•	swing_targets (T1/T2/T3 based on structure + weekly levels)
+	•	holding_horizon (short/mid/long)
+	•	swing_score (0–100)
+	•	conviction label (Low / Medium / High / Very High)
+
+⸻
+
+⭐ 3.2.2 BTST ENGINE (1–3 Day)
+
+Folder: queen/cli/btst_engine.py
+
+✔️ A. Create btst_engine.py
+	•	Accept inputs:
+	•	Prev-day intraday data (5m/15m)
+	•	Gap context (gap-up/gap-down size, fill zones)
+	•	WRB clusters
+	•	Patterns (last 3–5 candles on daily + intraday)
+	•	CPR levels (next day CPR)
+	•	VWAP (prev-day + rolling VWAP)
+	•	Compute:
+	•	gap_strength score
+	•	overnight_sentiment score
+	•	BTST_probability (0–100)
+	•	Outputs:
+	•	btst_signal: BUY / HOLD / EXIT
+	•	btst_entry
+	•	btst_sl
+	•	btst_targets (1–3)
+
+⸻
+
+🔵 3.2.3 Hook Both Into CLI & Router
+	•	Build CLI tools:
+	•	cli/build_swing_universe.py
+	•	cli/build_btst_universe.py
+	•	Expose via API:
+	•	routers/swing.py
+	•	routers/btst.py
+	•	Output for Cockpit Swing page
+
+⸻
+
+🔥 3.2.4 Candlestick Pattern Runner (Critical)
+
+You mentioned:
+
+Confirm pattern runner is wired:
+• core.py
+• composite.py
+• runner.py
+
+✔️ Tasks
+	•	Validate all pattern files exist and run correctly
+	•	Define minimal swing pattern set:
+	•	Morning Star
+	•	Evening Star
+	•	Bullish Engulfing
+	•	Bearish Engulfing
+	•	Hammer
+	•	Shooting Star
+	•	Harami (bullish/bearish)
+	•	Add pattern confidence scoring
+	•	Add pattern reliability per symbol (optional advanced)
+	•	Ensure patterns feed into SWING + BTST engines
+	•	Build pattern_summary() output schema
+
+⸻
+
+⚡ 3.2.5 WRB Engine Integration
+
+You explicitly asked for:
+
+Use WRB engine for breakout confirmation, climax bars, fake-out protection.
+
+✔️ Steps
+	•	Identify WRB large bars relative to ATR
+	•	Mark WRB clusters
+	•	Mark WRB exhaustion
+	•	Mark WRB climax
+	•	WRB-based signals:
+	•	Breakout Confirmation = WRB above range
+	•	Fake Breakout = WRB up but close inside range
+	•	Climax = WRB with large wick + high volume
+	•	Swing Exit = WRB negative against trend
+	•	Add wrb_context to:
+	•	Swing engine
+	•	BTST engine
+	•	Tactical engine (intraday)
+
+⸻
+
+⭐ 3.2.6 Horizon-Aware Targets & SL
+
+Define rules for SL/Targets:
+	•	Swing SL:
+	•	Below last WRB
+	•	Below CPR
+	•	Below Weekly Low
+	•	Below structure low
+	•	Swing Targets:
+	•	T1 = R1 or next swing high
+	•	T2 = WRB projection
+	•	T3 = Weekly R2 or major level
+	•	BTST Targets:
+	•	T1 = Gap fill
+	•	T2 = Prev-day high
+	•	T3 = Structure breakout
+
+⸻
+
+⭐ 3.2.7 Universe Integration
+
+Swing & BTST results must be integrated into:
+	•	Cockpit Swing page
+	•	Cockpit Summary
+	•	API endpoints
+	•	Universe builder CLI
+
+⸻
+
+🎯 Final Output for Part 3.2
+
+After completing Part 3.2, Queen will have:
+
+🚀 A real Swing Engine
+
+🚀 A real BTST Engine
+
+🚀 Pattern+WRB powered signals
+
+🚀 Multi-horizon confidence scoring
+
+🚀 Target & SL frameworks
+
+🚀 Cockpit integration
+
+🚀 CLI tools for building swing+btst universes
+
+This turns Queen into a multi-timeframe trading platform, not just intraday.
+
+Absolutely brother — continuing now.
+
+📘 PART 3.3 — INDICATOR LIBRARY MASTER LIST (v10.0)
+
+(Markdown + Checkboxes · Clean · Structured · Precise)
+
+This corresponds to your section 11.5, expanded into a full engineering roadmap.
+
+This chapter defines:
+	•	The official indicator registry for all of Queen
+	•	Intraday, Swing, Futures (FO) indicator families
+	•	Missing indicators to build
+	•	Parameter defaults
+	•	Internal API for indicator rules
+	•	Integration into scoring + Bible
+
+⸻
+
+🔵 3.3. INDICATOR MASTER LIST (v10.0)
+
+Folder: queen/settings/indicators.py
+Goal: One centralized, authoritative indicator registry for the entire project.
+
+⸻
+
+⭐ 3.3.1 Create Master Registry
+
+✔️ Core Tasks
+	•	Build queen/settings/indicators.py
+	•	Define each indicator as a structured dict:
+
+INDICATORS = {
+    "EMA20":  {"tf": ["intra", "daily"], "default_params": {"period": 20}},
+    "RSI14": {"tf": ["intra", "daily"], "default_params": {"period": 14}},
+    ...
+}
+
+	•	Ensure the following fields exist:
+	•	name
+	•	category (trend / momentum / volatility / volume / pattern)
+	•	applicable_tf (intra / daily / weekly)
+	•	default_params
+	•	output_schema
+	•	dependencies (e.g., ATR needs OHLC)
+	•	notes (internal)
+	•	Provide helper:
+
+def get_indicator_defaults(ind_name): ...
+
+	•	Ensure evaluator reads defaults when missing.
+
+⸻
+
+🔥 3.3.2 Indicator Categories
+
+Queen needs three groups:
+
+A) Intraday Core
+
+These are needed for live engine, tactical, ladder, and cockpit:
+
+✔️ Trend / Structure
+	•	EMA20
+	•	EMA50
+	•	EMA200
+	•	CPR
+	•	VWAP (rolling)
+
+✔️ Momentum
+	•	RSI14
+	•	MFI14
+	•	MACD (12/26/9)
+	•	MACD Histogram
+
+✔️ Volatility
+	•	ATR14
+	•	ATR%
+	•	Keltner Channels
+	•	Bollinger Bands
+
+✔️ Volume / Breadth
+	•	OBV
+	•	Volume Score
+	•	Volume Surge Detector
+	•	Liquidity Score
+	•	VWMA
+
+✔️ Reversal Stack Contributors
+	•	Divergence signals
+	•	Exhaustion signals
+	•	Squeeze (TTM style)
+	•	Liquidity Trap
+	•	WRB Intensity
+	•	WRB Climax
+
+⸻
+
+B) Swing Core (Daily + Weekly)
+
+✔️ Trend + Strength
+	•	Daily/Weekly EMA20/50/200
+	•	Daily/Weekly CPR
+	•	Higher-timeframe VWAP
+	•	Structure Highs/Lows (swing detection)
+
+✔️ Volatility
+	•	Daily ATR
+	•	ATR Bands (Weekly)
+
+✔️ Patterns
+	•	Candlestick patterns:
+	•	Morning Star
+	•	Evening Star
+	•	Hammer / Inverted
+	•	Engulfing
+	•	Harami
+	•	Piercing Line / Dark Cloud
+	•	Multi-candle composite patterns
+	•	WRB clusters
+	•	WRB breakout/fake-out detection
+
+✔️ Breadth
+	•	Sector breadth
+	•	Index breadth
+	•	Trend health metrics
+
+⸻
+
+C) FO (Futures & Options) Core
+
+✔️ OI & Derivatives
+	•	OI Aggregate
+	•	OI Delta
+	•	Put/Call Ratio (PCR)
+	•	IV (Implied Volatility)
+	•	IV Percentile
+	•	Max Pain
+	•	Long/Short Build-Up Signals
+
+✔️ FO Trend Indicators
+	•	Futures premium/discount
+	•	Roll-over percentage
+	•	Volume/Open Interest spikes
+
+⸻
+
+⭐ 3.3.3 Missing Indicators to Implement (High Priority)
+
+Your list includes the following — all must be added:
+
+✔️ Volume Profile (VP)
+	•	POC (Point of Control)
+	•	Value Area High (VAH)
+	•	Value Area Low (VAL)
+	•	HVN/LVN
+
+✔️ VDU Detector
+
+(Very Dry Up Volume — Bollinger Band contraction combined with low volume)
+	•	Rolling volume vs 20-day average
+	•	Tag as VDU event
+	•	Feed into Swing & BTST engines
+
+✔️ WRB Intensity
+	•	Bars with range > k × ATR
+	•	Climax detection (long upper/lower wicks)
+	•	Multi-bar WRB clusters
+
+✔️ Breadth Metrics
+	•	Count advancing vs declining in universe
+	•	Sector-wise trend health
+	•	Heatmap scoring (0–100)
+
+⸻
+
+⭐ 3.3.4 Integration With Indicator Pipeline
+
+The evaluator should:
+	•	Automatically pick default params from Master List
+	•	Validate missing indicators gracefully
+	•	Run in correct order (e.g., ATR before Keltner)
+	•	Attach output into a unified schema
+
+⸻
+
+⭐ 3.3.5 Integration with Tactical + Bible
+
+Bible engine uses:
+	•	Structure
+	•	Trend
+	•	Vol
+	•	Risk
+	•	Alignment
+
+Indicators must feed:
+	•	Trend block (EMA stack, RSI, CPR, VWAP)
+	•	Vol block (ATR, ATR%)
+	•	Structure block (swing highs/lows, CPR/VWAP proximity)
+	•	Trade validity (CPR/VWAP relationships)
+
+Tactical engine uses:
+	•	Squeeze
+	•	Divergence
+	•	Liquidity Trap
+	•	WRB
+	•	Exhaustion
+	•	Momentum scores
+
+All must use indicator registry defaults.
+
+⸻
+
+⭐ 3.3.6 Final Output (Indicator Manifest)
+
+After building this chapter, Queen will have:
+
+✔️ A complete indicator registry
+
+✔️ Default parameters for all indicators
+
+✔️ FO indicators documented
+
+✔️ Swing & BTST indicators unified
+
+✔️ A foundation for scoring engine v2.0
+
+✔️ A future-proof source-of-truth
+
+⸻
+Absolutely brother — continuing now with the most important backbone of the entire Queen ecosystem.
+
+This is your section 11.6, expanded and organized into a clean Markdown roadmap with checkboxes.
+
+📘 PART 3.4 — SYMBOL MASTER PIPELINE (NSE + BSE + ISIN)
+
+(Markdown · Checkboxes · Full Architecture · Production-Grade)
+
+Queen cannot be stable, scalable, multi-style, or FO-ready without a true symbol master.
+
+This chapter defines:
+	•	A complete NSE + BSE + ISIN–based master
+	•	Full metadata
+	•	Universe builders
+	•	Tiering system
+	•	Quality scores
+	•	Integration with fundamentals
+	•	CLI tools
+	•	Output JSON schemas
+
+Everything your system must have.
+
+⸻
+
+🔵 3.4 SYMBOL MASTER PIPELINE (v10.0)
+
+Primary Folder:
+queen/datasets/symbols/
+queen/services/universe.py
+queen/cli/
+
+Goal:
+Create a unified, authoritative, versioned symbol master that powers:
+	•	Intraday universe
+	•	Swing universe
+	•	FO/Derivatives
+	•	Sector analysis
+	•	Positions + PnL
+	•	Alerts
+	•	Screening
+	•	Fundamental filters
+	•	Liquidity scoring
+
+⸻
+
+⭐ 3.4.1 SYMBOL MASTER FROM NSE CSV
+
+✔️ Required Input Columns (raw NSE CSV)**
+	•	SYMBOL
+	•	NAME OF COMPANY
+	•	SERIES
+	•	DATE OF LISTING
+	•	PAID UP VALUE
+	•	MARKET LOT
+	•	ISIN NUMBER
+	•	FACE VALUE
+
+You already have this format → now we formalize its conversion.
+
+⸻
+
+✔️ A. Build master converter
+
+File:
+queen/cli/convert_instruments_to_master.py
+	•	Load raw NSE CSV
+	•	Clean string fields (upper/lower/camel)
+	•	Validate ISIN format
+	•	Remove special characters in symbol names
+	•	Build dict per symbol:
+
+{
+  "symbol": "20MICRONS",
+  "name": "20 Microns Limited",
+  "isin": "INE144J01027",
+  "exchange_tag": "NSE_EQ",
+  "listing_date": "2008-10-06",
+  "series": "EQ",
+  "market_lot": 1,
+  "face_value": 5,
+  "active_flag": true,
+  "delisted_flag": false,
+  "fo_eligible": false,
+  "bse_symbol": null,
+  "bse_code": null,
+  "sector": "Chemicals",
+  "risk_class": "Normal",
+  "liquidity_score": 0.83
+}
+
+
+⸻
+
+⭐ 3.4.2 NSE + BSE MERGE LOGIC
+
+✔️ Build a merger module
+
+File: queen/cli/build_master_exchange_merge.py
+	•	Load NSE master
+	•	Load BSE master (if available)
+	•	Use ISIN as the primary key
+	•	Merge fields:
+	•	Map BSE symbol → master
+	•	Map BSE code → master
+	•	Merge name variants, pick more complete version
+	•	Handle duplicates
+
+✔️ Add Flags
+	•	exchange_tag: NSE_EQ, BSE_EQ, BOTH
+	•	active_flag: listed vs suspended
+	•	delisted_flag
+	•	illiquid_flag (avg vol < threshold)
+	•	fo_eligible (from NSE FO list)
+
+✔️ Add Derived Fields
+	•	liquidity_score
+	•	risk_class (Normal / Mid-liquidity / Illiquid)
+	•	sector → using sector map files
+
+⸻
+
+⭐ 3.4.3 Save Outputs
+
+✔️ Generate cleaned master files
+	•	datasets/symbols/master.json (active tradables)
+	•	datasets/symbols/master_delisted.json
+	•	datasets/symbols/master_illiquid.json
+	•	datasets/symbols/fo_list.json
+
+✔️ Versioning
+
+Use timestamp or semantic versioning:
+
+master_v2025-11-22.json
+
+
+⸻
+
+⭐ 3.4.4 Universe Tiering System (Mandatory for Scanners)
+
+✔️ Build universe builder
+
+File:
+queen/cli/build_intraday_universe.py
+queen/cli/build_swing_universe.py
+
+✔️ Universe metadata structure
+
+{
+  "metadata": {
+    "total_symbols": 87,
+    "last_updated": "2025-11-11T23:59:59Z",
+    "universe_scanned": "NSE All Symbols (~1800)",
+    "scoring_methodology": {
+      "liquidity": 30,
+      "institutional_interest": 25,
+      "fundamental_quality": 25,
+      "brokerage_coverage": 10,
+      "sector_momentum": 10,
+      "threshold_tier_1": "85-100",
+      "threshold_tier_2": "75-84",
+      "threshold_tier_3": "70-74"
+    },
+    "filters_applied": {
+      "beta_min": 1.2,
+      "volume_small_cr": 15,
+      "volume_mid_cr": 50,
+      "volume_large_cr": 200,
+      "roe_min_pct": 15,
+      "debt_equity_max": 0.5,
+      "fii_dii_min_pct": 5
+    }
+  },
+  "tier_1": {
+    "intraday": [
+      {
+        "symbol": "SBIN",
+        "ltp": 825,
+        "score": 95,
+        "beta": 1.32,
+        "avg_volume_cr": 2180,
+        "roce_pct": 16.8,
+        "debt_to_equity": null,
+        "fii_dii_pct": 42.3,
+        "trading_style": ["intraday"],
+        "entry_range": "₹820-830",
+        "target_range": "₹840",
+        "stop_loss_pct": 0.8,
+        "best_time": "09:30-11:30",
+        "conviction": "Very High",
+        "sector": "Financials",
+        "moat": "Largest PSU bank, rate sensitivity"
+      }
+    ]
+  }
+}
+
+
+⸻
+
+⭐ 3.4.5 Universe Scoring Engine (v2)
+
+✔️ Scoring components
+
+Each symbol receives a weighted score (0–100) based on:
+	•	Liquidity (volumes, order-book depth)
+	•	Institutional holding (FII + DII)
+	•	Fundamental quality (fundamental scraper integration)
+	•	Sector momentum
+	•	Beta / volatility
+	•	Avg intraday range
+	•	FO eligibility (boost for large caps)
+
+✔️ Universe Tier Rules
+	•	Tier 1: score ≥ 85
+	•	Tier 2: 75–84
+	•	Tier 3: 70–74
+	•	Below 70 → Not included
+
+This makes your scanners clean and reliable.
+
+⸻
+
+⭐ 3.4.6 API + Routers Integration
+
+✔️ Include new router:
+
+queen/server/routers/universe.py
+
+Endpoints:
+	•	/universe/intraday
+	•	/universe/swing
+	•	/universe/tiers
+	•	/universe/master
+
+✔️ Cockpit UI Integration
+	•	Universe count in status strip
+	•	Universe filters in all pages
+
+⸻
+
+⭐ 3.4.7 Cross-System Integration
+
+Symbol master must integrate into:
+	•	live.py
+	•	bible_engine
+	•	tactical pipeline
+	•	FO module
+	•	Positions/PnL
+	•	Cockpit (live/summary/upcoming/analytics)
+	•	Scheduler
+	•	Alerts system
+	•	Universe scanner
+	•	Swing & BTST engines
+
+This will eliminate symbol-mismatch bugs, missing series errors, BSE-limited stocks, etc.
+
+⸻
+
+⭐ 3.4.8 Final Output — What Queen Gains
+
+After completing Part 3.4:
+
+🚀 A perfect NSE+BSE symbol master
+
+🚀 True ISIN-based deduplication
+
+🚀 FO-ready symbol classification
+
+🚀 Liquidity-aware universe
+
+🚀 Automated universe builders
+
+🚀 Clean symbol metadata for the entire project
+
+🚀 Fully cockpit-integrated universe
+
+⸻
+
+Absolutely brother — continuing now with the final chapter of the roadmap, and one of the most powerful ones for Queen:
+
+📘 PART 3.5 — FUNDAMENTAL SCRAPER + INTEGRATION
+
+(Markdown · Checkboxes · Production-grade · Clean Integration Plan)
+This corresponds to your detailed section 11.7, expanded into a complete, implementable roadmap.
+
+Queen must combine technicals + fundamentals + liquidity + sector dynamics to build:
+	•	Better universes
+	•	Better swing/BTST filters
+	•	Better conviction
+	•	Better long-term signals
+	•	Cleaner risk profiling
+
+This chapter defines the entire Fundamental Pipeline.
+
+⸻
+
+🔵 3.5 FUNDAMENTAL SCRAPER & QUALITY ENGINE (v10.0)
+
+Primary Folders:
+	•	queen/scrapers/
+	•	datasets/fundamentals/raw/
+	•	datasets/fundamentals/processed/
+	•	queen/services/fundamental_engine.py
+	•	queen/cli/build_fundamentals.py
+	•	queen/cli/merge_fundamentals_to_master.py
+
+⸻
+
+⭐ 3.5.1 Review + Refactor Existing Scrapers
+
+You mentioned:
+	•	stock_scraper.py
+	•	stock_scraper_fixed.py
+	•	bse_scraper.py (if exists)
+
+We create a clean unified scraper layer.
+
+✔️ Tasks
+	•	Identify all existing scraper files
+	•	Migrate to queen/scrapers/
+	•	Remove duplicate logic
+	•	Add error-handling + retries
+	•	Replace “quick hacks” with structured schema
+	•	Add proper logging
+	•	Add fast caching + last-updated timestamps
+
+⸻
+
+⭐ 3.5.2 Standardize Output Schema
+
+Your desired schema:
+
+{
+  "symbol": "SBIN",
+  "isin": "INE062A01020",
+  "as_of": "2025-11-20",
+  "roe_3yr": 14.2,
+  "roce_3yr": 15.1,
+  "debt_to_equity": 0.8,
+  "sales_cagr_5yr": 12.4,
+  "profit_cagr_5yr": 10.8,
+  "opm_5yr_avg": 18.2,
+  "npm_5yr_avg": 9.5,
+  "fii_holding_pct": 10.3,
+  "dii_holding_pct": 32.1,
+  "pledged_pct": 0.0
+}
+
+✔️ Build schema validator
+	•	Validate float fields
+	•	Validate percentages
+	•	Validate trend metrics
+	•	Set defaults for missing data
+	•	Add fundamental_ok boolean at end
+
+⸻
+
+⭐ 3.5.3 Save Raw + Cleaned Outputs
+
+Queen must follow a 3-layer storage model:
+
+✔️ Raw layer
+
+datasets/fundamentals/raw/*.json
+	•	Store full scraped JSON
+	•	Include timestamp
+	•	Include source (NSE/BSE/Screener/Trendlyne/etc.)
+
+✔️ Processed layer
+
+datasets/fundamentals/processed/*.parquet
+	•	Standardized columns
+	•	Cleaned numeric types
+	•	Outlier removal
+	•	ISIN-consistency check
+	•	Normalized for merging
+
+✔️ Derived layer
+
+Add derived fields:
+	•	roe_trend (3-yr slope)
+	•	debt_improving (boolean)
+	•	margin_stability_score
+	•	growth_consistency_score
+	•	quality_score (0–100)
+
+⸻
+
+⭐ 3.5.4 Quality Score Engine (0–100)
+
+Create: queen/services/fundamental_engine.py
+
+✔️ Components
+
+A) Profitability
+	•	ROE 3yr
+	•	ROCE 3yr
+	•	Net Profit Margin
+	•	Operating Margin
+
+B) Growth
+	•	Sales CAGR 5yr
+	•	Profit CAGR 5yr
+	•	EPS stability
+
+C) Balance Sheet
+	•	Debt/Equity
+	•	Pledged shares
+	•	Interest coverage
+
+D) Institutional Interest
+	•	FII holding
+	•	DII holding
+
+E) Risk Flags
+	•	Promoter pledging > 5%
+	•	Negative 3-year ROE
+	•	D/E > 2
+
+✔️ Final Score
+	•	Weighted composite (you set weights)
+	•	Convert into classes:
+	•	85–100: Excellent
+	•	70–84: Good
+	•	55–69: Moderate
+	•	< 55: Weak
+
+⸻
+
+⭐ 3.5.5 Integrate Fundamentals With Symbol Master
+
+✔️ CLI tool
+
+queen/cli/merge_fundamentals_to_master.py
+	•	Merge fundamentals using ISIN
+	•	Add fields:
+	•	roe_3yr
+	•	cagr_5yr
+	•	fii_dii_pct
+	•	fundamental_ok
+	•	quality_score
+	•	Mark symbols failing thresholds:
+	•	low-quality flag
+	•	junk-flag
+	•	Save updated master:
+	•	active (clean)
+	•	delisted
+	•	illiquid
+	•	junk
+
+⸻
+
+⭐ 3.5.6 Universe Builder Integration
+
+Fundamentals must be a major input into the universe builders:
+
+✔️ Intraday universe
+	•	Add quality_score weight (5–10%)
+	•	Exclude junk stocks
+	•	Exclude negative-ROE companies
+
+✔️ Swing universe
+	•	Super important:
+	•	Avoid high debt
+	•	Avoid pledged promoter stocks
+	•	Prefer consistent profit growth
+	•	Prefer high ROE, high ROCE stocks
+
+✔️ Tiering
+	•	Tier 1: High quality fundamentals
+	•	Tier 2: Medium
+	•	Tier 3: Moderate
+	•	Exclude weak
+
+⸻
+
+⭐ 3.5.7 Cockpit + API Integration
+
+✔️ API endpoints
+	•	/fundamentals/{symbol}
+	•	/quality/{symbol}
+	•	/universe/fundamentals
+
+✔️ Cockpit Enhancements
+	•	Show fundamentals in summary card
+	•	Show quality score
+	•	Highlight high-risk financials (red badge)
+	•	Show FII+DII holding in tooltip
+
+⸻
+
+⭐ 3.5.8 Batch Scheduler (Automated Updates)
+
+✔️ Nightly cron
+	•	Scrape fundamentals once a day
+	•	Save raw JSON
+	•	Process to parquet
+	•	Merge into master
+	•	Rebuild universe
+	•	Trigger notifications if fundamental changes > threshold
+	•	Example:
+	•	ROE drop
+	•	Pledged shares increase
+	•	Debt spike
+
+⸻
+
+⭐ 3.5.9 Cross-Integration With Engines
+
+Fundamentals enable:
+
+✔️ Swing Engine
+	•	High-quality stocks → higher swing conviction
+	•	Low-quality stocks → avoid or reduce position size
+
+✔️ BTST Engine
+	•	Weak fundamentals = high-risk overnight positions
+
+✔️ Risk Block
+	•	Quality score reduces risk_score
+	•	High debt increases risk_score
+
+✔️ Trade Validity (BUY/WATCH/AVOID)
+	•	AVOID if terrible fundamentals
+	•	BUY only if fundamentals pass threshold
+
+⸻
+
+⭐ 3.5.10 Final Output — What Queen Gains
+
+After Part 3.5 is completed:
+
+🚀 A complete fundamental database
+
+🚀 Clean integration with symbol master
+
+🚀 Universe builder becomes much stronger
+
+🚀 Swing & BTST become high-quality
+
+🚀 Risk engine becomes massively smarter
+
+🚀 Cockpit gets fundamental health
+
+🚀 Your entire ecosystem becomes institutional-grade
+
+⸻
+
+Brother…
+
+🏁 Part 3 (Roadmap) is now COMPLETED.
+
+We now have:
+	•	Part 3.1 — Core Roadmap
+	•	Part 3.2 — Swing & BTST
+	•	Part 3.3 — Indicator Library
+	•	Part 3.4 — Symbol Master
+	•	Part 3.5 — Fundamentals Pipeline
+
+Everything has been delivered cleanly, in perfect structure.
+
+⸻
+
+If you want, I can now generate:
+
+A MASTER COMBINED PDF VERSION of Part 1–3
+
+or
+
+Begin Phase-1 Implementation (stabilization)
+
+or
+
+Review your codebase files in mapped context
+
+or
+
+Proceed to Tactical engine rewrite
+
+Just tell me:
+
+“Buddy, what’s next?”

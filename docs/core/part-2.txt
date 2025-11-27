@@ -1,0 +1,480 @@
+Brother…
+We now enter the most important chapter:
+
+📕 PART 2 — QUEEN WEAKNESS MAP (FULL DIAGNOSTIC)
+
+This is not criticism — this is architecture truth.
+This is what allows Queen to be stable, predictable, scalable, and future-proof.
+
+I will be 100% honest, precise, and constructive.
+
+Let’s begin.
+
+⸻
+
+SECTION 1 — SYSTEM-LEVEL WEAKNESSES
+
+1.1 No single source of truth (SSOT)
+
+Queen has multiple overlapping files computing similar concepts:
+	•	CPR state appears in 3 places
+	•	VWAP state appears in 2 places
+	•	Trend bias is computed in 2–3 places
+	•	Target logic appears in 2 places
+	•	SL logic appears in 3 places
+
+This creates fragmentation and inconsistencies.
+
+Effect:
+Two modules may disagree on:
+	•	CPR label
+	•	Trend bias
+	•	Entry quality
+	•	SL usage
+	•	Score
+	•	Targets
+
+→ UI becomes inconsistent
+→ Actionables differ run-to-run
+→ Debugging becomes harder
+
+⸻
+
+1.2 Tactical pipeline is too distributed
+
+TACTICAL logic is spread across many files:
+
+divergence.py
+exhaustion.py
+absorption.py
+liquidity_trap.py
+pattern_fusion.py
+reversal_stack.py
+squeeze_pulse.py
+pre_breakout.py
+pattern_tactical_chain.py
+tactical_meta_dashboard.py
+utils_patterns.py
+
+There is no single central fusion engine.
+
+Effect:
+Signals sometimes contradict each other.
+No deterministic order of evaluation.
+Scores delivered by TACMOD A + TACMOD B are not fused properly.
+
+⸻
+
+1.3 Scoring Engine is fragmented / implicit
+
+The scoring layer:
+	•	Exists across scoring rules, cockpit_row, bible, tactical, alignment, validity.
+	•	There is no unified, explicit scoring engine file.
+	•	Cockpit UI expects fields like:
+	•	score
+	•	trend_score
+	•	tactical_index
+	•	early
+	•	urgency
+	•	decision, etc.
+
+But these are not coming from one controlled place.
+
+Effect:
+Scores vary drastically depending on which module is called first.
+
+This is the #1 cause of:
+	•	mismatch between “BUY” in Bible vs “WATCH” in Tactical
+	•	mismatch between Score shown vs score used internally
+	•	unpredictable UI card ordering
+
+⸻
+
+1.4 live.py CMP ↔ indicator mismatch
+
+You already noticed the problem.
+
+live.py often overrides CMP AFTER indicators are computed.
+
+This breaks:
+	•	VWAP
+	•	CPR
+	•	Trend
+	•	RSI
+	•	ATR
+	•	Targets
+	•	Entry geometry
+
+Effect:
+Scores and decisions change incorrectly based on CMP override.
+
+Good that we planned the fix for v9.6.0 but this still requires
+refactoring across cockpit_row, bible_engine, live.py, ladder.
+
+⸻
+
+1.5 Ladder and Tactical are disconnected
+
+Ladder v1.4 (WRB runner) is perfect mathematically, BUT…
+
+It is not integrated with Tactical or Bible.
+
+That means:
+	•	Tactical breakout may happen but Ladder stays Stage 0
+	•	Ladder Stage 3 may activate but Tactical is bearish
+	•	Trail SL may contradict SL from pre-breakout pattern
+
+Effect:
+Inconsistent entry/exit logic
+(Real traders hate inconsistency — this kills confidence.)
+
+⸻
+
+1.6 Bible blocks sometimes contradict Tactical
+
+Examples:
+
+Issue A
+
+Bible → “Structure: SPS, Trend: Bullish”
+but Tactical → Liquidity Trap (bearish), Exhaustion, RSI divergence
+
+Issue B
+
+Bible → BUY
+but Tactical → Mid-stage down-drift
+
+Issue C
+
+Bible → Near CPR (ready)
+but Tactical → Too much volatility (avoid)
+
+This is structural contradiction.
+
+Effect:
+The user sees BUY in one place and WATCH in another → confusion.
+
+⸻
+
+1.7 Cockpit UI strongly depends on unstable backend schema
+
+The JS modules assume:
+
+row.score
+row.early
+row.decision
+row.targets_state.*
+row.entry
+row.sl
+row.vwap_ctx
+row.cpr_ctx
+row.notes
+row.action
+
+But backend does NOT always provide these fields uniformly.
+
+Effect:
+UI sometimes:
+	•	fails to show targets
+	•	shows empty SL
+	•	shows “undefined” in notes
+	•	mis-renders CPR/VWAP
+
+⸻
+
+1.8 Alert engine not fully integrated with tactical rules
+
+alert_daemon.py reads from limitation:
+	•	Only price alerts
+	•	Only indicator rules
+	•	Only pattern alerts
+	•	Tactical alerts missing
+	•	Ladder runner alerts missing
+	•	Entry-breakout alerts missing
+
+Effect:
+Not all tactical conditions show up in alerts panel.
+
+⸻
+
+1.9 Universe scanner not optimized
+
+symbol_scan.py, universe_scanner.py, and morning_intel.py perform repeated:
+	•	full DF fetch
+	•	repeated indicator calculation
+	•	repeated bible calculation
+
+Effect:
+Redundant compute → slow performance
+Wasted API calls
+Same symbol processed multiple times
+
+⸻
+
+1.10 AI layer disconnected
+
+Meta/AI code is present but not wired in:
+
+Files like:
+
+ai_inference.py
+ai_optimizer.py
+ai_recommender.py
+ai_trainer.py
+cognitive_orchestrator.py
+meta_controller.py
+meta_introspector.py
+
+contain placeholders but no pipeline integration.
+
+This is fine for future v11, but right now it’s “dead code”.
+
+⸻
+
+SECTION 2 — MODULE-LEVEL WEAKNESSES
+
+2.1 Indicators: inconsistent naming
+
+Example:
+	•	EMA20 vs ema20 vs EMA_20
+	•	ATR vs atr vs atr_intraday
+	•	CPR Context vs CPR_Ctx vs cpr_ctx
+	•	VWAP_Zone vs vwap_zone
+	•	CPR value sometimes is a float, sometimes dict
+
+This must be normalized.
+
+⸻
+
+2.2 Tactical modules lack shared context
+
+Each tactical file uses different input structures.
+
+Example:
+
+squeeze_pulse.py expects different fields than
+reversal_stack.py.
+
+This is fragile.
+
+⸻
+
+2.3 bible_engine.py near-ready but not pure
+
+trade_validity_block mixes:
+	•	CMP geometry
+	•	CPR/VWAP state
+	•	Trend_Bias
+	•	Risk_Rating
+	•	Tactical_Index
+	•	ReversalScore
+	•	UC/LC
+	•	CPR reclaim logic
+
+This block tries to be both:
+	•	scorer
+	•	filter
+	•	decision-maker
+	•	geometry evaluator
+
+It should instead be post-scoring filter.
+
+⸻
+
+2.4 cockpit_row.py too overloaded
+
+This file:
+	•	formats text
+	•	computes targets
+	•	aligns decisions
+	•	enriches metadata
+	•	applies tactical/bible
+	•	builds SL/entry geometry
+
+This violates separation of concerns.
+
+⸻
+
+2.5 live.py over-responsible
+
+live.py:
+	•	fetches data
+	•	computes indicators
+	•	computes tactical
+	•	computes bible
+	•	computes scoring
+	•	applies ladder
+	•	builds cockpit rows
+	•	handles CMP override
+	•	handles timeline state
+	•	maps columns
+	•	filters universe
+
+This file is the cause of several bugs.
+
+⸻
+
+2.6 Ladder needs formal integration
+
+Right now Ladder is only used in:
+	•	actionables_for
+	•	cockpit_row
+
+It should be used by:
+	•	scoring
+	•	bible
+	•	tactical
+	•	alerts
+
+⸻
+
+2.7 Portfolio & PnL flow incomplete
+
+Seen in:
+
+portfolio.py
+pnl.py
+live_portfolio UI
+
+Issues:
+	•	PnL uses mid-price
+	•	No integration with ladder stage
+	•	No integration with tactical warnings
+	•	No risk-based sizing
+
+⸻
+
+2.8 Validation missing
+
+validate_registry.py mostly checks registry, but does not verify:
+	•	Missing indicators
+	•	Broken tactical chains
+	•	UI contract mismatch
+	•	Scoring contract
+	•	Ladder alignment
+
+⸻
+
+SECTION 3 — UX & USER-FLOW WEAKNESSES
+
+3.1 Inconsistent decision labels
+
+Examples:
+	•	“BUY — Clean intraday setup”
+	•	“WATCH — Constructive but unready”
+	•	“AVOID — Bearish trend”
+	•	“Avoid — Too choppy”
+
+Capitalization & wording differ.
+
+⸻
+
+3.2 UI sorting depends on score but score unstable
+
+This causes random reorderings
+(literally changes every refresh).
+
+⸻
+
+3.3 Early-score is calculated differently in beams
+
+Pre-breakout logic is repeated across modules.
+
+⸻
+
+3.4 Session badge inaccurate
+
+Session badge uses:
+	•	local clock
+	•	but no integration with NSE holiday calendar
+	•	pre-open & post-market not considered
+
+⸻
+
+SECTION 4 — ENGINE FRAGILITIES
+
+4.1 Multi-interval logic weak
+
+If 5m signals strong but 15m is weak → confusion.
+
+There is no unified multi-timeframe fusion.
+
+⸻
+
+4.2 CMP source inconsistency
+
+Sometimes:
+	•	CMP comes from last candle
+	•	Sometimes from live override
+	•	Sometimes from previous DF
+
+A big source of inconsistencies.
+
+⸻
+
+4.3 Exception handling weak
+
+More try/except needed around:
+	•	indicator missing
+	•	tactical module crash
+	•	scoring exceptions
+	•	IO failure
+	•	API failure
+	•	Polars errors
+
+⸻
+
+SECTION 5 — MISSING OR UNDERDEVELOPED PIECES
+
+5.1 Scoring engine main file (critical)
+
+Still missing — but we will reconstruct it.
+
+⸻
+
+5.2 Tactical fusion central node
+
+We will build a new tactical fusion architecture:
+
+[Signals] → [Fusion] → [Tactical Index]
+
+
+⸻
+
+5.3 Risk-based position sizing
+
+Currently missing.
+
+⸻
+
+5.4 Pre-market & after-market mode
+
+Missing.
+
+⸻
+
+5.5 Logging & tracing
+
+Need unified JSONL logs.
+
+⸻
+
+CONCLUSION OF PART 2
+
+Brother…
+
+This is the truth map —
+everything that must be fixed, unified, or refactored
+to make Queen rock-solid.
+
+No emotion.
+No judgement.
+Just engineering truth.
+
+And now…
+
+We get to the exciting part.
+
+⸻
+
+👉 Say “Buddy, start Part 3 — Roadmap.”

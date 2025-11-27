@@ -3,7 +3,7 @@
 **Project**: `queen/` (Quantitative Trading Platform)
 **Version**: v9.6+
 **Architecture**: Modular, Registry-Driven, Settings-First
-**Last Updated**: 2025-11-13
+**Last Updated**: 2025-11-25
 
 ---
 
@@ -60,10 +60,13 @@ Essential platform infrastructure
 | Module | Key Functions | Purpose |
 |--------|---------------|---------|
 | `__init__.py` |  |  |
+| `fundamentals_cli.py` | `main` |  |
+| `g_upstox_client.py` | `__init__`, `get_auth_url`, `generate_access_token` |  |
 | `list_master.py` | `_print`, `_save`, `main` |  |
 | `list_signals.py` | `main` |  |
 | `list_technicals.py` | `parse_args`, `main` |  |
 | `live_monitor.py` | `main` |  |
+| `live_monitor_cli.py` | `main` |  |
 | `monitor_stream.py` | `_fmt`, `_render`, `_graceful` |  |
 | `morning_intel.py` | `main` |  |
 | `run_strategy.py` | `_dummy_ohlcv`, `_wire_minimals`, `main` |  |
@@ -81,7 +84,8 @@ Essential platform infrastructure
 | `alert_daemon.py` | `check`, `_parse_args`, `__init__` |  |
 | `alert_v2 copy.py` | `_backfill_days`, `_timeframe_key`, `_min_bars_for` |  |
 | `alert_v2.py` | `_backfill_days`, `_min_bars_for`, `_days_for_interval` |  |
-| `live_engine.py` | `_cpr_from_last_completed_session`, `_fmt`, `_compact_table` |  |
+| `live_engine.py` | `_fmt`, `_compact_table`, `_expanded_table` |  |
+| `live_engine_cli.py` | `_cpr_from_last_completed_session`, `_fmt`, `_compact_table` |  |
 | `morning_intel.py` | `_buy_sell_hold`, `_fmt_last`, `_ema_bias` |  |
 | `scheduler.py` | `run_cli` |  |
 
@@ -91,11 +95,56 @@ Essential platform infrastructure
 |--------|---------------|---------|
 | `__init__.py` |  |  |
 | `fetch_router.py` | `_chunk_list`, `_generate_output_path`, `run_cli` |  |
-| `nse_fetcher.py` | `_quote_url`, `_referer_url`, `_read_cache` |  |
+| `fundamentals_scraper.py` | `info`, `warning`, `error` |  |
+| `g_nse_fecther_cache.py` | `_clean_price`, `_quote_url`, `_referer_url` | Consolidated NSE fetcher combining: 1. Time-based disk cachi... |
+| `nse_fetcher.py` | `_clean_price`, `_quote_url`, `_referer_url` |  |
+| `nse_fetcher_new.py` | `_quote_url`, `_referer_url`, `_read_cache` |  |
+| `build_monthly_universe.py` | `normalize_series`, `compute_factors`, `build_score` | Quant-Core v1.2 — Monthly Active Universe Builder (Async + D... |
+| `convert_instruments_to_master.py` | `normalize_date`, `parse_nse_equity_file`, `print_summary` | Convert NSE raw equity CSV → master_active_list.json (Config... |
 | `upstox_fetcher.py` | `_min_rows_from_settings`, `_headers`, `_merge_unique_sort` |  |
 | `instruments.py` | `_instrument_path_for`, `_all_instrument_paths`, `_read_instruments` |  |
 
 #### `queen/services/__init__.py`
+
+#### `queen/services/bible_engine.py`
+
+**Classes:**
+- `class SwingPoints`
+
+**Functions:**
+- `def _swing_points(df: pl.DataFrame, window: int=3, max_points: int=5)`
+- `def _slope_sign(values: List[float])`
+- `def _classify_structure(swings: SwingPoints, close: float, cpr: Optional[float], vwap: Optional[float])`
+- `def compute_structure_block(df: pl.DataFrame, indicators: Optional[Dict[str, Any]]=None, *, lookback: int=60)`
+- `def _safe_pct_diff(a: Optional[float], b: Optional[float])`
+- `def _bias_from_above_below(price: Optional[float], ref: Optional[float], up_thresh: float=0.3, dn_thresh: float=-0.3)`
+- `def _strength_from_distance(price: Optional[float], ref: Optional[float], tight: float=0.5, medium: float=1.5, strong: float=3.0)`
+- `def compute_trend_block(indicators: Dict[str, Any])`
+- `def compute_vol_block(df: pl.DataFrame, indicators: Optional[Dict[str, Any]]=None)`
+- `def compute_risk_block(structure: Dict[str, Any], trend: Dict[str, Any], vol: Dict[str, Any], indicators: Optional[Dict[str, Any]]=None, pos: Optional[Dict[str, Any]]=None)`
+- `def compute_alignment_block(indicators: Dict[str, Any])`
+- `def trade_validity_block(metrics: Dict[str, Any])`
+- `def compute_indicators_plus_bible(df: pl.DataFrame, base_indicators: Optional[Dict[str, Any]]=None, *, symbol: Optional[str]=None, interval: str='15m', pos: Optional[Dict[str, Any]]=None)`
+
+#### `queen/services/cockpit_row.py`
+
+**Functions:**
+- `def build_cockpit_row(symbol: str, df: pl.DataFrame, *, interval: str='15m', book: str='all', tactical: Optional[Dict[str, Any]]=None, pattern: Optional[Dict[str, Any]]=None, reversal: Optional[Dict[str, Any]]=None, volatility: Optional[Dict[str, Any]]=None, pos: Optional[Dict[str, Any]]=None)`
+- `def _format_risk_summary(row: Dict[str, Any])`
+
+#### `queen/services/enrich_instruments.py`
+
+**Functions:**
+- `def _safe_float(v: Any)`
+- `def _from_df(df: pl.DataFrame)`
+- `def _from_nse(symbol: str)`
+- `def enrich_instrument_snapshot(symbol: str, base: Dict[str, Any], *, df: Optional[pl.DataFrame]=None)`
+
+#### `queen/services/enrich_tactical.py`
+
+**Functions:**
+- `def _merge(dst: Dict[str, Any], src: Optional[Dict[str, Any]])`
+- `def enrich_indicators(base: Dict[str, Any], *, tactical: Optional[Dict[str, Any]]=None, pattern: Optional[Dict[str, Any]]=None, reversal: Optional[Dict[str, Any]]=None, volatility: Optional[Dict[str, Any]]=None)`
 
 #### `queen/services/forecast.py`
 
@@ -112,20 +161,60 @@ Essential platform infrastructure
 **Functions:**
 - `def load_history(max_items: int=500)`
 
+#### `queen/services/ladder_state-newgpt.py`
+
+**Classes:**
+- `class LadderState`
+  - `def label(self, side: str='LONG')`
+
+**Functions:**
+- `def _tf_priority(tf: str)`
+- `def _today_trading_date()`
+- `def label(self, side: str='LONG')`
+- `def _reset_if_new_day(state: LadderState, trading_date: date)`
+- `def _extract_targets_t1_t3(row: Dict[str, Any])`
+- `def _extend_static_to_t6(t1: float, t2: float, t3: float, side: str)`
+- `def _stage_from_price_ext(price: float, levels: List[float], side: str)`
+- `def _true_range(h: float, l: float, pc: float | None)`
+- `def _is_directional_wrb(*, last_open, last_high, last_low, last_close, prev_close, atr, side, wrb_mult=1.5, body_ratio_min=0.55)`
+- `def augment_targets_state(row: Dict[str, Any], interval: str)`
+
+#### `queen/services/ladder_state.py`
+
+**Classes:**
+- `class LadderState`
+  - `def label(self, side: str='LONG')`
+
+**Functions:**
+- `def _tf_priority(tf: str)`
+- `def _today_trading_date()`
+- `def label(self, side: str='LONG')`
+- `def _reset_if_new_day(state: LadderState, trading_date: date)`
+- `def _extract_targets_t1_t3(row: Dict[str, Any])`
+- `def _extend_static_to_t6(t1: float, t2: float, t3: float, side: str)`
+- `def _stage_from_price_ext(price: float, levels: List[float], side: str)`
+- `def _format_targets_text(tg: Dict[str, Any] | None, *, hits: Dict[str, bool] | None=None, decimals: int=1, prefix: str='T')`
+- `def _true_range(last_high: float, last_low: float, prev_close: float | None)`
+- `def _is_directional_wrb(*, last_open: float, last_high: float, last_low: float, last_close: float, prev_close: float | None, atr: float, side: str, wrb_mult: float=1.5, body_ratio_min: float=0.55)`
+- `def augment_targets_state(row: Dict[str, Any], interval: str)`
+
+#### `queen/services/live copy.py`
+
+**Functions:**
+- `def _min_bars(interval_min: int)`
+- `def structure_and_targets(last_close_val: float, cpr, vwap, rsi, atr, obv)`
+- `def _recompute_cmp_sensitive(row: Dict[str, Any])`
+
 #### `queen/services/live.py`
 
 **Functions:**
 - `def _min_bars(interval_min: int)`
-- `def _safe_float(v)`
-- `def _ctx_from_value(cmp_val: float | None, ref: float | None, eps_pct: float=0.1)`
-- `def _cpr_ctx_with_fallback(cmp_val: float | None, cpr_pp: float | None, vwap: float | None)`
-- `def _ensure_min_width_with_atr(row: Dict, atr: Optional[float])`
+- `def structure_and_targets(last_close_val: float, cpr, vwap, rsi, atr, obv)`
+- `def _recompute_cmp_sensitive(row: Dict[str, Any])`
 
 #### `queen/services/morning.py`
 
 **Functions:**
-- `def _read_json(path: Path, default)`
-- `def _write_json(path: Path, data)`
 - `def _archive_yesterday_signals(now_ist: datetime)`
 - `def _trend_last_n(n: int=5)`
 - `def _weekly_gauge(n: int=7)`
@@ -137,21 +226,36 @@ Essential platform infrastructure
 **Functions:**
 - `def _last(series: pl.Series)`
 - `def _ema_last(df: pl.DataFrame, period: int, column: str='close')`
+- `def _daily_ohlc_from_intraday(df: pl.DataFrame)`
+- `def _daily_risk_snapshot(df: pl.DataFrame, period: int=14)`
 - `def compute_indicators(df: pl.DataFrame)`
 - `def _normalize_signal(payload: Dict | None, name: str)`
 - `def _fallback_early(df: pl.DataFrame, cmp_: float, vwap_: Optional[float])`
 - `def _early_bundle(df: pl.DataFrame, cmp_: float, vwap_: Optional[float])`
-- `def score_symbol(indd: Dict[str, float | str])`
+- `def compute_indicators_plus_bible(df: pl.DataFrame, interval: str='15m', *, symbol: Optional[str]=None, pos: Optional[Dict[str, Any]]=None)`
+- `def score_symbol(indd: Dict[str, Any])`
 - `def _ladder_from_base(base: float, atr: Optional[float])`
 - `def _non_position_entry(cmp_: float, vwap: Optional[float], ema20: Optional[float], cpr: Optional[float], atr: Optional[float])`
-- `def action_for(symbol: str, indd: Dict[str, float | str], book: str='all', use_uc_lc: bool=True)`
+- `def compute_indicators_plus_bible(df: pl.DataFrame, interval: str='15m', *, symbol: Optional[str]=None, pos: Optional[Dict[str, Any]]=None)`
+- `def action_for(symbol: str, indd: Dict[str, Any], book: str='all', use_uc_lc: bool=True)`
 
 #### `queen/services/symbol_scan.py`
 
 **Functions:**
 - `def _min_bars_for(rule: Rule)`
-- `def _days_for_interval(interval: str, need_bars: int)`
 - `def _window(interval: str, need_bars: int)`
+
+#### `queen/services/tactical_pipeline.py`
+
+**Functions:**
+- `def pattern_block(df: pl.DataFrame, indicators: Dict[str, Any] | None=None)`
+- `def trend_block(df: pl.DataFrame, indicators: Dict[str, Any] | None=None)`
+- `def alignment_block(df: pl.DataFrame, indicators: Dict[str, Any] | None=None)`
+- `def reversal_block(df: pl.DataFrame, indicators: Dict[str, Any] | None=None)`
+- `def volatility_block(df: pl.DataFrame, indicators: Dict[str, Any] | None=None)`
+- `def risk_block(df: pl.DataFrame, indicators: Dict[str, Any] | None, structure: Dict[str, Any] | None, trend: Dict[str, Any] | None, vol: Dict[str, Any] | None, pos: Dict[str, Any] | None=None)`
+- `def tactical_block(metrics: Dict[str, Any], interval: str='15m')`
+- `def compute_bible_blocks(df: pl.DataFrame, indicators: Dict[str, Any], interval: str='15m')`
 
 #### `queen/strategies/fusion.py`
 
@@ -213,6 +317,12 @@ Usage:
 - `def empty_df()`
 - `def summary(df: pl.DataFrame, name: str='candles')`
 
+#### `queen/helpers/candles.py`
+
+**Functions:**
+- `def ensure_sorted(df: pl.DataFrame, ts_col: str='timestamp')`
+- `def last_close(df: pl.DataFrame)`
+
 #### `queen/helpers/common.py`
 
 **Functions:**
@@ -228,6 +338,147 @@ Usage:
 
 **Functions:**
 - `def warn_if_same_day_eod(from_date: str | date | None, to_date: str | date | None)`
+
+#### `queen/helpers/fundamentals_adapter.py`
+
+**Functions:**
+- `def _deep_get(d: Dict[str, Any], path: List[str])`
+- `def _deep_get_dot(d: Dict[str, Any], dot_path: str)`
+- `def _latest_non_null(v: Any)`
+- `def _promote_latest_series(out: Dict[str, Any], tbl: Dict[str, Any])`
+- `def _extract_latest_period(series: Dict[str, Any])`
+- `def to_row(m: Dict[str, Any])`
+
+#### `queen/helpers/fundamentals_polars_engine.py`
+
+**Functions:**
+- `def _read_json(p: Path)`
+- `def _validate_or_fallback(raw: Dict[str, Any], source: str)`
+- `def _is_numeric_like_str(s: str)`
+- `def _infer_dtype_for_col(values: List[Any], col: str)`
+- `def _build_safe_schema(rows: List[Dict[str, Any]])`
+- `def _ensure_symbol_sector(df: pl.DataFrame)`
+- `def _numeric_candidates(df: pl.DataFrame)`
+- `def _cast_numeric_candidates(df: pl.DataFrame)`
+- `def load_one_processed(processed_dir: Union[str, Path], symbol: str)`
+- `def to_polars_row(symbol_fund_json: Dict[str, Any])`
+- `def build_df_from_rows(rows: Iterable[Dict[str, Any]])`
+- `def build_df_from_all_processed(processed_dir: Union[str, Path])`
+- `def load_all(processed_dir: Union[str, Path])`
+
+#### `queen/helpers/fundamentals_registry.py`
+
+**Classes:**
+- `class Logger`
+  - `def info(self, msg)`
+  - `def warning(self, msg)`
+  - `def error(self, msg)`
+- `class FundamentalsRegistry`
+  - `def __init__(self)`
+  - `def build(self, df: pl.DataFrame, metric_columns: Sequence[str])`
+  - `def _reset(self, reason: str)`
+  - `def sector_stats(self, sector: str)`
+  - `def global_mean(self, metric: str)`
+
+**Functions:**
+- `def info(self, msg)`
+- `def warning(self, msg)`
+- `def error(self, msg)`
+- `def _pick_col(df: pl.DataFrame, candidates: Sequence[str])`
+- `def __init__(self)`
+- `def build(self, df: pl.DataFrame, metric_columns: Sequence[str])`
+- `def _reset(self, reason: str)`
+- `def sector_stats(self, sector: str)`
+- `def global_mean(self, metric: str)`
+
+#### `queen/helpers/fundamentals_schema.py`
+
+**Classes:**
+- `class FundamentalsModel(BaseModel)`
+  - `def _norm_flat_metrics(cls, v: Any)`
+  - `def _norm_table_series(cls, v: Any)`
+  - `def _norm_shareholding(cls, v: Any)`
+
+**Functions:**
+- `def _clean(x: Any)`
+- `def _coerce_float(x: Any)`
+- `def _norm_flat_metrics(cls, v: Any)`
+- `def _norm_table_series(cls, v: Any)`
+- `def _norm_shareholding(cls, v: Any)`
+
+#### `queen/helpers/fundamentals_timeseries_engine.py`
+
+**Functions:**
+- `def _is_series_dict(x: Any)`
+- `def _series_values(series_dict: Dict[str, Any])`
+- `def _first_last_slope(vals: List[float])`
+- `def _qoq_accel(vals: List[float])`
+- `def _cv(vals: List[float])`
+- `def _pick_series_from_table(table: Any, candidates: Sequence[str])`
+- `def _trend_label(slope: Optional[float], accel: Optional[float])`
+- `def _slope_expr(table_col: str, candidates: Sequence[str], *, out_name: str)`
+- `def _accel_expr(table_col: str, candidates: Sequence[str], *, out_name: str)`
+- `def _cv_expr(table_col: str, candidates: Sequence[str], *, out_name: str)`
+- `def _label_expr(slope_col: str, accel_col: str, *, out_name: str)`
+- `def add_timeseries_features(df: pl.DataFrame)`
+- `def add_timeseries_and_score(df: pl.DataFrame, scorer_fn)`
+
+#### `queen/helpers/gemini_schema_adapter.py`
+
+> Queen Schema Adapter — Unified Broker Schema Bridge (Refactored)
+------------------------------------------------------
+✅ Imports shared helpers from schema_helper.py (DRY)
+✅ Focuses on candle-specific logic (e.g., interval parsing, candle normalization)
+
+**Classes:**
+- `class UpstoxAPIError(Exception)`
+  - `def __init__(self, code: str, message: str | None=None)`
+
+**Functions:**
+- `def _load_schema()`
+- `def _parse_range_token(tok: str)`
+- `def _collect_intraday_supported()`
+- `def _collect_historical_supported()`
+- `def get_supported_intervals(unit: str | None=None, *, intraday: bool | None=None)`
+- `def validate_interval(unit: str, interval: int, *, intraday: bool | None=None)`
+- `def _normalize(candles: list[list[Any]])`
+- `def to_candle_df(candles: list[list[Any]], symbol: str)`
+- `def finalize_candle_df(df: pl.DataFrame, symbol: str, isin: str)`
+- `def __init__(self, code: str, message: str | None=None)`
+- `def handle_api_error(code: str)`
+- `def run_cli()`
+
+#### `queen/helpers/gemini_schema_helper.py`
+
+> Common helpers for Polars DataFrame manipulation, timestamp parsing,
+and schema drift detection, shared between different broker schema adapters.
+
+**Functions:**
+- `def _safe_select(df: pl.DataFrame, cols: list[str])`
+- `def _safe_parse(df: pl.DataFrame, column: str='timestamp')`
+- `def _checksum(cols: list[str])`
+- `def _detect_drift(cols: list[str], drift_log_path: Path)`
+- `def _log_drift(cols: list[str], drift_log_path: Path)`
+- `def df_summary(df: pl.DataFrame, name='DataFrame')`
+- `def print_summary(df: pl.DataFrame, console: Console, title='Schema Summary')`
+
+#### `queen/helpers/gemini_schema_options_adapter.py`
+
+> Queen Schema Options Adapter — Unified Options Schema Bridge (Refactored)
+-------------------------------------------------------------
+✅ Imports shared helpers from schema_helper.py (DRY)
+✅ Focuses on options-specific logic (e.g., contract building, error mapping)
+
+**Classes:**
+- `class UpstoxOptionsAPIError(Exception)`
+  - `def __init__(self, code: str, message: str | None=None)`
+
+**Functions:**
+- `def _load_schema()`
+- `def to_contract_df(data: list[dict[str, Any]], key_col: str)`
+- `def __init__(self, code: str, message: str | None=None)`
+- `def handle_api_error(code: str)`
+- `def run_cli()`
 
 #### `queen/helpers/intervals.py`
 
@@ -257,6 +508,7 @@ Usage:
 - `def _p(path: str | Path)`
 - `def ensure_dir(path: str | Path)`
 - `def _atomic_write_bytes(path: Path, data: bytes)`
+- `def write_json_atomic(path: Path | str, obj)`
 - `def read_json(path: str | Path)`
 - `def write_json(data: Any, path: str | Path, *, indent: int=2, atomic: bool=True)`
 - `def safe_write_parquet(df: pl.DataFrame, path: str | Path)`
@@ -431,6 +683,19 @@ Cache-enabled with 24h TTL
 - `def save_cache(cache: Dict[str, Dict[str, Any]])`
 - `def test_cli()`
 
+#### `queen/helpers/ta_math.py`
+
+**Functions:**
+- `def to_np(x: ArrayLike, *, dtype=float)`
+- `def sma(series: ArrayLike, window: int, *, allow_short: bool=True)`
+- `def ema(series: ArrayLike, span: int)`
+- `def wilder_ema(series: ArrayLike, period: int)`
+- `def true_range(high: ArrayLike, low: ArrayLike, prev_close: ArrayLike)`
+- `def atr_wilder(high: ArrayLike, low: ArrayLike, close: ArrayLike, period: int=14)`
+- `def normalize_0_1(x: ArrayLike, *, eps: float=1e-09)`
+- `def normalize_symmetric(x: ArrayLike, *, eps: float=1e-09)`
+- `def gradient_norm(x: ArrayLike, *, eps: float=1e-09)`
+
 #### `queen/helpers/tactical_regime_adapter.py`
 
 **Classes:**
@@ -471,6 +736,29 @@ Cache-enabled with 24h TTL
 ## Server Components
 
 Web server and API layer
+
+#### `queen/server/g_fastapi_upstox.py`
+
+**Classes:**
+- `class AuthConfig`
+- `class APIConfig`
+- `class UpstoxClient`
+  - `def __init__(self, auth_config: AuthConfig, api_config: APIConfig)`
+  - `def generate_auth_url(self)`
+  - `def exchange_code_for_token(self, auth_code: str)`
+  - `def _make_request(self, endpoint: str, params: Dict[str, Any])`
+  - `def get_full_market_quote(self, instrument_keys: List[str])`
+  - `def get_ltp_v3(self, instrument_keys: List[str])`
+
+**Functions:**
+- `def __init__(self, auth_config: AuthConfig, api_config: APIConfig)`
+- `def generate_auth_url(self)`
+- `def exchange_code_for_token(self, auth_code: str)`
+- `def _make_request(self, endpoint: str, params: Dict[str, Any])`
+- `def get_full_market_quote(self, instrument_keys: List[str])`
+- `def get_ltp_v3(self, instrument_keys: List[str])`
+- `def run_market_data_tasks(access_token: str)`
+- `def home()`
 
 #### `queen/server/main.py`
 
@@ -542,6 +830,8 @@ import-time side effects. Import submodules directly:
   from queen.settings import indicators as IND
   from queen.settings import timeframes as TF
 
+#### `queen/settings/cockpit_schema.py`
+
 #### `queen/settings/formulas.py`
 
 **Functions:**
@@ -552,6 +842,8 @@ import-time side effects. Import submodules directly:
 - `def get_pattern(name: str)`
 - `def get_meta_layer(name: str)`
 - `def validate()`
+
+#### `queen/settings/fundamentals_map.py`
 
 #### `queen/settings/indicator_policy.py`
 
@@ -608,6 +900,7 @@ import-time side effects. Import submodules directly:
 - `def required_candles(name: str, group: str | None=None)`
 - `def contexts_for(name: str, group: str | None=None)`
 - `def required_lookback(name: str, context_key: str)`
+- `def role_for(name: str, group: str | None=None)`
 - `def validate()`
 
 #### `queen/settings/profiles.py`
@@ -671,6 +964,8 @@ import-time side effects. Import submodules directly:
 - `def window_days_for_tf(token: str, bars: int)`
 - `def get_timeframe(name: str)`
 - `def list_timeframes()`
+- `def context_to_token(context: Optional[str], default: str=_DEFAULT_TOKEN)`
+- `def token_to_context(token: Optional[str], *, domain: str='intraday', default: str='intraday_15m')`
 
 #### `queen/settings/universe.py`
 
@@ -695,6 +990,9 @@ import-time side effects. Import submodules directly:
 **Functions:**
 - `def get_thresholds(tf: str | None=None)`
 - `def fusion_weights_for(present_tfs: list[str])`
+- `def reversal_weights()`
+- `def tactical_component_weights()`
+- `def tactical_normalization()`
 
 ---
 
@@ -716,6 +1014,36 @@ Notes:
     • NAME = "friendly_name"; def compute(...): ...
       or
     • def compute_<name>(df, **kwargs): ...
+
+#### `queen/technicals/fundamentals_gate.py`
+
+**Classes:**
+- `class Logger`
+  - `def info(self, msg)`
+  - `def warning(self, msg)`
+  - `def error(self, msg)`
+
+**Functions:**
+- `def info(self, msg)`
+- `def warning(self, msg)`
+- `def error(self, msg)`
+- `def _pick_col(df: pl.DataFrame, candidates: Sequence[str])`
+- `def _ensure_symbol_col(df: pl.DataFrame, preferred: str='Symbol')`
+- `def fundamentals_overlay_df(fundamentals_df: pl.DataFrame, *, symbol_col: str='Symbol')`
+- `def fundamentals_gate_and_boost(joined: pl.DataFrame, *, hard_gate: bool=True, boost_map: Optional[Dict[str, float]]=None, score_col: str='Technical_Score', alert_col: str='Technical_Alert', out_score_col: Optional[str]=None, out_alert_col: str='Final_Alert')`
+
+#### `queen/technicals/fundamentals_score_engine.py`
+
+**Functions:**
+- `def _safe_z(x: Optional[float], mean: Optional[float], std: Optional[float])`
+- `def _sigmoid(z: float)`
+- `def _bucket(score: float)`
+- `def _coalesce(*vals)`
+- `def add_zscores(df: pl.DataFrame)`
+- `def add_intrinsic_score(df: pl.DataFrame)`
+- `def add_powerscore(df: pl.DataFrame)`
+- `def add_pass_fail(df: pl.DataFrame)`
+- `def score_and_filter(df: pl.DataFrame)`
 
 #### `queen/technicals/master_index.py`
 
@@ -755,12 +1083,12 @@ Notes:
 | `breadth_cumulative.py` | `compute_breadth`, `summarize_breadth` |  |
 | `breadth_momentum.py` | `compute_breadth_momentum`, `summarize_breadth_momentum`, `compute_regime_strength` |  |
 | `core.py` | `sma`, `ema`, `_slope` |  |
-| `keltner.py` | `ema`, `true_range`, `compute_atr` |  |
-| `momentum_macd.py` | `ema`, `compute_macd`, `summarize_macd` |  |
-| `state.py` | `volume_delta`, `_compute_rsi_series`, `rsi_density` |  |
+| `keltner.py` | `compute_keltner`, `summarize_keltner`, `compute_volatility_index` |  |
+| `momentum_macd.py` | `macd_config`, `compute_macd`, `summarize_macd` |  |
+| `state.py` | `_ensure_series`, `_pattern_bias`, `volume_delta` |  |
 | `volatility_fusion.py` | `compute_volatility_fusion`, `summarize_volatility` |  |
 | `volume_chaikin.py` | `_ema_np`, `chaikin`, `summarize_chaikin` |  |
-| `volume_mfi.py` | `_tf_from_context`, `mfi`, `compute_mfi` |  |
+| `volume_mfi.py` | `mfi`, `compute_mfi`, `summarize_mfi` |  |
 
 ### Pattern Detection
 
@@ -780,9 +1108,10 @@ Notes:
 | `cmv.py` | `_norm_pm1`, `compute_cmv` |  |
 | `liquidity_breadth.py` | `compute_liquidity_breadth_fusion`, `_norm01` |  |
 | `market_regime.py` | `_norm01`, `compute_market_regime` |  |
+| `pattern_fusion.py` | `compute_pattern_component` |  |
 | `pre_breakout.py` | `_boll_params`, `_ensure_bollinger`, `compute_pre_breakout` |  |
 | `registry.py` | `_search_packages`, `_canonical`, `_register` |  |
-| `reversal_summary.py` | `_safe_last`, `summarize_reversal_stacks` |  |
+| `reversal_summary.py` | `_pattern_bias`, `_last_float`, `_last_bool` |  |
 | `__init__.py` |  |  |
 | `absorption.py` | `detect_absorption_zones`, `summarize_absorption` |  |
 | `ai_inference.py` | `_model_path_default`, `load_model`, `prepare_features` |  |
@@ -791,7 +1120,7 @@ Notes:
 | `ai_trainer.py` | `_event_log_path`, `_model_path`, `load_event_log` |  |
 | `bias_regime.py` | `compute_bias_regime` |  |
 | `cognitive_orchestrator.py` | `_maybe`, `_import_inference`, `_import_trainer` | Contract: single-cycle runner ----------------------------- ... |
-| `core.py` | `_safe_read_json`, `_zscore`, `_minmax` | Adaptive Tactical Fusion Engine — blends regime (RScore), vo... |
+| `core.py` | `_zscore`, `_minmax`, `compute_tactical_index` | Adaptive Tactical Fusion Engine — blends regime (RScore), vo... |
 | `divergence.py` | `detect_divergence`, `summarize_divergence` |  |
 | `event_log.py` | `_last`, `log_tactical_events` |  |
 | `exhaustion.py` | `detect_exhaustion_bars` |  |
@@ -823,6 +1152,15 @@ and market-time logic, ensuring basic functional integrity without pytest.
 
 **Functions:**
 - `def run_all()`
+
+#### `queen/tests/fundamentals_devcheck.py`
+
+**Functions:**
+- `def _parse_args()`
+- `def _preview_extracted(symbol: str, processed_dir: Path)`
+- `def _warn_if_null_metrics(df: pl.DataFrame, thresh: float)`
+- `def _load_registry(df: pl.DataFrame)`
+- `def main()`
 
 #### `queen/tests/market_playback.py`
 
@@ -963,6 +1301,23 @@ Now includes:
 #### `queen/tests/smoke_fetch_utils.py`
 
 **Functions:**
+- `def main()`
+
+#### `queen/tests/smoke_fundamentals.py`
+
+**Classes:**
+- `class Logger`
+  - `def info(self, msg)`
+  - `def warning(self, msg)`
+  - `def error(self, msg)`
+
+**Functions:**
+- `def info(self, msg)`
+- `def warning(self, msg)`
+- `def error(self, msg)`
+- `def _parse_args()`
+- `def _preview_extracted(symbol: str, processed_dir: Path)`
+- `def _warn_if_null_metrics(df: pl.DataFrame)`
 - `def main()`
 
 #### `queen/tests/smoke_fusion_all_latency.py`
@@ -1385,8 +1740,8 @@ When asking an AI to modify or extend this system:
 ---
 
 ## File Count Summary
-- **Total Python Files**: 83
-- **Core Modules**: 137
+- **Total Python Files**: 85
+- **Core Modules**: 170
 - **Test Files**: 1
 - **Settings/Configs**: 1
 - **Helpers/Utilities**: 1

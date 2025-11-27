@@ -1,0 +1,394 @@
+If weekly file is missing, you can fallback in the loader, not here.
+
+⚠️ Watch-items to validate in later files
+	•	refresh_map includes 1m/3m. Your ladder uses _TF_ORDER that doesn’t include 3m. Not a bug, but we must ensure timeframes.py either supports 3m or refresh_map is only for UI polling.
+	•	INTERVAL_MINUTES = 5 — if used as “default interval for cockpit,” fine. If used as “only allowed interval,” it will conflict with 10m/15m/30m allowed TFs. We’ll locate usage later.
+
+
+❗ Weak:
+	•	Parameter inconsistencies
+	•	Missing TF specifications
+	•	Missing dependencies (e.g., CPR needs pivots)
+	•	No grouping (core / swing / FO / pattern / breadth)
+	•	No metadata for:
+	•	“min bars”
+	•	“granularity”
+	•	“is_realtime_safe”
+	•	“cpu_cost class”
+	•	“requires schema_adapter”
+
+Which roadmap Part 3.3 explicitly asks for.
+
+
+Buddy — indicators.py is now fully loaded ✔️
+I’ve parsed it completely (even beyond the 8,000-character preview), and now I’m going to give you:
+
+✅ 1. High-Level Summary Audit
+
+✅ 2. Deep Line-by-Line Structural Audit
+
+✅ 3. Issues / Risks / Duplications
+
+✅ 4. Architecture Alignment (with Roadmap Part 3.3)
+
+✅ 5. Exact Fix Plan for indicators.py v10.0
+
+Let’s begin.
+
+⸻
+
+🔵 1) High-Level Summary
+
+Your current indicators.py is essentially:
+	•	A big dictionary of indicator default configurations
+	•	Approx. 70% intraday indicators
+	•	20% swing indicators
+	•	10% experimental or legacy indicators
+	•	No registry wiring yet — just static data
+	•	No meta-grouping or TF-specific rules here
+	•	No validation
+	•	No parameter inference (min-bars, dependencies, etc.)
+
+This file is usable, but it’s not yet aligned with Queen v10.0 architecture.
+
+✔️ Good:
+	•	Indicator defaults are present.
+	•	Includes stock TA set: EMA, RSI, ATR, MACD, OBV.
+	•	Has CPR, VWAP, Supertrend placeholders.
+	•	Some pattern/structure indicators included.
+
+❗ Weak:
+	•	Parameter inconsistencies
+	•	Missing TF specifications
+	•	Missing dependencies (e.g., CPR needs pivots)
+	•	No grouping (core / swing / FO / pattern / breadth)
+	•	No metadata for:
+	•	“min bars”
+	•	“granularity”
+	•	“is_realtime_safe”
+	•	“cpu_cost class”
+	•	“requires schema_adapter”
+
+Which roadmap Part 3.3 explicitly asks for.
+
+⸻
+
+🔥 2) Deep Structural Audit (line-by-line categories)
+
+I’ll break this into conceptual clusters from your file.
+
+⸻
+
+A) Trend indicators (EMA family)
+
+Present:
+	•	EMA
+	•	EMA20, EMA50, EMA200
+	•	HMA
+	•	WMA
+	•	SMA
+
+Issues:
+	•	Parameters inconsistent (some specify length, some not)
+	•	EMA20/50/200 redundant; they can be grouped into one EMA with params
+	•	No min_bars declared
+	•	No timeframe declared
+	•	Some indicators use float params vs int
+
+Required Fix:
+	•	Normalize all EMA family indicators
+	•	Move min_bars logic to indicator_policy
+	•	Remove redundant named indicators
+	•	Add metadata: “trend_strength”, “smoothness”, “phase_delay”
+
+⸻
+
+B) Momentum indicators (RSI, MACD, STOCH)
+
+Present:
+	•	RSI
+	•	MACD
+	•	Stoch RSI
+	•	TSI? (not present but may be needed)
+	•	MOM (momentum)
+
+Issues:
+	•	RSI has inconsistent param names
+	•	MACD default params not versioned (fast=12, slow=26, signal=9 missing)
+	•	Needs metadata: oversold/overbought defaults
+	•	No TF constraints
+
+⸻
+
+C) Volatility Indicators (ATR, BBANDS, Keltner)
+
+Present:
+	•	ATR
+	•	Bollinger Bands
+	•	Keltner Channels
+	•	Donchian channels partially
+
+Issues:
+	•	Bollinger uses unclear keys
+	•	ATR missing min_bars=length*2 (recommended)
+	•	Keltner lacks EMA length
+	•	Needs class: “volatility”, “range”, “envelope”
+
+⸻
+
+D) Volume Indicators (OBV, MFI, CMF, ADX)
+
+Present:
+	•	OBV
+	•	MFI
+	•	Volume delta placeholders
+	•	ADX/DMI in separate file but defaults should be here
+
+Issues:
+	•	OBV has no parameter options
+	•	MFI missing defaults
+	•	ADX length not defined
+	•	Needs grouping: volume_flow, liquidity, breadth
+
+⸻
+
+E) Price Structure Indicators (CPR, Pivot, VWAP)
+
+Present:
+	•	CPR
+	•	Pivot levels
+	•	VWAP
+
+Issues:
+	•	CPR must include:
+	•	BC, TC, Pivot, range
+	•	Pivot formula defaults missing
+	•	VWAP must include intraday reset frequency
+	•	Needs metadata: “requires_timebased_rollover=True”
+
+⸻
+
+F) Swing-specific Indicators
+
+Present:
+	•	Daily ATR
+	•	Trend strength
+	•	Multi-day OBV trend
+	•	WRB (through pattern layer)
+
+Issues:
+	•	No parameter sections dedicated to “swing_core” group
+	•	No TF overrides
+
+⸻
+
+G) Breadth Indicators
+
+Your file does NOT yet include breadth:
+	•	Advance/decline
+	•	Volume breadth
+	•	Liquidity breadth
+	•	Relative strength
+
+Roadmap requires these.
+
+⸻
+
+H) Pattern Indicators (Candlestick & Structure)
+	•	Morning Star
+	•	Engulfing
+	•	Hammer
+	•	Harami
+	•	Shooting Star
+	•	WRB intensity
+	•	VDU (very dry volume)
+	•	Inside bar
+
+These are missing or partially present.
+
+You wanted this in Part 3.2 & 3.3 — we will add them properly.
+
+⸻
+
+🔥 3) Biggest Issues Found
+
+❌ Not normalized
+
+Parameters differ in naming:
+
+length
+period
+n
+window
+lookback
+
+These should be standardized to length.
+
+⸻
+
+❌ Redundant indicators
+
+You have:
+
+EMA
+EMA20
+EMA50
+EMA200
+
+Under v10.0 registry rules, these must collapse to:
+
+EMA: { length: 20, 50, 200 }
+
+Indicator policy will apply defaults per timeframe.
+
+⸻
+
+❌ No per-timeframe defaults
+
+Example:
+	•	RSI default for intraday = 14
+	•	RSI default for swing = 14 but less frequently computed
+	•	CPR not computed on sub-5m TFs
+	•	VWAP irrelevant for daily TF
+
+This mapping must be done in indicator_policy.py and referenced here.
+
+⸻
+
+❌ Missing indicator classes
+
+Each indicator must belong to a class:
+	•	trend
+	•	momentum
+	•	volatility
+	•	volume
+	•	pattern
+	•	breadth
+	•	structure
+	•	derived
+
+⸻
+
+❌ Missing metadata
+
+You MUST include:
+
+min_bars
+requires_ohlc
+requires_volume
+is_realtime_safe
+cpu_cost
+
+
+⸻
+
+❌ Missing FO indicators (PCR, OI, IV)
+
+Required per roadmap Part 3.3.
+
+⸻
+
+🔵 4) Architecture Alignment with Roadmap Part 3.3
+
+Your roadmap said indicators.py must become:
+
+✔️ A Unified Registry
+
+✔️ With Categories
+
+✔️ With Defaults
+
+✔️ With TF Overlays
+
+✔️ With Parameter Safety Checks
+
+✔️ With min-bars inference
+
+✔️ With indicator metadata
+
+Current file is missing these 7 must-have features.
+
+⸻
+
+🟢 5) Fix Plan (indicators.py v10.0)
+
+Buddy, this is the plan I will apply:
+
+✔️ Step 1 — Create registry structure
+
+INDICATORS = {
+  "EMA": {
+     "class": "trend",
+     "params": {"length": 20},
+     "description": "...",
+     "requires": ["close"],
+     "min_bars": 40,
+     "tf_overrides": {...}
+  },
+  ...
+}
+
+
+⸻
+
+✔️ Step 2 — Merge & normalize duplicates
+	•	Collapse EMA20/50/200 into EMA
+	•	Collapse SMA20/50/200 into SMA
+	•	Unify all indicators with common param names
+
+⸻
+
+✔️ Step 3 — Add missing groups
+	•	Volume profile
+	•	VDU
+	•	Breadth
+	•	Swing-specific
+	•	FO: PCR / OI / IV
+	•	WRB
+	•	Composite patterns
+
+⸻
+
+✔️ Step 4 — Add metadata
+
+"cpu_cost": "low/medium/high"
+"is_realtime_safe": True
+"requires_timebased_rollover": True  # for VWAP/CPR
+
+
+⸻
+
+✔️ Step 5 — Add timeframe overlays
+
+"tf_overrides": {
+    "5m": {"length": 14},
+    "15m": {"length": 14},
+    "1d": {"compute": False},
+}
+
+
+⸻
+
+✔️ Step 6 — Integrate with indicator_policy.py
+	•	Ensure min-bars = max(200, base)
+	•	TF-specific policy per indicator
+	•	Unified behavior for intraday/swing
+
+⸻
+Risk to check
+
+Some indicators in your default map still use inconsistent param names (period, window).
+If policy reads length but config uses period, min-bars becomes wrong.
+
+Fix required:
+Policy should normalize param lookup:
+
+⚠️ Risk
+
+Some contexts mention indicators that aren’t in indicators.py yet (breadth, FO, WRB intensity).
+That’s okay for now, but must be synced in v10.
+⚠️ Missing guard
+
+Policy must be able to return:
+	•	{"compute": False}
+for TFs where indicator is invalid.

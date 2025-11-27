@@ -11,23 +11,27 @@ from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
 
-'''def warn_if_same_day_eod(from_date: str | None, to_date: str | None) -> None:
-    """Emit a helpful warning if the request includes today's EOD."""
-    if not from_date or not to_date:
-        return
-    try:
-        today_ist = datetime.now(tz=IST).date()
-        f = date.fromisoformat(from_date)
-        t = date.fromisoformat(to_date)
-        if t >= today_ist:
-            log.warning(
-                "[EOD] You requested today's daily candle but EOD may not be published yet. "
-                "Use --mode intraday for live data, or re-run after market close."
-            )
-    except Exception:
-        # Best-effort warning: never fail the caller
-        return
-'''
+def ensure_datetime(value: datetime | None, *, tz: ZoneInfo | None = None) -> datetime | None:
+    """
+    Strict normalizer for datetime inputs.
+
+    - Accepts only `datetime` or `None`.
+    - Returns a timezone-aware datetime in the given tz (default: IST).
+    - Raises TypeError for any other type (str, date, etc.).
+
+    This is meant for NEW code paths so we keep them type-clean from day one.
+    """
+    if value is None:
+        return None
+
+    if not isinstance(value, datetime):
+        raise TypeError(
+            f"ensure_datetime expects a datetime or None, got {type(value)!r} with value={value!r}"
+        )
+
+    tz = tz or IST
+    return value.replace(tzinfo=tz) if value.tzinfo is None else value.astimezone(tz)
+
 
 def warn_if_same_day_eod(from_date: str | date | None, to_date: str | date | None) -> None:
     if not from_date or not to_date:

@@ -7,7 +7,9 @@ https://github.com/scrapy/scrapy?tab=readme-ov-file
 https://github.com/gocolly/colly
 https://github.com/apify/crawlee-python
 # Rust Re-implementations of Python Libraries for Performance
+https://github.com/ijl/orjson
 
+https://github.com/tracel-ai/burn (ML Library)
 ## ⚡ Copy-Paste Version for Documentation
 
 ### **DataFrames & Data Processing (Pandas/Spark Alternatives)**

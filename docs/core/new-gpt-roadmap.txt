@@ -1,0 +1,284 @@
+Perfect, buddy.
+We go straight for the throat of Queen v9.6 — the MOST CRITICAL path:
+
+🚀 PHASE 4.1 — CRITICAL PATH AUDIT
+
+(1) FETCH → (2) CANDLE → (3) TECHNICALS → (4) SCORING
+
+This is the ONLY path that affects:
+	•	Live Engine
+	•	Cockpit Live
+	•	Breakout detection
+	•	Intraday scoring
+	•	Supervisor / Daemon
+	•	Everything that must “never break”
+
+We stabilize this FIRST.
+
+Below is Part 1 of the detailed audit (FETCH).
+We will go step-by-step.
+Once you approve each part, we move to the next.
+
+⸻
+
+⭐ PART 1 — FETCH LAYER (UPSTOX + NSE + ROUTER)
+
+Buddy, the fetch layer is the current biggest cause of breakage because:
+
+1️⃣ fetch_router.py, upstox_fetcher.py, nse_fetcher.py all expect different data shapes
+	•	router wants: dict
+	•	upstox wants: dict → DF
+	•	nse wants: raw JSON
+	•	candle_adapter wants: DF or dict depending on code path
+
+This must be unified.
+
+2️⃣ Timeframe tokens differ
+	•	“5m”
+	•	“05m”
+	•	“5-minute”
+	•	“5min”
+	•	“INTRADAY_5”
+	•	uppercase vs lowercase
+
+This is a major breakage source.
+
+3️⃣ No canonical output format
+
+Some fetchers return:
+
+{symbol, tf, candles}
+
+Some return:
+
+{status, data}
+
+Some return a Polars DF alone.
+
+⸻
+
+✔ What works well today (we keep it):
+
+✓ Upstox API client (g_upstox_client.py)
+✓ NSE fetcher for quote-level data
+✓ router code that spins parallel threads
+✓ schema_adapter reading JSON definitions
+✓ market/gate logic & holidays
+
+These are fine and will not break.
+
+⸻
+
+❌ What must be fixed NOW before moving forward:
+
+🔥 Problem A — No Canonical Fetch Output
+
+Fetch needs to guarantee EXACT shape:
+
+THE ONLY ACCEPTABLE FETCH OUTPUT (v11 Contract)
+
+{
+  "symbol": "TATASTEEL",
+  "tf": "5m",
+  "df": <Polars DataFrame>,
+  "meta": {
+      "source": "upstox",
+      "fetched_at": "...",
+      "rows": 120,
+      "status": "OK"
+  }
+}
+
+EVERY fetcher must return this.
+EVERY downstream module must expect this.
+
+⸻
+
+🔥 Problem B — upstox_fetcher uses different column formats
+
+Current output varies:
+	•	sometimes OHLC lower-case
+	•	sometimes “open_price”, “high_price”
+	•	sometimes df schema not normalized
+	•	sometimes timestamps are string or INT ms
+
+This causes technicals to fail.
+
+MUST FIX → Candle Normalization
+
+We create a single unbreakable function:
+
+normalize_candles(df) → returns canonical Polars DF
+
+Canonical columns:
+
+ts (datetime)
+open (float)
+high (float)
+low (float)
+close (float)
+volume (float or int)
+
+
+⸻
+
+🔥 Problem C — fetch_router has missing imports + inconsistent modes
+
+You already experienced:
+	•	missing ensure_datetime
+	•	missing list_symbols_from_active_universe
+	•	missing logger
+	•	inconsistent mode: INTRADAY vs intraday
+	•	router tries to handle too many concerns
+
+We fix router by reducing its job to:
+
+✔ read symbols
+✔ read TF
+✔ run fetcher
+✔ return results
+
+Not technicals, not candle parsing, not backup/backfill.
+
+⸻
+
+🔥 Problem D — ZERO multi-threading in Upstox fetcher
+
+You mentioned this, and you’re right.
+
+router = multi-threaded
+BUT
+upstox_fetcher = sequential
+
+Meaning:
+for each symbol, each timeframe → each REST call is sequential → slow.
+
+We change this using ThreadPoolExecutor inside Upstox fetcher OR asyncio + httpx.
+
+⸻
+
+⭐ PART 1 — FETCH LAYER PLAN
+
+Here is EXACTLY how we’ll fix fetch WITHOUT breaking ANYTHING.
+
+⸻
+
+✔ STEP 1 — Restore all your original working fetch code
+
+You said you will revert settings.py / timeframes / fetch_router / upstox_fetcher to original.
+
+Perfect.
+
+We start from a SAFE, WORKING BASELINE.
+
+⸻
+
+✔ STEP 2 — Add NEW v11 functions WITHOUT touching existing ones
+
+We add:
+
+1) normalize_timeframe(tf)
+
+2) normalize_candles(df)
+
+3) fetch_unified_v11(symbol, tf)
+
+4) fetch_router_v11(symbols, tf)
+
+All clean. No breakage.
+Your old pipeline continues working.
+
+⸻
+
+✔ STEP 3 — After full audit, we slowly migrate layer-by-layer to v11
+
+Technicals → scoring → tactical → cockpit → server.
+
+No backward-compat hacks.
+No random shims.
+No breakage.
+
+Clean forward-only upgrades.
+
+⸻
+
+⭐ PART 2 — CANDLE ENGINE AUDIT (coming next)
+
+Once you confirm, next I will give:
+
+✔ Candle Canonical Schema v11
+
+✔ Candle Normalizer — ultra strict mode
+
+✔ DF → candle adapter map
+
+✔ Fix for timestamp handling (epoch ms / ISO / int)
+
+✔ Fix for missing candles
+
+✔ Fix for Polars dtype mismatches
+
+✔ Fix for OHLC naming inconsistencies
+
+This will make technicals stable.
+
+⸻
+
+⭐ PART 3 — TECHNICALS AUDIT
+
+We will:
+
+✔ Build Technicals Contract v11
+
+Every technical declares:
+
+INPUT: required columns
+OUTPUT: columns it adds
+MODE: row-wise / windowed / series / multi-column
+
+We will generate documentation for all 120 technical indicators from your files.
+
+⸻
+
+⭐ PART 4 — SCORING AUDIT
+
+We unify:
+	•	trend score
+	•	volume score
+	•	breakout quality score
+	•	volatility expansion score
+	•	regime bias
+	•	reversal stack score
+	•	liquidity breadth
+	•	participation strength
+
+into Scoring Engine v11.
+
+⸻
+
+⭐ Buddy — Before I continue to Part 2 (Candle Layer)…
+
+❓ Please confirm ONE thing:
+
+Do you want me to start generating the new v11 code
+
+but
+WITHOUT replacing ANY existing files
+(just adding new modules side-by-side)?
+
+YES / NO?
+
+If YES, I will generate:
+	•	queen/fetchers/upstox_fetcher_v11.py
+	•	queen/fetchers/fetch_router_v11.py
+	•	queen/candles/candle_normalizer.py
+	•	queen/settings/timeframes_v11.py
+
+all as NEW files — safe, isolated.
+
+You can migrate whenever ready.
+
+⸻
+
+Buddy, just say:
+“Yes, create v11 modules without touching existing code.”

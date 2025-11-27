@@ -10,6 +10,8 @@ queen/
 │   │   └── terminal/
 ├── cli/
 │   │   ├── __init__.py
+│   │   ├── fundamentals_cli.py
+│   │   ├── g_upstox_client.py
 │   │   ├── list_master.py
 │   │   ├── list_signals.py
 │   │   ├── list_technicals.py
@@ -43,13 +45,21 @@ queen/
 │   │   ├── __init__.py
 │   │   └── pattern_tactical_chain.py
 ├── docs/
+│   │   ├── core/
+│   │   │   │   │   ├── feedback-fixes.txt
+│   │   │   │   │   ├── part-1-n-part-2-road-map.txt
+│   │   │   │   │   ├── part-1.txt
+│   │   │   │   │   ├── part-2.txt
+│   │   │   │   │   ├── PRE_TODO.MD
+│   │   │   │   │   ├── roadmap.md
+│   │   │   │   │   ├── roadmap.txt
+│   │   │   │   │   └── TODO.MD
 │   │   ├── core_docs/
 │   │   │   │   │   ├── bible-flow.txt
 │   │   │   │   │   ├── master-todo.txt
 │   │   │   │   │   ├── quant.md
 │   │   │   │   │   ├── todo-index-20-11-2025-nov.txt
 │   │   │   │   │   └── upcoming-todo-20-11-2025-nov.txt
-│   │   ├── ai_documentation.md
 │   │   ├── alerts-fastapi.txt
 │   │   ├── ATR-DYNAMIC.png
 │   │   ├── Breakout_Bible_v10.pdf
@@ -61,7 +71,6 @@ queen/
 │   │   ├── daemons-todo.txt
 │   │   ├── developers_commands.md
 │   │   ├── documentation.md
-│   │   ├── folder_layout.md
 │   │   ├── git_commands.md
 │   │   ├── image.png
 │   │   ├── important-libraries.txt
@@ -93,8 +102,10 @@ queen/
 │   │   │   │   │   └── convert_instruments_to_master.py
 │   │   ├── __init__.py
 │   │   ├── fetch_router.py
+│   │   ├── fundamentals_scraper.py
+│   │   ├── g_nse_fecther_cache.py
 │   │   ├── nse_fetcher.py
-│   │   ├── nse_meta_cache.py
+│   │   ├── nse_fetcher_new.py
 │   │   └── upstox_fetcher.py
 ├── helpers/
 │   │   ├── __init__.py
@@ -102,6 +113,14 @@ queen/
 │   │   ├── candles.py
 │   │   ├── common.py
 │   │   ├── fetch_utils.py
+│   │   ├── fundamentals_adapter.py
+│   │   ├── fundamentals_polars_engine.py
+│   │   ├── fundamentals_registry.py
+│   │   ├── fundamentals_schema.py
+│   │   ├── fundamentals_timeseries_engine.py
+│   │   ├── gemini_schema_adapter.py
+│   │   ├── gemini_schema_helper.py
+│   │   ├── gemini_schema_options_adapter.py
 │   │   ├── instruments.py
 │   │   ├── intervals.py
 │   │   ├── io.py
@@ -116,8 +135,6 @@ queen/
 │   │   ├── ta_math.py
 │   │   ├── tactical_regime_adapter.py
 │   │   └── verify.py
-├── runtime/
-│   └── [runtime files...]
 ├── scrapers/
 │   │   ├── bse_batch_processor.py
 │   │   ├── bse_scraper.py
@@ -170,6 +187,7 @@ queen/
 │   │   │   │   │   │   │   │   │   └── upcoming.html
 │   │   │   │   │   ├── index.html
 │   │   │   │   │   └── summary.html
+│   │   ├── g_fastapi_upstox.py
 │   │   ├── main.py
 │   │   └── state.py
 ├── services/
@@ -180,8 +198,9 @@ queen/
 │   │   ├── enrich_tactical.py
 │   │   ├── forecast.py
 │   │   ├── history.py
-│   │   ├── ladder_state copy.py
+│   │   ├── ladder_state-newgpt.py
 │   │   ├── ladder_state.py
+│   │   ├── live copy.py
 │   │   ├── live.py
 │   │   ├── morning.py
 │   │   ├── scoring.py
@@ -191,6 +210,7 @@ queen/
 │   │   ├── __init__.py
 │   │   ├── cockpit_schema.py
 │   │   ├── formulas.py
+│   │   ├── fundamentals_map.py
 │   │   ├── indicator_policy.py
 │   │   ├── indicators.py
 │   │   ├── meta_controller_cfg.py
@@ -270,10 +290,13 @@ queen/
 │   │   ├── strategy/
 │   │   │   │   │   └── __init__.py
 │   │   ├── __init__.py
+│   │   ├── fundamentals_gate.py
+│   │   ├── fundamentals_score_engine.py
 │   │   ├── master_index.py
 │   │   └── registry.py
 ├── tests/
 │   │   ├── __init__.py
+│   │   ├── fundamentals_devcheck.py
 │   │   ├── market_playback.py
 │   │   ├── market_test.py
 │   │   ├── smoke_absorption.py
@@ -295,6 +318,7 @@ queen/
 │   │   ├── smoke_event_log.py
 │   │   ├── smoke_exhaustion_latency.py
 │   │   ├── smoke_fetch_utils.py
+│   │   ├── smoke_fundamentals.py
 │   │   ├── smoke_fusion_all_latency.py
 │   │   ├── smoke_fusion_latency.py
 │   │   ├── smoke_fusion_lbx.py

@@ -1,0 +1,193 @@
+{
+  "symbol": "GROWW",
+  "sector": "Financial Services Financial Services Capital Markets Stockbroking & Allied",
+  "top_ratios": {
+    "market_cap": 97500.0,
+    "current_price": 158.0,
+    "high": 194.0,
+    "low": 112.0,
+    "pe_ratio": 64.3,
+    "book_value": null,
+    "dividend_yield": 0.0,
+    "roce": 65.3,
+    "roe": 50.0,
+    "face_value": 2.0
+  },
+  "quarters": {
+    "q_op": {
+      "Sep 2024": 412.0,
+      "Jun 2025": 357.0,
+      "Sep 2025": 423.0
+    },
+    "q_opm": {
+      "Sep 2024": 0.51,
+      "Jun 2025": 0.57,
+      "Sep 2025": 0.61
+    },
+    "q_interest": {
+      "Sep 2024": 1.0,
+      "Jun 2025": 0.0,
+      "Sep 2025": 0.0
+    },
+    "q_depreciation": {
+      "Sep 2024": 5.0,
+      "Jun 2025": 6.0,
+      "Sep 2025": 6.0
+    },
+    "q_pbt": {
+      "Sep 2024": 441.0,
+      "Jun 2025": 392.0,
+      "Sep 2025": 485.0
+    },
+    "q_tax": {
+      "Sep 2024": 0.25,
+      "Jun 2025": 0.22,
+      "Sep 2025": 0.27
+    },
+    "q_eps": {
+      "Sep 2024": 10.6,
+      "Jun 2025": 1.46,
+      "Sep 2025": 0.59
+    }
+  },
+  "profit_loss": {
+    "pl_op": {
+      "Mar 2022": -238.0,
+      "Mar 2023": 432.0,
+      "Mar 2024": 237.0,
+      "Mar 2025": 2008.0
+    },
+    "pl_opm": {
+      "Mar 2022": -1.28,
+      "Mar 2023": 0.43,
+      "Mar 2024": 0.12,
+      "Mar 2025": 0.69
+    },
+    "pl_interest": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 2.0,
+      "Mar 2024": 3.0,
+      "Mar 2025": 2.0
+    },
+    "pl_depr": {
+      "Mar 2022": 3.0,
+      "Mar 2023": 12.0,
+      "Mar 2024": 18.0,
+      "Mar 2025": 21.0
+    },
+    "pl_pbt": {
+      "Mar 2022": -241.0,
+      "Mar 2023": 427.0,
+      "Mar 2024": -947.0,
+      "Mar 2025": 1987.0
+    },
+    "pl_taxpct": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 0.05,
+      "Mar 2024": 0.1,
+      "Mar 2025": 0.25
+    },
+    "pl_eps": {
+      "Mar 2022": -2157.83,
+      "Mar 2023": 59.55,
+      "Mar 2024": -153.01,
+      "Mar 2025": 8.16
+    },
+    "pl_div_payout": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 0.0,
+      "Mar 2024": 0.0,
+      "Mar 2025": 0.0
+    }
+  },
+  "balance_sheet": {
+    "bs_equity_cap": {
+      "Mar 2022": 0.11,
+      "Mar 2023": 21.0,
+      "Mar 2024": 21.0,
+      "Mar 2025": 366.0,
+      "Sep 2025": 1198.0
+    },
+    "bs_reserves": {
+      "Mar 2022": 2465.0,
+      "Mar 2023": 2980.0,
+      "Mar 2024": 1971.0,
+      "Mar 2025": 3606.0,
+      "Sep 2025": 5128.0
+    },
+    "bs_total_liabilities": {
+      "Mar 2022": 2605.0,
+      "Mar 2023": 3205.0,
+      "Mar 2024": 4355.0,
+      "Mar 2025": 4241.0,
+      "Sep 2025": 7033.0
+    },
+    "bs_cwip": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 0.0,
+      "Mar 2024": 0.0,
+      "Mar 2025": 0.0,
+      "Sep 2025": 0.0
+    },
+    "bs_investments": {
+      "Mar 2022": 852.0,
+      "Mar 2023": 1785.0,
+      "Mar 2024": 2210.0,
+      "Mar 2025": 3325.0,
+      "Sep 2025": 4923.0
+    },
+    "bs_total_assets": {
+      "Mar 2022": 2605.0,
+      "Mar 2023": 3205.0,
+      "Mar 2024": 4355.0,
+      "Mar 2025": 4241.0,
+      "Sep 2025": 7033.0
+    }
+  },
+  "cash_flow": {
+    "cf_net": {
+      "Mar 2022": -4.0,
+      "Mar 2023": 135.0,
+      "Mar 2024": -88.0,
+      "Mar 2025": 41.0
+    }
+  },
+  "ratios": {
+    "debtor_days": {
+      "Mar 2022": 277.0,
+      "Mar 2023": 106.0,
+      "Mar 2024": 130.0,
+      "Mar 2025": 36.0
+    },
+    "inventory_days": {
+      "Mar 2022": null,
+      "Mar 2023": null,
+      "Mar 2024": null,
+      "Mar 2025": null
+    },
+    "days_payable": {
+      "Mar 2022": null,
+      "Mar 2023": null,
+      "Mar 2024": null,
+      "Mar 2025": null
+    },
+    "ccc": {
+      "Mar 2022": 277.0,
+      "Mar 2023": 106.0,
+      "Mar 2024": 130.0,
+      "Mar 2025": 36.0
+    },
+    "wc_days": {
+      "Mar 2022": 236.0,
+      "Mar 2023": 161.0,
+      "Mar 2024": -161.0,
+      "Mar 2025": 44.0
+    },
+    "roce_pct": {
+      "Mar 2022": null,
+      "Mar 2023": 0.15,
+      "Mar 2024": 0.15,
+      "Mar 2025": 0.65
+    }
+  }
+}

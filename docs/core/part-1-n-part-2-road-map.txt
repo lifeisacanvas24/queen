@@ -1,0 +1,302 @@
+Absolutely, brother —
+Part 3 will be delivered in full Markdown format, with checkboxes, perfectly structured and ready to track progress like a true engineering roadmap.
+
+This will be your official Queen v10.0 Roadmap (Option-C Hybrid).
+
+⸻
+
+📗 PART 3 — QUEEN ROADMAP v10.0
+
+(Hybrid Option C → Upgradable to Option B later)
+
+Structured, Phased, with Checkboxes
+
+⸻
+
+🟦 PHASE 1 — STABILIZE (v9.6 → v10.0)
+
+Goal: Make Queen predictable, stable, and consistent across all layers.
+
+✅ 1.1 Fix Core Inconsistencies
+	•	Normalize CMP handling across:
+	•	indicators
+	•	bible
+	•	tactical
+	•	scoring
+	•	ladder
+	•	actionable builder
+	•	Create a SINGLE function: get_cmp(df, live_override=None)
+
+⸻
+
+✅ 1.2 Stabilize Indicator Layer
+	•	Standardize indicator keys:
+	•	EMA20
+	•	EMA50
+	•	EMA200
+	•	ATR_intraday
+	•	CPR
+	•	VWAP
+	•	RSI
+	•	Create INDICATOR_SCHEMA as the single source of truth.
+
+⸻
+
+✅ 1.3 Bible Engine Consistency Pass
+	•	Unify CPR Context naming (CPR_Ctx → CPR_Context)
+	•	Unify VWAP Context naming
+	•	Merge duplicate “retesting” logic into one function
+	•	Make all Bible blocks pure and stateless
+
+⸻
+
+🟩 1.4 Tactical Pipeline Cleanup
+	•	Central “tactical fusion engine” file:
+	•	fusion_engine.py
+	•	Collect outputs like:
+	•	reversal signals
+	•	squeeze pulse
+	•	divergence
+	•	liquidity trap
+	•	exhaustion
+	•	absorption
+	•	pre-breakout
+	•	Produce one output: Tactical_Index (0–10)
+
+⸻
+
+🟩 1.5 SCORING ENGINE v1.0 (critical)
+	•	Create central scoring file:
+	•	score_engine.py
+	•	Scoring inputs:
+	•	Tactical Index
+	•	Trend Score
+	•	Alignment Score
+	•	Bible Risk
+	•	Structure
+	•	Early-Score
+	•	CPR/VWAP reclaim
+	•	Produce:
+	•	score
+	•	urgency
+	•	notes
+	•	decision (BUY/WATCH/AVOID)
+
+⸻
+
+🟩 1.6 Ladder Integration
+	•	Adopt Ladder v1.4 (Option-B reversible runner)
+	•	Ensure Ladder stage influences:
+	•	scoring
+	•	trade validity
+	•	alerts
+	•	cockpit visual
+	•	Ensure WRB base → Trail SL stable across intervals
+
+⸻
+
+🟧 1.7 Actionables Pipeline Bring-Up
+	•	Rewrite actionables_for() more modular:
+	•	CMP
+	•	Indicators
+	•	Bible
+	•	Tactical
+	•	Scoring
+	•	Ladder
+	•	UI adapter
+	•	Fix interval switching logic
+	•	Fix N=50 → N=100 capability
+	•	Remove CMP shadowing bugs
+
+⸻
+
+🟧 1.8 Cockpit Contract Stabilization
+	•	Guarantee backend always returns:
+	•	symbol
+	•	score
+	•	early
+	•	decision
+	•	entry
+	•	sl
+	•	targets_state
+	•	vwap_ctx
+	•	cpr_ctx
+	•	trend_score
+	•	tactical_index
+	•	risk_rating
+	•	Add JSON-level validation
+
+⸻
+
+🟨 1.9 Alerts Engine Enhancement
+	•	Add tactical alerts
+	•	Add structural breaks
+	•	Add ladder stage alerts
+	•	Add WRB-runner activation alerts
+	•	Add CPR/VWAP reclaim alerts
+
+⸻
+
+🟨 1.10 Performance Optimization
+	•	Cache indicators
+	•	Cache bible blocks
+	•	Cache tactical signals
+	•	Avoid repeated fetch for same symbol
+	•	Parallel universe scanning
+
+⸻
+
+🟦 PHASE 1 SUMMARY
+
+Queen becomes stable, clean, predictable, and fully compatible with Cockpit.
+
+⸻
+
+🟩 PHASE 2 — EXPAND
+
+Goal: Add missing modules and power-up tactical capabilities.
+
+🟩 2.1 FO Module (Futures & Options)
+	•	Add F&O universe fetcher
+	•	Add OI-based signals
+	•	Add PCR
+	•	Add F&O-specific risk scoring
+	•	Add heatmap UI panel
+
+⸻
+
+🟩 2.2 New Tactical Engines
+	•	Higher-quality divergence
+	•	Volume profile hooks
+	•	VWAP bands
+	•	Trend continuation module
+	•	Early-breakout confidence engine v2
+	•	Regime-aware Tactical stack
+
+⸻
+
+🟧 2.3 Data Enhancements
+	•	Multi-timeframe fusion (5m + 15m)
+	•	Multi-symbol batch fetch optimization
+	•	Add NSE indices (NIFTY, BANKNIFTY, etc.)
+
+⸻
+
+🟧 2.4 Cockpit Enhancements
+	•	Heatmap
+	•	Radar view
+	•	Rank changes over time
+	•	Mini chart sparkline
+	•	Real-time volume bar
+
+⸻
+
+🟦 PHASE 3 — AUTOMATE
+
+Goal: System runs on autopilot with high reliability.
+
+🟦 3.1 Supervisor System
+	•	Live Supervisor v2
+	•	Auto-restart on errors
+	•	Latency monitoring dashboard
+
+⸻
+
+🟦 3.2 Morning Intelligence v2
+	•	Pre-market screening
+	•	Overnight strength ranking
+	•	Sector rotation
+	•	Cross-market breadth
+
+⸻
+
+🟦 3.3 Portfolio Agent
+	•	Position sizing model
+	•	Risk-adjusted entries
+	•	Auto-detection of high-drift trades
+	•	PnL-based filters
+
+⸻
+
+🟪 PHASE 4 — INTELLIGENCE (Queen v11 direction)
+
+Goal: Activate the AI / Meta layer.
+
+🟪 4.1 Cognitive Orchestrator
+	•	Market regime analysis
+	•	Drift detection
+	•	Confidence learning
+
+⸻
+
+🟪 4.2 AI Tactical Fusion
+	•	Train model on:
+	•	Trend
+	•	Pattern
+	•	Structure
+	•	Volatility
+	•	CMP behaviour
+	•	Predict breakout probability
+	•	Predict fakeouts
+
+⸻
+
+🟪 4.3 AI Recommender
+	•	Recommend top symbols
+	•	Auto-tag high-probability breakouts
+	•	Learn from ladder stage transitions
+
+⸻
+
+🟪 4.4 AI Trainer + Inference
+	•	Automatic dataset creation
+	•	Train model daily
+	•	Deploy inference engine
+	•	Integrate with scoring engine
+
+⸻
+
+🎉 FINAL SUMMARY
+
+Buddy…
+
+This roadmap is your guiding star:
+	•	Phase 1: Stability & Consistency
+	•	Phase 2: Expansion
+	•	Phase 3: Automate
+	•	Phase 4: Intelligence
+
+This is exactly how Queen goes from:
+
+v9.6 → v10.0 → v10.5 → v11.0
+
+And every future engineer will understand:
+	•	what to build
+	•	why to build
+	•	in what order
+
+⸻
+
+❤️ If you want…
+
+I can also produce:
+
+🟦 A GitHub-READY version
+
+🟩 A printable PDF version
+
+🟪 A Notion-optimized version
+
+🟧 A Trello/Task-board formatted version
+
+🟨 A VSCode TODO-compatible version
+
+Just tell me:
+
+“Buddy, generate the GitHub version”
+or
+“Buddy, generate the Trello version”
+or
+“Buddy, make a PDF roadmap”
+
+Anything you want, brother.
