@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/bible_engine.py — v1.3
+# queen/services/bible_engine.py — v1.4
 # Bible SUPREME Blocks (Phase 2, pure — no circular imports)
+#
+# Notes (v1.4):
+#   • Trend block uses a SINGLE timeframe EMA stack as a proxy:
+#       - D = fast / tactical (CMP vs EMA20)
+#       - W = medium / slow (EMA20 vs EMA50 vs EMA200)  [weekly-ish proxy]
+#       - M = very slow / regime (CMP vs EMA200)
+#   • Vol / Risk:
+#       - SL_Zone naming unified: "Tight" / "Normal" / "Wide"
+#       - Risk_Rating & SL_Zone fallbacks consistent with scoring._daily_risk_snapshot
+#   • Structure block:
+#       - _pct helper clarified (distance in % of reference level)
 # ============================================================
 
 from __future__ import annotations
@@ -121,18 +132,19 @@ def _classify_structure(
     except Exception:
         last_low = None
 
-    def _pct(a: float, b: float) -> float:
-        return abs(a - b) / max(1.0, b) * 100.0
+    def _pct_dist(price: float, ref_level: float) -> float:
+        """Percent distance of price from ref_level (in % of ref_level)."""
+        return abs(price - ref_level) / max(1.0, ref_level) * 100.0
 
     if structure in {"SPS", "CPS"} and last_low is not None:
-        if _pct(close, last_low) <= 0.6:
+        if _pct_dist(close, last_low) <= 0.6:
             micro_pullback = True
 
     # Retest = close very near CPR or VWAP (if available)
     for lvl in (cpr, vwap):
         if lvl is None:
             continue
-        if _pct(close, float(lvl)) <= 0.4:
+        if _pct_dist(close, float(lvl)) <= 0.4:
             is_retesting = True
             break
 
@@ -239,7 +251,16 @@ def _strength_from_distance(
 
 
 def compute_trend_block(indicators: Dict[str, Any]) -> Dict[str, Any]:
-    """Multi-horizon trend view using EMAs + CMP (single-DF approximation)."""
+    """
+    Multi-horizon trend view using EMAs + CMP from a SINGLE timeframe.
+
+    Important:
+      • D = fast / tactical bias    (CMP vs EMA20 + EMA20 vs EMA50)
+      • W = medium / slow bias      (EMA20 vs EMA50 vs EMA200)  — weekly *proxy*
+      • M = very slow / regime bias (CMP vs EMA200)
+
+    This does NOT use true multi-timeframe OHLC. It is a stacked-EMA approximation.
+    """
     ind = indicators or {}
 
     df = ind.get("_df")  # optional Polars DF injected by caller
@@ -278,7 +299,7 @@ def compute_trend_block(indicators: Dict[str, Any]) -> Dict[str, Any]:
             strength_d -= 0.5
     strength_d = max(0.0, min(strength_d, 3.0))
 
-    # --- Weekly horizon: EMA20 vs EMA50 vs EMA200 (slow stack feel)
+    # --- Weekly horizon: EMA20 vs EMA50 vs EMA200 (slow stack feel / proxy)
     if ema20 is not None and ema50 is not None and ema200 is not None:
         if ema20 > ema50 > ema200:
             bias_w = "Bullish"
@@ -395,15 +416,16 @@ def compute_vol_block(
         else:
             risk_rating = "High"
 
-    # --- SL_Zone helper if not present
+    # --- SL_Zone helper if not present (keep naming consistent with scoring._daily_risk_snapshot)
     sl_zone = ind.get("SL_Zone")
     if not sl_zone and risk_rating:
-        if risk_rating == "Low":
+        rr = str(risk_rating).title()
+        if rr == "Low":
             sl_zone = "Tight"
-        elif risk_rating == "Medium":
+        elif rr == "Medium":
             sl_zone = "Normal"
         else:
-            sl_zone = "Loose"
+            sl_zone = "Wide"   # unified naming
 
     out: Dict[str, Any] = {
         "Daily_ATR": daily_atr,
@@ -563,11 +585,11 @@ def compute_alignment_block(indicators: Dict[str, Any]) -> Dict[str, Any]:
             ema_state = "Mixed"
             ema_score = 1.5
     else:
-        # ✅ fallback so label never goes "Unknown"
-        if ema_bias in ("Bullish", "Strong Bullish"):
+        # fallback so label never goes "Unknown"
+        if ema_bias == "Bullish":
             ema_state = "Bullish"
             ema_score = 2.5
-        elif ema_bias in ("Bearish", "Strong Bearish"):
+        elif ema_bias == "Bearish":
             ema_state = "Bearish"
             ema_score = 2.5
         else:
@@ -788,9 +810,9 @@ def trade_validity_block(metrics: Dict[str, Any]) -> Dict[str, Any]:
     good_structure = struct_type in {"SPS", "CPS"} and struct_conf >= 0.6
     good_risk = risk_rating in {"Low", "Medium"}
     low_reversal = reversal_score <= 1.5
-    good_align = align_score == 0.0 or align_score >= 5.0
+    good_align = (align_score == 0.0) or (align_score >= 5.0)
 
-    if all([good_trend, good_structure, good_risk, low_reversal, (not below_vwap)]):
+    if all([good_trend, good_structure, good_risk, low_reversal, (not below_vwap), good_align]):
 
         # Must not be a bad entry geometry
         if below_entry:
@@ -917,5 +939,8 @@ def compute_indicators_plus_bible(
 
     return metrics
 
+
 if __name__ == "__main__":
-    print("bible_engine — structure / trend / vol / risk / alignment / trade blocks loaded.")
+    print(
+        "bible_engine — structure / trend / vol / risk / alignment / trade blocks loaded."
+    )

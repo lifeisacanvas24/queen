@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/cockpit_row.py — v2.2 (Bible-integrated)
+# queen/services/cockpit_row.py — v2.3 (Bible + Strategy Fusion)
 # Base cockpit row builder (shared by /monitor + /cockpit)
 # ============================================================
 
@@ -16,6 +16,7 @@ from queen.services.scoring import (
     action_for,
     compute_indicators_plus_bible,
 )
+from queen.strategies.fusion import apply_strategies  # 🔁 Unified strategy / TV fusion hook
 
 _INSTRUMENT_KEYS = (
     "open",
@@ -77,6 +78,9 @@ def build_cockpit_row(
     row = action_for(symbol, ind, book=book, use_uc_lc=False)
     if not row:
         return {}
+
+    # 2b) Unified strategies: playbook tagging + TV fusion (scalp overrides)
+    row = apply_strategies(row, interval=interval)
 
     # 3) Canonical CMP from latest close (strict intraday DF)
     cmp_val = last_close(df)
@@ -153,7 +157,6 @@ def build_cockpit_row(
         row["risk_summary"] = risk_summary
 
     return row
-
 
 def _format_risk_summary(row: Dict[str, Any]) -> Optional[str]:
     """

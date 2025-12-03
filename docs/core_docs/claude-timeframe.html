@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+h1, h2, h3 { color: #00d4ff; }
+h1 { text-align: center; border-bottom: 3px solid #00d4ff; padding-bottom: 15px; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #16213e; }
+th { background: #0f3460; color: #00d4ff; padding: 12px; text-align: left; border: 1px solid #1a1a2e; }
+td { padding: 10px; border: 1px solid #1a1a2e; vertical-align: top; }
+.priority-high { background: #1b4332; color: #95d5b2; }
+.priority-medium { background: #3d405b; color: #f4f1de; }
+.priority-low { background: #4a3f35; color: #ddb892; }
+.section-header { background: #e94560; color: white; text-align: center; font-size: 18px; font-weight: bold; }
+.indicator-name { font-weight: bold; color: #00d4ff; }
+.timeframe { color: #ffd700; }
+.lookback { color: #90ee90; }
+.note { font-size: 12px; color: #aaa; font-style: italic; }
+.legend { background: #0f3460; padding: 15px; border-radius: 8px; margin: 20px 0; }
+.legend-item { display: inline-block; margin: 5px 15px; padding: 5px 10px; border-radius: 4px; }
+.bull { background: #1b4332; }
+.bear { background: #4a1c1c; }
+.neutral { background: #3d405b; }
+</style>
+</head>
+<body>
+
+<h1>📊 COMPLETE TRADING INDICATOR FRAMEWORK</h1>
+
+<div class="legend">
+<h3>📌 LEGEND</h3>
+<span class="legend-item priority-high">HIGH PRIORITY - Must Use</span>
+<span class="legend-item priority-medium">MEDIUM PRIORITY - Recommended</span>
+<span class="legend-item priority-low">LOW PRIORITY - Optional/Confirmation</span>
+</div>
+
+<!-- ==================== SCALP SECTION ==================== -->
+<h2>⚡ 1. SCALP TRADING (5-30 Minutes)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">SCALP TRADING INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">VWAP</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-min, 3-min, 5-min</td>
+<td>Standard (Daily Reset)</td>
+<td class="lookback">Current Day Only</td>
+<td>Primary trend filter. Long above, Short below. Use bands for mean reversion</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-min: 9/21 EMA<br>5-min: 9/21/50 EMA</td>
+<td>9, 21, 50 periods</td>
+<td class="lookback">50-100 candles (~1-2 hours)</td>
+<td>9 EMA crossover 21 EMA for entry signals. 50 EMA as dynamic support/resistance</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-min, 3-min</td>
+<td>Period: 7-9<br>OB: 75, OS: 25</td>
+<td class="lookback">30-50 candles</td>
+<td>Look for divergences. Don't trade RSI extremes alone - wait for price confirmation</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Volume Delta / VDU</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-min, 3-min</td>
+<td>Cumulative Delta</td>
+<td class="lookback">Current session</td>
+<td>Confirm breakout with positive delta. Negative delta on rallies = weakness</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">ATR</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">5-min</td>
+<td>Period: 14</td>
+<td class="lookback">14 candles (~70 min)</td>
+<td>Stop Loss = 1-1.5x ATR. Target = 1.5-2x ATR. Skip if ATR < 0.3% of price</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">FVG (Fair Value Gap)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-min, 3-min</td>
+<td>Standard 3-candle pattern</td>
+<td class="lookback">Last 30-50 candles</td>
+<td>Trade into FVG zones for high probability entries. 70%+ fill rate expected</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">MACD</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">3-min, 5-min</td>
+<td>Fast: 8, Slow: 17, Signal: 9</td>
+<td class="lookback">50 candles</td>
+<td>Use histogram for momentum. Crossovers often lag in scalping</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">MCS (Market Structure)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">5-min (reference 15-min)</td>
+<td>HH/HL for uptrend<br>LH/LL for downtrend</td>
+<td class="lookback">Last 1-2 hours</td>
+<td>Only scalp in direction of higher timeframe structure</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Wyckoff</td>
+<td>🟢 LOW</td>
+<td class="timeframe">5-min, 15-min (reference)</td>
+<td>Simplified: Spring/Upthrust</td>
+<td class="lookback">Last 2-4 hours of structure</td>
+<td>Identify springs at intraday lows, upthrusts at highs for reversal scalps</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Stochastic</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-min, 3-min</td>
+<td>%K: 5, %D: 3, Slowing: 3</td>
+<td class="lookback">20-30 candles</td>
+<td>Cross in oversold (<20) for longs, overbought (>80) for shorts</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Order Flow / Footprint</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-min, 3-min</td>
+<td>Volume Profile, Delta</td>
+<td class="lookback">Current session</td>
+<td>Identify absorption, imbalances, and trapped traders</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">SCALP - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Engulfing (Bullish/Bearish)</td>
+<td>3-min, 5-min</td>
+<td>HIGH (75%+)</td>
+<td>Must occur at key S/R or VWAP levels</td>
+</tr>
+<tr class="priority-high">
+<td>Pin Bar / Hammer / Shooting Star</td>
+<td>3-min, 5-min</td>
+<td>HIGH (70%+)</td>
+<td>Wick should be 2x body minimum</td>
+</tr>
+<tr class="priority-medium">
+<td>Inside Bar Breakout</td>
+<td>3-min, 5-min</td>
+<td>MEDIUM (65%)</td>
+<td>Trade breakout direction with volume confirmation</td>
+</tr>
+<tr class="priority-low">
+<td>Doji</td>
+<td>3-min, 5-min</td>
+<td>LOW (55%)</td>
+<td>Only use as reversal confirmation at extremes</td>
+</tr>
+<tr class="priority-medium">
+<td>Three White Soldiers / Three Black Crows</td>
+<td>1-min confirmation</td>
+<td>MEDIUM (65%)</td>
+<td>Strong momentum confirmation</td>
+</tr>
+</table>
+
+<!-- ==================== INTRADAY SECTION ==================== -->
+<h2>📈 2. INTRADAY TRADING (1-6 Hours)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">INTRADAY TRADING INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">VWAP</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">5-min, 15-min</td>
+<td>Daily VWAP with ±1σ, ±2σ bands</td>
+<td class="lookback">Current Day + Previous Day's VWAP close</td>
+<td>Primary bias filter. Also track previous day's VWAP close as S/R</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min: 9/21/50<br>1-hour: 20/50</td>
+<td>9, 21, 50, 200 periods</td>
+<td class="lookback">200 candles (~3-4 days on 15min)</td>
+<td>200 EMA on 15-min = key intraday trend filter</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min, 1-hour</td>
+<td>Period: 14<br>OB: 70, OS: 30</td>
+<td class="lookback">50-100 candles</td>
+<td>Use 1-hour RSI for trend direction, 15-min for entry timing</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">ATR</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min</td>
+<td>Period: 14</td>
+<td class="lookback">14 candles</td>
+<td>SL = 1.5-2x ATR. Target = 2-3x ATR minimum</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MACD</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min, 1-hour</td>
+<td>12, 26, 9 (Standard)</td>
+<td class="lookback">100 candles</td>
+<td>Histogram divergence is key. Zero-line cross confirms trend change</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Volume Profile</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min (Daily Profile)</td>
+<td>Session Volume Profile</td>
+<td class="lookback">Current + Previous 2 sessions</td>
+<td>POC, VAH, VAL are key S/R levels</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">FVG</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min, 1-hour</td>
+<td>Standard 3-candle</td>
+<td class="lookback">Last 3-5 days</td>
+<td>Larger gaps on 1-hour are high probability targets</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">RPS (Relative Strength)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min vs Index</td>
+<td>Price relative to Nifty/SPX</td>
+<td class="lookback">Current day + 5 days</td>
+<td>Long outperformers when market up, short underperformers when down</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">MCS (Market Structure)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min (reference 1-hour)</td>
+<td>Break of Structure (BOS)<br>Change of Character (CHoCH)</td>
+<td class="lookback">Last 2-3 days</td>
+<td>Trade in direction of 1-hour structure, time entries on 15-min</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Wyckoff</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min, 1-hour</td>
+<td>All phases applicable</td>
+<td class="lookback">5-10 days of structure</td>
+<td>Identify accumulation/distribution ranges for range trades</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Bollinger Bands</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min</td>
+<td>20, 2σ</td>
+<td class="lookback">50 candles</td>
+<td>Squeeze breakouts, mean reversion at outer bands</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Supertrend</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">15-min</td>
+<td>Period: 10, Multiplier: 3</td>
+<td class="lookback">50 candles</td>
+<td>Good for trailing stops and trend confirmation</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">ADX</td>
+<td>🟢 LOW</td>
+<td class="timeframe">15-min, 1-hour</td>
+<td>Period: 14</td>
+<td class="lookback">50 candles</td>
+<td>ADX > 25 = trending, trade breakouts. ADX < 20 = range, mean revert</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Pivot Points</td>
+<td>🟢 LOW</td>
+<td class="timeframe">15-min</td>
+<td>Daily Pivots (Standard/Camarilla)</td>
+<td class="lookback">Previous day OHLC</td>
+<td>Key S/R levels. R1/S1 are first targets</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">INTRADAY - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Engulfing Patterns</td>
+<td>15-min, 1-hour</td>
+<td>HIGH (75%+)</td>
+<td>At key levels with volume surge</td>
+</tr>
+<tr class="priority-high">
+<td>Morning Star / Evening Star</td>
+<td>15-min</td>
+<td>HIGH (72%+)</td>
+<td>Strong reversal signal at session extremes</td>
+</tr>
+<tr class="priority-high">
+<td>Hammer / Inverted Hammer</td>
+<td>15-min, 1-hour</td>
+<td>HIGH (70%+)</td>
+<td>At support zones with increasing volume</td>
+</tr>
+<tr class="priority-medium">
+<td>Tweezer Top / Bottom</td>
+<td>15-min</td>
+<td>MEDIUM (68%)</td>
+<td>Double top/bottom confirmation</td>
+</tr>
+<tr class="priority-medium">
+<td>Marubozu</td>
+<td>15-min</td>
+<td>MEDIUM (65%)</td>
+<td>Strong momentum, continuation expected</td>
+</tr>
+<tr class="priority-medium">
+<td>Three Inside Up/Down</td>
+<td>15-min</td>
+<td>MEDIUM (67%)</td>
+<td>Reliable reversal confirmation</td>
+</tr>
+</table>
+
+<!-- ==================== BTST SECTION ==================== -->
+<h2>🌙 3. BTST TRADING (Buy Today, Sell Tomorrow)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">BTST TRADING INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-hour, Daily</td>
+<td>Period: 14<br>Buy: 40-60 rising, Avoid: >75</td>
+<td class="lookback">Daily: 50 candles, 1H: 100 candles</td>
+<td>Look for RSI breaking above 50 with momentum. Avoid overbought entries</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">VWAP</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min</td>
+<td>Daily VWAP</td>
+<td class="lookback">Current session</td>
+<td>Entry should be above VWAP. Close above VWAP is bullish for next day</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">1-hour: 20/50<br>Daily: 20/50</td>
+<td>20, 50, 200 periods</td>
+<td class="lookback">Daily: 200 candles, 1H: 100 candles</td>
+<td>Price above all major EMAs. Look for 20 EMA crossover 50 EMA on 1-hour</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Volume Analysis</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">15-min, Daily</td>
+<td>Above 20-day average</td>
+<td class="lookback">20 days</td>
+<td>Entry day volume should be 1.5x+ average. Delivery % matters for BTST</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RPS (Relative Strength)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily</td>
+<td>vs Nifty/Sector Index</td>
+<td class="lookback">10-20 days</td>
+<td>Only BTST stocks outperforming index. High RPS = continuation likely</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">ATR</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily</td>
+<td>Period: 14</td>
+<td class="lookback">14 days</td>
+<td>Target = 0.5-1x Daily ATR from close. SL = 1.5x ATR below entry</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">MACD</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-hour, Daily</td>
+<td>12, 26, 9</td>
+<td class="lookback">50-100 candles</td>
+<td>Bullish crossover on 1-hour during last 2 hours of session</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">FVG</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-hour, Daily</td>
+<td>Gap-up continuation</td>
+<td class="lookback">10 days</td>
+<td>Stocks gapping up with unfilled gap = momentum likely to continue</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">MCS</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-hour, Daily</td>
+<td>Higher High, Higher Low</td>
+<td class="lookback">10-15 days</td>
+<td>Breaking out of consolidation structure ideal for BTST</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Supertrend</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">1-hour</td>
+<td>Period: 10, Mult: 2</td>
+<td class="lookback">50 candles</td>
+<td>Should be green (buy signal) on 1-hour</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Wyckoff</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Daily</td>
+<td>Phase identification</td>
+<td class="lookback">30-60 days</td>
+<td>BTST works best in Phase 2 (Breakout) and Phase 4 (Markup)</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">OBV (On Balance Volume)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>Standard</td>
+<td class="lookback">20-30 days</td>
+<td>Rising OBV confirms accumulation. New high in OBV before price = bullish</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">BTST - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Bullish Engulfing</td>
+<td>Daily (forming by 3:15 PM)</td>
+<td>HIGH (78%+)</td>
+<td>Strong close above previous day's high</td>
+</tr>
+<tr class="priority-high">
+<td>Breakout Candle (Wide Range)</td>
+<td>Daily</td>
+<td>HIGH (75%+)</td>
+<td>Range > 1.5x ATR with strong close</td>
+</tr>
+<tr class="priority-high">
+<td>Hammer at Support</td>
+<td>Daily</td>
+<td>HIGH (72%+)</td>
+<td>After 2-3 day pullback in uptrend</td>
+</tr>
+<tr class="priority-medium">
+<td>Three White Soldiers</td>
+<td>Daily (partial 2 candles + forming)</td>
+<td>MEDIUM (70%)</td>
+<td>Continuation pattern</td>
+</tr>
+<tr class="priority-medium">
+<td>Rising Three Methods</td>
+<td>Daily</td>
+<td>MEDIUM (68%)</td>
+<td>Consolidation in uptrend before continuation</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="3">BTST - TIMING CONSIDERATIONS</td>
+</tr>
+<tr>
+<th>Timing</th>
+<th>Action</th>
+<th>Reason</th>
+</tr>
+<tr>
+<td>2:30 PM - 3:00 PM</td>
+<td>Scan & Shortlist</td>
+<td>Pattern formation visible, avoid last minute volatility</td>
+</tr>
+<tr>
+<td>3:00 PM - 3:20 PM</td>
+<td>Entry Window</td>
+<td>Optimal entry time, enough time to confirm pattern</td>
+</tr>
+<tr>
+<td>3:20 PM - 3:30 PM</td>
+<td>Final Entry / Avoid</td>
+<td>Only if strong momentum, risk of gap down increases</td>
+</tr>
+<tr>
+<td>Next Day 9:15 AM - 9:30 AM</td>
+<td>Evaluate & Exit Decision</td>
+<td>Exit within first 15 min if gap up OR hold if trending</td>
+</tr>
+</table>
+
+<!-- ==================== SWING SECTION ==================== -->
+<h2>🔄 4. SWING TRADING (3-15 Days)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">SWING TRADING INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily: 20/50/200<br>Weekly: 10/20</td>
+<td>20, 50, 100, 200 periods</td>
+<td class="lookback">Daily: 1 year (252 candles)<br>Weekly: 52 candles</td>
+<td>Price above 20 & 50 EMA for longs. 200 EMA = major trend. Weekly EMAs for context</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>Period: 14<br>Buy Zone: 40-60</td>
+<td class="lookback">Daily: 100 candles<br>Weekly: 52 candles</td>
+<td>Weekly RSI > 50 for bull bias. Daily RSI pullback to 40-50 = entry zone</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MACD</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>12, 26, 9 (Standard)</td>
+<td class="lookback">Daily: 100-150 candles</td>
+<td>Daily MACD crossover with Weekly MACD positive = high probability</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">ATR</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily</td>
+<td>Period: 14</td>
+<td class="lookback">14-20 days</td>
+<td>SL = 2-3x Daily ATR. Target = 3-5x ATR. Position size based on ATR</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MCS (Market Structure)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily (reference Weekly)</td>
+<td>Swing High/Low analysis</td>
+<td class="lookback">3-6 months</td>
+<td>Trade only when daily structure aligns with weekly. BOS = trend change</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Volume Analysis</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily</td>
+<td>20-day MA of Volume</td>
+<td class="lookback">50-100 days</td>
+<td>Breakout volume should be 2x+ average. Pullback on low volume = healthy</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RPS (Relative Strength)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily vs Index/Sector</td>
+<td>Mansfield RS or RS Line</td>
+<td class="lookback">3-6 months</td>
+<td>Rising RS line = outperformer. New high in RS before price = early signal</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Wyckoff</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>Full phase analysis</td>
+<td class="lookback">3-6 months</td>
+<td>Enter at Spring/LPS in accumulation. Exit at LPSY in distribution</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">FVG</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>Standard gaps</td>
+<td class="lookback">30-60 days</td>
+<td>Daily FVGs are high probability target zones</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Fibonacci Retracement</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>38.2%, 50%, 61.8%</td>
+<td class="lookback">Last major swing (1-3 months)</td>
+<td>50-61.8% retracement = optimal pullback entry zone</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Bollinger Bands</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>20, 2σ</td>
+<td class="lookback">50-100 days</td>
+<td>Squeeze before breakout. Band walk = strong trend</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">ADX</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>Period: 14</td>
+<td class="lookback">50 candles</td>
+<td>ADX rising from <20 to >25 = trend starting. ADX > 40 = strong trend</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">OBV</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily</td>
+<td>Standard</td>
+<td class="lookback">50-100 days</td>
+<td>OBV divergence from price = early warning. Rising OBV = accumulation</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">VWAP</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Weekly VWAP (Anchored)</td>
+<td>Anchored to swing low/high</td>
+<td class="lookback">From anchor point</td>
+<td>Anchored VWAP from major pivot = key S/R for swing trades</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Ichimoku Cloud</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Daily</td>
+<td>9, 26, 52 (Standard)</td>
+<td class="lookback">52 candles</td>
+<td>Price above cloud = bullish. Cloud twist = trend change coming</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">SWING - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Bullish/Bearish Engulfing</td>
+<td>Daily, Weekly</td>
+<td>HIGH (80%+ on Weekly)</td>
+<td>Weekly engulfing is very high probability</td>
+</tr>
+<tr class="priority-high">
+<td>Morning Star / Evening Star</td>
+<td>Daily</td>
+<td>HIGH (78%+)</td>
+<td>Classic reversal at key S/R levels</td>
+</tr>
+<tr class="priority-high">
+<td>Hammer / Hanging Man</td>
+<td>Daily, Weekly</td>
+<td>HIGH (75%+)</td>
+<td>Weekly hammer at major support = strong signal</td>
+</tr>
+<tr class="priority-high">
+<td>Piercing Line / Dark Cloud Cover</td>
+<td>Daily</td>
+<td>HIGH (73%+)</td>
+<td>Reversal at trend extremes</td>
+</tr>
+<tr class="priority-medium">
+<td>Three Inside Up/Down</td>
+<td>Daily</td>
+<td>MEDIUM (70%)</td>
+<td>Harami + confirmation candle</td>
+</tr>
+<tr class="priority-medium">
+<td>Abandoned Baby</td>
+<td>Daily</td>
+<td>MEDIUM (72%)</td>
+<td>Rare but highly reliable</td>
+</tr>
+<tr class="priority-medium">
+<td>Three White Soldiers / Three Black Crows</td>
+<td>Daily</td>
+<td>MEDIUM (68%)</td>
+<td>Strong momentum continuation</td>
+</tr>
+<tr class="priority-low">
+<td>Spinning Top / High Wave</td>
+<td>Daily</td>
+<td>LOW (55%)</td>
+<td>Indecision - wait for confirmation</td>
+</tr>
+</table>
+
+<!-- ==================== POSITIONAL SECTION ==================== -->
+<h2>📊 5. POSITIONAL TRADING (2-8 Weeks)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">POSITIONAL TRADING INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily: 20/50/100/200<br>Weekly: 10/20/40</td>
+<td>Key: 50 & 200 Daily</td>
+<td class="lookback">Daily: 2 years<br>Weekly: 100+ candles</td>
+<td>Golden Cross (50>200) = major bullish. Price above 50 EMA = healthy trend</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly (primary), Daily (timing)</td>
+<td>Period: 14</td>
+<td class="lookback">Weekly: 52+ candles<br>Daily: 200 candles</td>
+<td>Weekly RSI 50-70 = strong uptrend zone. Weekly RSI < 40 = avoid longs</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MACD</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly (trend), Daily (timing)</td>
+<td>12, 26, 9</td>
+<td class="lookback">Weekly: 100 candles<br>Daily: 150 candles</td>
+<td>Weekly MACD above zero line = bullish regime. Histogram expansion = momentum</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RPS (Relative Strength)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly</td>
+<td>vs Benchmark Index</td>
+<td class="lookback">6-12 months</td>
+<td>RS making new highs = leader. Sector RS also important</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Volume Profile</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily (Visible Range)</td>
+<td>Extended lookback</td>
+<td class="lookback">6 months - 1 year</td>
+<td>High Volume Nodes = support. Low Volume Nodes = quick price movement zones</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Wyckoff</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>Full phase analysis</td>
+<td class="lookback">6-12 months</td>
+<td>Buy in Phase 2 (SOS after Spring). Hold through Phase 4 (Markup)</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">ATR</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>Period: 14</td>
+<td class="lookback">14-20 periods</td>
+<td>Weekly ATR for position sizing. SL = 2x Weekly ATR or below structure</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MCS (Market Structure)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly (primary), Daily (detail)</td>
+<td>Major swing analysis</td>
+<td class="lookback">1-2 years</td>
+<td>Weekly higher highs/higher lows = uptrend. Break of major weekly swing = exit</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Fibonacci</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Weekly</td>
+<td>38.2%, 50%, 61.8%, Extensions</td>
+<td class="lookback">Major swing (6-18 months)</td>
+<td>61.8% retracement of major move = strong support. Extensions for targets</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">ADX</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Weekly</td>
+<td>Period: 14</td>
+<td class="lookback">52 candles</td>
+<td>Weekly ADX > 25 with +DI > -DI = strong uptrend</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">OBV</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Daily, Weekly</td>
+<td>Standard</td>
+<td class="lookback">6 months - 1 year</td>
+<td>Long-term OBV trend should confirm price trend</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Ichimoku Cloud</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Weekly</td>
+<td>9, 26, 52</td>
+<td class="lookback">52 candles</td>
+<td>Price above thick weekly cloud = very bullish</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">VWAP (Anchored)</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Daily</td>
+<td>Anchored to major lows/events</td>
+<td class="lookback">From anchor point</td>
+<td>Anchored VWAP from 52-week low = institutional cost basis</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">CRP (Consolidation Range %)</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Daily</td>
+<td>Contraction/Expansion</td>
+<td class="lookback">30-60 days</td>
+<td>Tight consolidation (ATR compression) = breakout imminent</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">POSITIONAL - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Weekly Bullish Engulfing</td>
+<td>Weekly</td>
+<td>VERY HIGH (85%+)</td>
+<td>At 50 EMA or major support - strongest reversal signal</td>
+</tr>
+<tr class="priority-high">
+<td>Weekly Hammer</td>
+<td>Weekly</td>
+<td>VERY HIGH (82%+)</td>
+<td>At 200 EMA or 52-week support</td>
+</tr>
+<tr class="priority-high">
+<td>Weekly Inside Bar Breakout</td>
+<td>Weekly</td>
+<td>HIGH (78%+)</td>
+<td>Consolidation before continuation</td>
+</tr>
+<tr class="priority-medium">
+<td>Monthly Hammer/Engulfing</td>
+<td>Monthly</td>
+<td>VERY HIGH (88%+)</td>
+<td>Rare but extremely reliable</td>
+</tr>
+<tr class="priority-medium">
+<td>Cup & Handle</td>
+<td>Daily</td>
+<td>HIGH (75%+)</td>
+<td>Classic positional setup - handle should be 1-4 weeks</td>
+</tr>
+<tr class="priority-medium">
+<td>Double Bottom / W Pattern</td>
+<td>Daily</td>
+<td>HIGH (73%+)</td>
+<td>Second low higher than first = stronger</td>
+</tr>
+</table>
+
+<!-- ==================== INVESTMENT SECTION ==================== -->
+<h2>💎 6. INVESTMENT (Months to Years)</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="6">INVESTMENT INDICATOR MATRIX</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Priority</th>
+<th>Chart Timeframe</th>
+<th>Indicator Settings</th>
+<th>Historical Lookback</th>
+<th>Usage Notes</th>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">EMA (200)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly, Monthly</td>
+<td>200 Weekly / 40 Monthly</td>
+<td class="lookback">5-10 years</td>
+<td>Price above 200 Weekly EMA = secular bull market. Retest = accumulation zone</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RSI</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Monthly</td>
+<td>Period: 14</td>
+<td class="lookback">10+ years</td>
+<td>Monthly RSI < 30 = generational buying opportunity. > 70 = reduce allocation</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MACD</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Monthly</td>
+<td>12, 26, 9</td>
+<td class="lookback">10+ years</td>
+<td>Monthly MACD bullish crossover = multi-year uptrend starting</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">RPS (Relative Strength)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Monthly</td>
+<td>vs Broad Market</td>
+<td class="lookback">3-5 years</td>
+<td>Long-term outperformers tend to continue outperforming</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">MCS (Market Structure)</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Monthly</td>
+<td>Major structural pivots</td>
+<td class="lookback">5-10 years</td>
+<td>Monthly higher highs/lows = secular bull. Break of multi-year low = avoid</td>
+</tr>
+
+<tr class="priority-high">
+<td class="indicator-name">Wyckoff</td>
+<td>🔴 HIGH</td>
+<td class="timeframe">Weekly, Monthly</td>
+<td>Major cycle analysis</td>
+<td class="lookback">2-5 years</td>
+<td>Accumulation phases can last 1-2 years. Best buying is during Phase A1-A4</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">ATR</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Monthly</td>
+<td>Period: 14</td>
+<td class="lookback">14 months</td>
+<td>For position sizing only. Investment stops are based on structure, not ATR</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">OBV (Long-term)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Monthly</td>
+<td>Standard</td>
+<td class="lookback">3-5 years</td>
+<td>Long-term accumulation/distribution. Rising OBV = institutional buying</td>
+</tr>
+
+<tr class="priority-medium">
+<td class="indicator-name">Volume (Average)</td>
+<td>🟡 MEDIUM</td>
+<td class="timeframe">Monthly</td>
+<td>12-month average</td>
+<td class="lookback">5 years</td>
+<td>Rising volume trend = increasing interest. Volume climax at tops/bottoms</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Ichimoku Cloud</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Monthly</td>
+<td>9, 26, 52</td>
+<td class="lookback">52 months</td>
+<td>Monthly cloud = major support/resistance zones for years</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">Fibonacci (Major)</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Monthly</td>
+<td>38.2%, 50%, 61.8%</td>
+<td class="lookback">Full cycle (5-10 years)</td>
+<td>Retracement of entire bull market = major accumulation zones</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">VWAP</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Not applicable</td>
+<td>-</td>
+<td class="lookback">-</td>
+<td>VWAP is intraday indicator - not used for investment timeframe</td>
+</tr>
+
+<tr class="priority-low">
+<td class="indicator-name">FVG</td>
+<td>🟢 LOW</td>
+<td class="timeframe">Weekly/Monthly gaps</td>
+<td>Major gaps only</td>
+<td class="lookback">1-2 years</td>
+<td>Monthly gaps may take years to fill - not primary focus</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">INVESTMENT - CANDLESTICK PATTERNS TO USE</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>Timeframe</th>
+<th>Reliability</th>
+<th>Notes</th>
+</tr>
+<tr class="priority-high">
+<td>Monthly Hammer</td>
+<td>Monthly</td>
+<td>VERY HIGH (90%+)</td>
+<td>At major multi-year support - generational buy</td>
+</tr>
+<tr class="priority-high">
+<td>Monthly Bullish Engulfing</td>
+<td>Monthly</td>
+<td>VERY HIGH (88%+)</td>
+<td>After multi-month decline - major reversal</td>
+</tr>
+<tr class="priority-high">
+<td>Weekly/Monthly Doji at Support</td>
+<td>Monthly</td>
+<td>HIGH (80%+)</td>
+<td>Indecision after extended decline = accumulation</td>
+</tr>
+<tr class="priority-medium">
+<td>Quarterly Hammer</td>
+<td>Quarterly</td>
+<td>EXTREMELY HIGH (92%+)</td>
+<td>Very rare - major secular bottom signal</td>
+</tr>
+<tr class="priority-medium">
+<td>Monthly Morning Star</td>
+<td>Monthly</td>
+<td>VERY HIGH (85%+)</td>
+<td>3-month reversal pattern - very reliable</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="3">INVESTMENT - FUNDAMENTAL INDICATORS TO COMBINE</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Usage</th>
+<th>Notes</th>
+</tr>
+<tr>
+<td>P/E Ratio (TTM & Forward)</td>
+<td>Valuation</td>
+<td>Compare to historical average and sector</td>
+</tr>
+<tr>
+<td>PEG Ratio</td>
+<td>Growth-adjusted valuation</td>
+<td>PEG < 1 = undervalued growth</td>
+</tr>
+<tr>
+<td>ROE / ROCE</td>
+<td>Quality filter</td>
+<td>Consistent > 15% = quality business</td>
+</tr>
+<tr>
+<td>Debt/Equity</td>
+<td>Risk assessment</td>
+<td>Lower is better for long-term holds</td>
+</tr>
+<tr>
+<td>Revenue & EPS Growth</td>
+<td>Growth trajectory</td>
+<td>Consistent double-digit growth preferred</td>
+</tr>
+<tr>
+<td>Dividend Yield & Growth</td>
+<td>Income + quality signal</td>
+<td>Consistent dividend increases = quality</td>
+</tr>
+<tr>
+<td>Promoter Holding Changes</td>
+<td>Insider sentiment</td>
+<td>Increasing = bullish signal</td>
+</tr>
+<tr>
+<td>FII/DII Holdings</td>
+<td>Institutional interest</td>
+<td>Increasing institutional ownership = positive</td>
+</tr>
+</table>
+
+<!-- ==================== MASTER COMPARISON ==================== -->
+<h2>📋 MASTER INDICATOR COMPARISON MATRIX</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="8">INDICATOR APPLICABILITY BY TRADING STYLE</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>SCALP</th>
+<th>INTRADAY</th>
+<th>BTST</th>
+<th>SWING</th>
+<th>POSITIONAL</th>
+<th>INVESTMENT</th>
+<th>Best Timeframes</th>
+</tr>
+
+<tr>
+<td class="indicator-name">RSI</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td>All TF: 14 period standard</td>
+</tr>
+
+<tr>
+<td class="indicator-name">VWAP</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td>Intraday only</td>
+</tr>
+
+<tr>
+<td class="indicator-name">EMA</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td>9/21 (short) to 200 (long)</td>
+</tr>
+
+<tr>
+<td class="indicator-name">MACD</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td>12,26,9 standard</td>
+</tr>
+
+<tr>
+<td class="indicator-name">ATR</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td>14 period</td>
+</tr>
+
+<tr>
+<td class="indicator-name">FVG</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td>Intraday to Daily</td>
+</tr>
+
+<tr>
+<td class="indicator-name">MCS (Structure)</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td>HTF for trend, LTF for entry</td>
+</tr>
+
+<tr>
+<td class="indicator-name">RPS</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td>Daily to Monthly</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Wyckoff</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#1b4332;">✅ High</td>
+<td>Daily to Monthly</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Volume Delta</td>
+<td style="background:#1b4332;">✅ High</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td>Intraday only</td>
+</tr>
+
+<tr>
+<td class="indicator-name">OBV</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td>Daily to Monthly</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Bollinger Bands</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td>20,2 standard</td>
+</tr>
+
+<tr>
+<td class="indicator-name">ADX</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td>14 period</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Fibonacci</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td>Major swings only</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Supertrend</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td>10,3 for intraday; 10,2 for swing</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Ichimoku</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td>9,26,52 standard</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Stochastic</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#3d405b;">🟡 Medium</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td>5,3,3 fast; 14,3,3 slow</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Pivot Points</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a3f35;">🟢 Low</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td style="background:#4a1c1c;">❌ N/A</td>
+<td>Daily pivots for intraday</td>
+</tr>
+</table>
+
+<!-- ==================== CANDLESTICK SUMMARY ==================== -->
+<h2>🕯️ CANDLESTICK PATTERN RELIABILITY MATRIX</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="8">CANDLESTICK RELIABILITY BY TIMEFRAME</td>
+</tr>
+<tr>
+<th>Pattern</th>
+<th>1-5 min</th>
+<th>15 min</th>
+<th>1 Hour</th>
+<th>Daily</th>
+<th>Weekly</th>
+<th>Monthly</th>
+<th>Best Use</th>
+</tr>
+
+<tr>
+<td class="indicator-name">Bullish Engulfing</td>
+<td>55%</td>
+<td>65%</td>
+<td>72%</td>
+<td>78%</td>
+<td>85%</td>
+<td>90%</td>
+<td>Reversal at support</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Bearish Engulfing</td>
+<td>55%</td>
+<td>65%</td>
+<td>70%</td>
+<td>76%</td>
+<td>83%</td>
+<td>88%</td>
+<td>Reversal at resistance</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Hammer</td>
+<td>50%</td>
+<td>62%</td>
+<td>68%</td>
+<td>75%</td>
+<td>82%</td>
+<td>88%</td>
+<td>Bottoming signal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Shooting Star</td>
+<td>48%</td>
+<td>60%</td>
+<td>65%</td>
+<td>72%</td>
+<td>78%</td>
+<td>85%</td>
+<td>Topping signal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Morning Star</td>
+<td>52%</td>
+<td>65%</td>
+<td>72%</td>
+<td>78%</td>
+<td>84%</td>
+<td>90%</td>
+<td>Major reversal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Evening Star</td>
+<td>50%</td>
+<td>63%</td>
+<td>70%</td>
+<td>76%</td>
+<td>82%</td>
+<td>88%</td>
+<td>Major reversal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Doji</td>
+<td>45%</td>
+<td>52%</td>
+<td>55%</td>
+<td>60%</td>
+<td>68%</td>
+<td>75%</td>
+<td>Indecision only</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Three White Soldiers</td>
+<td>55%</td>
+<td>62%</td>
+<td>68%</td>
+<td>72%</td>
+<td>78%</td>
+<td>82%</td>
+<td>Strong momentum</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Three Black Crows</td>
+<td>53%</td>
+<td>60%</td>
+<td>66%</td>
+<td>70%</td>
+<td>76%</td>
+<td>80%</td>
+<td>Strong downward pressure</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Piercing Line</td>
+<td>48%</td>
+<td>58%</td>
+<td>65%</td>
+<td>73%</td>
+<td>80%</td>
+<td>86%</td>
+<td>Bullish reversal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Dark Cloud Cover</td>
+<td>47%</td>
+<td>56%</td>
+<td>63%</td>
+<td>71%</td>
+<td>78%</td>
+<td>84%</td>
+<td>Bearish reversal</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Inside Bar</td>
+<td>55%</td>
+<td>60%</td>
+<td>65%</td>
+<td>70%</td>
+<td>75%</td>
+<td>80%</td>
+<td>Breakout setup</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Pin Bar</td>
+<td>58%</td>
+<td>65%</td>
+<td>70%</td>
+<td>76%</td>
+<td>82%</td>
+<td>87%</td>
+<td>Key level rejection</td>
+</tr>
+</table>
+
+<!-- ==================== ADDITIONAL INDICATORS ==================== -->
+<h2>➕ ADDITIONAL RECOMMENDED INDICATORS</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="5">INDICATORS NOT IN ORIGINAL LIST BUT RECOMMENDED</td>
+</tr>
+<tr>
+<th>Indicator</th>
+<th>Best For</th>
+<th>Settings</th>
+<th>Usage</th>
+<th>Priority</th>
+</tr>
+
+<tr>
+<td class="indicator-name">Volume Profile (VPVR/VPSR)</td>
+<td>All timeframes</td>
+<td>Session/Visible Range</td>
+<td>POC, VAH, VAL as S/R. High Volume Nodes = congestion</td>
+<td>HIGH for intraday/swing</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Anchored VWAP</td>
+<td>Swing, Positional</td>
+<td>Anchor to significant pivots</td>
+<td>Institutional cost basis, dynamic S/R</td>
+<td>MEDIUM</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Market Internals (A/D, TICK, TRIN)</td>
+<td>Scalp, Intraday</td>
+<td>Real-time breadth</td>
+<td>Confirm market direction, divergence signals</td>
+<td>HIGH for index trading</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Order Flow / Footprint Charts</td>
+<td>Scalp</td>
+<td>Delta, Imbalance</td>
+<td>See buying/selling pressure in real-time</td>
+<td>HIGH for scalping</td>
+</tr>
+
+<tr>
+<td class="indicator-name">RVOL (Relative Volume)</td>
+<td>All timeframes</td>
+<td>vs 20-day average</td>
+<td>RVOL > 1.5 = unusual activity</td>
+<td>MEDIUM</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Donchian Channels</td>
+<td>Swing, Positional</td>
+<td>20 period</td>
+<td>Breakout trading, turtle system</td>
+<td>LOW</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Keltner Channels</td>
+<td>Intraday, Swing</td>
+<td>20, 1.5 ATR</td>
+<td>Mean reversion, squeeze plays</td>
+<td>LOW</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Williams %R</td>
+<td>Scalp, Intraday</td>
+<td>14 period</td>
+<td>Alternative to stochastic</td>
+<td>LOW</td>
+</tr>
+
+<tr>
+<td class="indicator-name">CCI (Commodity Channel Index)</td>
+<td>Swing</td>
+<td>20 period</td>
+<td>Trend strength, divergences</td>
+<td>LOW</td>
+</tr>
+
+<tr>
+<td class="indicator-name">MFI (Money Flow Index)</td>
+<td>Swing, Positional</td>
+<td>14 period</td>
+<td>Volume-weighted RSI, better for divergences</td>
+<td>MEDIUM</td>
+</tr>
+
+<tr>
+<td class="indicator-name">VWMA (Volume Weighted MA)</td>
+<td>Intraday, Swing</td>
+<td>20 period</td>
+<td>More responsive to volume-driven moves</td>
+<td>LOW</td>
+</tr>
+
+<tr>
+<td class="indicator-name">Chaikin Money Flow</td>
+<td>Swing, Positional</td>
+<td>21 period</td>
+<td>Accumulation/distribution pressure</td>
+<td>MEDIUM</td>
+</tr>
+</table>
+
+<!-- ==================== LOOKBACK SUMMARY ==================== -->
+<h2>⏱️ HISTORICAL LOOKBACK QUICK REFERENCE</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="7">RECOMMENDED LOOKBACK PERIODS BY TRADING STYLE</td>
+</tr>
+<tr>
+<th>Chart TF</th>
+<th>SCALP</th>
+<th>INTRADAY</th>
+<th>BTST</th>
+<th>SWING</th>
+<th>POSITIONAL</th>
+<th>INVESTMENT</th>
+</tr>
+
+<tr>
+<td>1-min</td>
+<td>30-50 candles<br>(30-50 min)</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+</tr>
+
+<tr>
+<td>3-min</td>
+<td>50-100 candles<br>(2.5-5 hrs)</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+</tr>
+
+<tr>
+<td>5-min</td>
+<td>50-100 candles<br>(4-8 hrs)</td>
+<td>100-200 candles<br>(1-2 days)</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+</tr>
+
+<tr>
+<td>15-min</td>
+<td>50 candles (reference)</td>
+<td>100-200 candles<br>(3-6 days)</td>
+<td>100 candles<br>(3 days)</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+</tr>
+
+<tr>
+<td>1-hour</td>
+<td>-</td>
+<td>50-100 candles<br>(1-2 weeks)</td>
+<td>50-100 candles<br>(1-2 weeks)</td>
+<td>100-200 candles<br>(1-2 months)</td>
+<td>-</td>
+<td>-</td>
+</tr>
+
+<tr>
+<td>Daily</td>
+<td>-</td>
+<td>Previous day OHLC</td>
+<td>10-30 days</td>
+<td>100-250 candles<br>(4-12 months)</td>
+<td>252-500 candles<br>(1-2 years)</td>
+<td>1000+ candles<br>(4+ years)</td>
+</tr>
+
+<tr>
+<td>Weekly</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>52 candles<br>(1 year)</td>
+<td>100-150 candles<br>(2-3 years)</td>
+<td>260+ candles<br>(5+ years)</td>
+</tr>
+
+<tr>
+<td>Monthly</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>36-60 candles<br>(3-5 years)</td>
+<td>120+ candles<br>(10+ years)</td>
+</tr>
+</table>
+
+<!-- ==================== WYCKOFF REFERENCE ==================== -->
+<h2>📚 WYCKOFF PHASES QUICK REFERENCE</h2>
+
+<table>
+<tr class="section-header">
+<td colspan="4">ACCUMULATION PHASES (BOTTOM FORMATION)</td>
+</tr>
+<tr>
+<th>Phase</th>
+<th>Characteristics</th>
+<th>Volume</th>
+<th>Action</th>
+</tr>
+<tr>
+<td style="background:#1b4332;">A1: Selling Climax (SC)</td>
+<td>Panic selling, wide range bars down</td>
+<td>Extremely High</td>
+<td>Watch - Don't buy</td>
+</tr>
+<tr>
+<td style="background:#3d405b;">A2: Automatic Rally (AR)</td>
+<td>Short covering bounce</td>
+<td>Moderate</td>
+<td>Watch - Don't buy</td>
+</tr>
+<tr>
+<td style="background:#3d405b;">A3: Secondary Test (ST)</td>
+<td>Retest of lows</td>
+<td>Lower than SC</td>
+<td>Watch - Getting interesting</td>
+</tr>
+<tr>
+<td style="background:#1b4332;">A4: Spring/Shakeout</td>
+<td>False breakdown below support</td>
+<td>Lower volume on break</td>
+<td>🎯 BEST ENTRY POINT</td>
+</tr>
+<tr>
+<td style="background:#1b4332;">A5: Sign of Strength (SOS)</td>
+<td>Strong rally above range</td>
+<td>High volume</td>
+<td>Breakout confirmation - Buy</td>
+</tr>
+<tr>
+<td style="background:#3d405b;">A6: Last Point of Support (LPS)</td>
+<td>Pullback to retest breakout</td>
+<td>Low volume</td>
+<td>Add to position</td>
+</tr>
+</table>
+
+<table>
+<tr class="section-header">
+<td colspan="4">DISTRIBUTION PHASES (TOP FORMATION)</td>
+</tr>
+<tr>
+<th>Phase</th>
+<th>Characteristics</th>
+<th>Volume</th>
+<th>Action</th>
+</tr>
+<tr>
+<td style="background:#4a1c1c;">D1: Preliminary Supply (PSY)</td>
+<td>First selling pressure after uptrend</td>
+<td>High</td>
+<td>Watch - First warning</td>
+</tr>
+<tr>
+<td style="background:#4a1c1c;">D2: Buying Climax (BC)</td>
+<td>Euphoric final push higher</td>
+<td>Extremely High</td>
+<td>⚠️ REDUCE / TAKE PROFITS</td>
+</tr>
+<tr>
+<td style="background:#3d405b;">D3: Automatic Reaction (AR)</td>
+<td>Sharp pullback from highs</td>
+<td>High</td>
+<td>Do not buy dip</td>
+</tr>
+<tr>
+<td style="background:#4a1c1c;">D4: Secondary Test (ST)</td>
+<td>Retest of highs - fails</td>
+<td>Lower than BC</td>
+<td>EXIT remaining longs</td>
+</tr>
+<tr>
+<td style="background:#4a1c1c;">D5: Upthrust (UT)</td>
+<td>False breakout above resistance</td>
+<td>Lower volume</td>
+<td>⚠️ SHORT ENTRY SIGNAL</td>
+</tr>
+<tr>
+<td style="background:#4a1c1c;">D6: Sign of Weakness (SOW)</td>
+<td>Breakdown below support</td>
+<td>High volume</td>
+<td>Confirms distribution - Short</td>
+</tr>
+</table>
+
+</body>
+</html>

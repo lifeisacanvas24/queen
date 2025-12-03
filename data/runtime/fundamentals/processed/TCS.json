@@ -1,20 +1,60 @@
 {
   "symbol": "TCS",
-  "sector": "Information Technology Information Technology IT - Software Computers - Software & Consulting",
-  "top_ratios": {
-    "market_cap": 1139570.0,
-    "current_price": 3151.0,
-    "high": 4495.0,
-    "low": 2867.0,
-    "pe_ratio": 23.8,
-    "book_value": 235.0,
-    "dividend_yield": 1.9,
-    "roce": 78.4,
-    "roe": 65.0,
-    "face_value": 1.0
-  },
+  "company_name": "Tata Consultancy Services Ltd",
+  "sector": "Information Technology",
+  "industry": "Computers - Software & Consulting",
+  "broad_sector": "Information Technology",
+  "market_cap": 1150570.0,
+  "current_price": 3180.0,
+  "week_52_high": 4495.0,
+  "week_52_low": 2867.0,
+  "pe_ratio": 24.0,
+  "book_value": 235.0,
+  "dividend_yield": 1.89,
+  "roce_pct": 78.4,
+  "roe_pct": 65.0,
+  "face_value": 1.0,
+  "about": "Tata Consultancy Services is the flagship company and a part of Tata group. It is an IT services, consulting and business solutions organization that has been partnering with many of the world's largest businesses in their transformation journeys for over 50 years. TCS offers a consulting-led, cognitive powered, integrated portfolio of business, technology and engineering services and solutions.[1]",
+  "pros": [
+    "Company has a good return on equity (ROE) track record: 3 Years ROE 58.9%",
+    "Company has been maintaining a healthy dividend payout of 87.7%"
+  ],
+  "cons": [
+    "Stock is trading at 13.5 times its book value",
+    "The company has delivered a poor sales growth of 10.4% over past five years."
+  ],
   "quarters": {
-    "q_op": {
+    "Sales+": {
+      "Sep 2022": 46819.0,
+      "Dec 2022": 49275.0,
+      "Mar 2023": 49780.0,
+      "Jun 2023": 49862.0,
+      "Sep 2023": 50165.0,
+      "Dec 2023": 50844.0,
+      "Mar 2024": 51488.0,
+      "Jun 2024": 52844.0,
+      "Sep 2024": 53990.0,
+      "Dec 2024": 53883.0,
+      "Mar 2025": 54136.0,
+      "Jun 2025": 52788.0,
+      "Sep 2025": 54531.0
+    },
+    "Expenses+": {
+      "Sep 2022": 34037.0,
+      "Dec 2022": 35759.0,
+      "Mar 2023": 36910.0,
+      "Jun 2023": 36726.0,
+      "Sep 2023": 36363.0,
+      "Dec 2023": 36481.0,
+      "Mar 2024": 36942.0,
+      "Jun 2024": 38269.0,
+      "Sep 2024": 39432.0,
+      "Dec 2024": 39156.0,
+      "Mar 2025": 40067.0,
+      "Jun 2025": 38031.0,
+      "Sep 2025": 38863.0
+    },
+    "Operating Profit": {
       "Sep 2022": 12782.0,
       "Dec 2022": 13516.0,
       "Mar 2023": 12870.0,
@@ -29,22 +69,37 @@
       "Jun 2025": 14757.0,
       "Sep 2025": 15668.0
     },
-    "q_opm": {
-      "Sep 2022": 0.27,
-      "Dec 2022": 0.27,
-      "Mar 2023": 0.26,
-      "Jun 2023": 0.26,
-      "Sep 2023": 0.28,
-      "Dec 2023": 0.28,
-      "Mar 2024": 0.28,
-      "Jun 2024": 0.28,
-      "Sep 2024": 0.27,
-      "Dec 2024": 0.27,
-      "Mar 2025": 0.26,
-      "Jun 2025": 0.28,
-      "Sep 2025": 0.29
+    "OPM %": {
+      "Sep 2022": 27.0,
+      "Dec 2022": 27.0,
+      "Mar 2023": 26.0,
+      "Jun 2023": 26.0,
+      "Sep 2023": 28.0,
+      "Dec 2023": 28.0,
+      "Mar 2024": 28.0,
+      "Jun 2024": 28.0,
+      "Sep 2024": 27.0,
+      "Dec 2024": 27.0,
+      "Mar 2025": 26.0,
+      "Jun 2025": 28.0,
+      "Sep 2025": 29.0
     },
-    "q_interest": {
+    "Other Income+": {
+      "Sep 2022": 1622.0,
+      "Dec 2022": 1558.0,
+      "Mar 2023": 1433.0,
+      "Jun 2023": 1903.0,
+      "Sep 2023": 1755.0,
+      "Dec 2023": 851.0,
+      "Mar 2024": 1806.0,
+      "Jun 2024": 2417.0,
+      "Sep 2024": 3185.0,
+      "Dec 2024": 2118.0,
+      "Mar 2025": 1922.0,
+      "Jun 2025": 2703.0,
+      "Sep 2025": 918.0
+    },
+    "Interest": {
       "Sep 2022": 125.0,
       "Dec 2022": 136.0,
       "Mar 2023": 250.0,
@@ -59,7 +114,7 @@
       "Jun 2025": 171.0,
       "Sep 2025": 203.0
     },
-    "q_depreciation": {
+    "Depreciation": {
       "Sep 2022": 976.0,
       "Dec 2022": 996.0,
       "Mar 2023": 1008.0,
@@ -74,7 +129,7 @@
       "Jun 2025": 1103.0,
       "Sep 2025": 1139.0
     },
-    "q_pbt": {
+    "Profit before tax": {
       "Sep 2022": 13303.0,
       "Dec 2022": 13942.0,
       "Mar 2023": 13045.0,
@@ -89,22 +144,37 @@
       "Jun 2025": 16186.0,
       "Sep 2025": 15244.0
     },
-    "q_tax": {
-      "Sep 2022": 0.24,
-      "Dec 2022": 0.24,
-      "Mar 2023": 0.25,
-      "Jun 2023": 0.25,
-      "Sep 2023": 0.24,
-      "Dec 2023": 0.23,
-      "Mar 2024": 0.25,
-      "Jun 2024": 0.24,
-      "Sep 2024": 0.22,
-      "Dec 2024": 0.24,
-      "Mar 2025": 0.24,
-      "Jun 2025": 0.22,
-      "Sep 2025": 0.22
+    "Tax %": {
+      "Sep 2022": 24.0,
+      "Dec 2022": 24.0,
+      "Mar 2023": 25.0,
+      "Jun 2023": 25.0,
+      "Sep 2023": 24.0,
+      "Dec 2023": 23.0,
+      "Mar 2024": 25.0,
+      "Jun 2024": 24.0,
+      "Sep 2024": 22.0,
+      "Dec 2024": 24.0,
+      "Mar 2025": 24.0,
+      "Jun 2025": 22.0,
+      "Sep 2025": 22.0
     },
-    "q_eps": {
+    "Net Profit+": {
+      "Sep 2022": 10059.0,
+      "Dec 2022": 10659.0,
+      "Mar 2023": 9800.0,
+      "Jun 2023": 10484.0,
+      "Sep 2023": 10929.0,
+      "Dec 2023": 10753.0,
+      "Mar 2024": 11393.0,
+      "Jun 2024": 12115.0,
+      "Sep 2024": 12994.0,
+      "Dec 2024": 11832.0,
+      "Mar 2025": 11116.0,
+      "Jun 2025": 12552.0,
+      "Sep 2025": 11828.0
+    },
+    "EPS in Rs": {
       "Sep 2022": 27.49,
       "Dec 2022": 29.13,
       "Mar 2023": 26.78,
@@ -118,10 +188,55 @@
       "Mar 2025": 30.72,
       "Jun 2025": 34.69,
       "Sep 2025": 32.69
+    },
+    "Raw PDF": {
+      "Sep 2022": "",
+      "Dec 2022": "",
+      "Mar 2023": "",
+      "Jun 2023": "",
+      "Sep 2023": "",
+      "Dec 2023": "",
+      "Mar 2024": "",
+      "Jun 2024": "",
+      "Sep 2024": "",
+      "Dec 2024": "",
+      "Mar 2025": "",
+      "Jun 2025": "",
+      "Sep 2025": ""
     }
   },
   "profit_loss": {
-    "pl_op": {
+    "Sales+": {
+      "Mar 2014": 64673.0,
+      "Mar 2015": 73578.0,
+      "Mar 2016": 85864.0,
+      "Mar 2017": 92693.0,
+      "Mar 2018": 97356.0,
+      "Mar 2019": 123170.0,
+      "Mar 2020": 131306.0,
+      "Mar 2021": 135963.0,
+      "Mar 2022": 160341.0,
+      "Mar 2023": 190354.0,
+      "Mar 2024": 202359.0,
+      "Mar 2025": 214853.0,
+      "TTM": 215338.0
+    },
+    "Expenses+": {
+      "Mar 2014": 43139.0,
+      "Mar 2015": 52550.0,
+      "Mar 2016": 58810.0,
+      "Mar 2017": 65604.0,
+      "Mar 2018": 69551.0,
+      "Mar 2019": 88206.0,
+      "Mar 2020": 93953.0,
+      "Mar 2021": 95653.0,
+      "Mar 2022": 114096.0,
+      "Mar 2023": 139357.0,
+      "Mar 2024": 146512.0,
+      "Mar 2025": 156924.0,
+      "TTM": 156117.0
+    },
+    "Operating Profit": {
       "Mar 2014": 21534.0,
       "Mar 2015": 21028.0,
       "Mar 2016": 27054.0,
@@ -136,22 +251,37 @@
       "Mar 2025": 57929.0,
       "TTM": 59221.0
     },
-    "pl_opm": {
-      "Mar 2014": 0.33,
-      "Mar 2015": 0.29,
-      "Mar 2016": 0.32,
-      "Mar 2017": 0.29,
-      "Mar 2018": 0.29,
-      "Mar 2019": 0.28,
-      "Mar 2020": 0.28,
-      "Mar 2021": 0.3,
-      "Mar 2022": 0.29,
-      "Mar 2023": 0.27,
-      "Mar 2024": 0.28,
-      "Mar 2025": 0.27,
-      "TTM": 0.28
+    "OPM %": {
+      "Mar 2014": 33.0,
+      "Mar 2015": 29.0,
+      "Mar 2016": 32.0,
+      "Mar 2017": 29.0,
+      "Mar 2018": 29.0,
+      "Mar 2019": 28.0,
+      "Mar 2020": 28.0,
+      "Mar 2021": 30.0,
+      "Mar 2022": 29.0,
+      "Mar 2023": 27.0,
+      "Mar 2024": 28.0,
+      "Mar 2025": 27.0,
+      "TTM": 28.0
     },
-    "pl_interest": {
+    "Other Income+": {
+      "Mar 2014": 3115.0,
+      "Mar 2015": 4995.0,
+      "Mar 2016": 3757.0,
+      "Mar 2017": 4568.0,
+      "Mar 2018": 5803.0,
+      "Mar 2019": 7627.0,
+      "Mar 2020": 8082.0,
+      "Mar 2021": 4182.0,
+      "Mar 2022": 7486.0,
+      "Mar 2023": 5328.0,
+      "Mar 2024": 6315.0,
+      "Mar 2025": 9642.0,
+      "TTM": 7661.0
+    },
+    "Interest": {
       "Mar 2014": 23.0,
       "Mar 2015": 80.0,
       "Mar 2016": 13.0,
@@ -166,7 +296,7 @@
       "Mar 2025": 703.0,
       "TTM": 786.0
     },
-    "pl_depr": {
+    "Depreciation": {
       "Mar 2014": 1081.0,
       "Mar 2015": 1394.0,
       "Mar 2016": 1459.0,
@@ -181,7 +311,7 @@
       "Mar 2025": 4220.0,
       "TTM": 4485.0
     },
-    "pl_pbt": {
+    "Profit before tax": {
       "Mar 2014": 23544.0,
       "Mar 2015": 24550.0,
       "Mar 2016": 29339.0,
@@ -196,22 +326,37 @@
       "Mar 2025": 62648.0,
       "TTM": 61611.0
     },
-    "pl_taxpct": {
-      "Mar 2014": 0.22,
-      "Mar 2015": 0.22,
-      "Mar 2016": 0.21,
-      "Mar 2017": 0.21,
-      "Mar 2018": 0.21,
-      "Mar 2019": 0.26,
-      "Mar 2020": 0.21,
-      "Mar 2021": 0.24,
-      "Mar 2022": 0.23,
-      "Mar 2023": 0.24,
-      "Mar 2024": 0.24,
-      "Mar 2025": 0.23,
-      "TTM": null
+    "Tax %": {
+      "Mar 2014": 22.0,
+      "Mar 2015": 22.0,
+      "Mar 2016": 21.0,
+      "Mar 2017": 21.0,
+      "Mar 2018": 21.0,
+      "Mar 2019": 26.0,
+      "Mar 2020": 21.0,
+      "Mar 2021": 24.0,
+      "Mar 2022": 23.0,
+      "Mar 2023": 24.0,
+      "Mar 2024": 24.0,
+      "Mar 2025": 23.0,
+      "TTM": ""
     },
-    "pl_eps": {
+    "Net Profit+": {
+      "Mar 2014": 18475.0,
+      "Mar 2015": 19257.0,
+      "Mar 2016": 23075.0,
+      "Mar 2017": 23653.0,
+      "Mar 2018": 25241.0,
+      "Mar 2019": 30065.0,
+      "Mar 2020": 33260.0,
+      "Mar 2021": 30960.0,
+      "Mar 2022": 38187.0,
+      "Mar 2023": 39106.0,
+      "Mar 2024": 43559.0,
+      "Mar 2025": 48057.0,
+      "TTM": 47328.0
+    },
+    "EPS in Rs": {
       "Mar 2014": 47.16,
       "Mar 2015": 49.16,
       "Mar 2016": 58.55,
@@ -226,24 +371,24 @@
       "Mar 2025": 132.82,
       "TTM": 130.8
     },
-    "pl_div_payout": {
-      "Mar 2014": 0.34,
-      "Mar 2015": 0.8,
-      "Mar 2016": 0.37,
-      "Mar 2017": 0.39,
-      "Mar 2018": 0.38,
-      "Mar 2019": 0.37,
-      "Mar 2020": 0.82,
-      "Mar 2021": 0.45,
-      "Mar 2022": 0.41,
-      "Mar 2023": 1.08,
-      "Mar 2024": 0.61,
-      "Mar 2025": 0.95,
-      "TTM": null
+    "Dividend Payout %": {
+      "Mar 2014": 34.0,
+      "Mar 2015": 80.0,
+      "Mar 2016": 37.0,
+      "Mar 2017": 39.0,
+      "Mar 2018": 38.0,
+      "Mar 2019": 37.0,
+      "Mar 2020": 82.0,
+      "Mar 2021": 45.0,
+      "Mar 2022": 41.0,
+      "Mar 2023": 108.0,
+      "Mar 2024": 61.0,
+      "Mar 2025": 95.0,
+      "TTM": ""
     }
   },
   "balance_sheet": {
-    "bs_equity_cap": {
+    "Equity Capital": {
       "Mar 2014": 196.0,
       "Mar 2015": 196.0,
       "Mar 2016": 197.0,
@@ -258,7 +403,7 @@
       "Mar 2025": 362.0,
       "Sep 2025": 362.0
     },
-    "bs_reserves": {
+    "Reserves": {
       "Mar 2014": 43856.0,
       "Mar 2015": 45221.0,
       "Mar 2016": 64816.0,
@@ -273,7 +418,37 @@
       "Mar 2025": 75255.0,
       "Sep 2025": 84667.0
     },
-    "bs_total_liabilities": {
+    "Borrowings+": {
+      "Mar 2014": 115.0,
+      "Mar 2015": 273.0,
+      "Mar 2016": 178.0,
+      "Mar 2017": 250.0,
+      "Mar 2018": 225.0,
+      "Mar 2019": 39.0,
+      "Mar 2020": 6110.0,
+      "Mar 2021": 5077.0,
+      "Mar 2022": 5855.0,
+      "Mar 2023": 5659.0,
+      "Mar 2024": 6145.0,
+      "Mar 2025": 7577.0,
+      "Sep 2025": 8970.0
+    },
+    "Other Liabilities+": {
+      "Mar 2014": 13210.0,
+      "Mar 2015": 17105.0,
+      "Mar 2016": 11860.0,
+      "Mar 2017": 11172.0,
+      "Mar 2018": 14541.0,
+      "Mar 2019": 20224.0,
+      "Mar 2020": 24150.0,
+      "Mar 2021": 29145.0,
+      "Mar 2022": 38106.0,
+      "Mar 2023": 39440.0,
+      "Mar 2024": 42729.0,
+      "Mar 2025": 49392.0,
+      "Sep 2025": 50622.0
+    },
+    "Total Liabilities": {
       "Mar 2014": 57377.0,
       "Mar 2015": 62794.0,
       "Mar 2016": 77051.0,
@@ -288,7 +463,22 @@
       "Mar 2025": 132586.0,
       "Sep 2025": 144621.0
     },
-    "bs_cwip": {
+    "Fixed Assets+": {
+      "Mar 2014": 5929.0,
+      "Mar 2015": 7996.0,
+      "Mar 2016": 9080.0,
+      "Mar 2017": 9231.0,
+      "Mar 2018": 9440.0,
+      "Mar 2019": 9661.0,
+      "Mar 2020": 16122.0,
+      "Mar 2021": 16059.0,
+      "Mar 2022": 16524.0,
+      "Mar 2023": 15690.0,
+      "Mar 2024": 14953.0,
+      "Mar 2025": 16825.0,
+      "Sep 2025": 17556.0
+    },
+    "CWIP": {
       "Mar 2014": 3048.0,
       "Mar 2015": 2707.0,
       "Mar 2016": 1640.0,
@@ -303,7 +493,7 @@
       "Mar 2025": 1318.0,
       "Sep 2025": 1952.0
     },
-    "bs_investments": {
+    "Investments": {
       "Mar 2014": 5832.0,
       "Mar 2015": 3399.0,
       "Mar 2016": 24159.0,
@@ -318,7 +508,22 @@
       "Mar 2025": 32802.0,
       "Sep 2025": 39201.0
     },
-    "bs_total_assets": {
+    "Other Assets+": {
+      "Mar 2014": 42568.0,
+      "Mar 2015": 48692.0,
+      "Mar 2016": 42172.0,
+      "Mar 2017": 35806.0,
+      "Mar 2018": 42695.0,
+      "Mar 2019": 58197.0,
+      "Mar 2020": 59850.0,
+      "Mar 2021": 61367.0,
+      "Mar 2022": 71797.0,
+      "Mar 2023": 64701.0,
+      "Mar 2024": 72346.0,
+      "Mar 2025": 81641.0,
+      "Sep 2025": 85912.0
+    },
+    "Total Assets": {
       "Mar 2014": 57377.0,
       "Mar 2015": 62794.0,
       "Mar 2016": 77051.0,
@@ -335,7 +540,49 @@
     }
   },
   "cash_flow": {
-    "cf_net": {
+    "Cash from Operating Activity+": {
+      "Mar 2014": 12942.0,
+      "Mar 2015": 16320.0,
+      "Mar 2016": 17986.0,
+      "Mar 2017": 23132.0,
+      "Mar 2018": 21587.0,
+      "Mar 2019": 23998.0,
+      "Mar 2020": 26603.0,
+      "Mar 2021": 33822.0,
+      "Mar 2022": 36127.0,
+      "Mar 2023": 37029.0,
+      "Mar 2024": 39142.0,
+      "Mar 2025": 40816.0
+    },
+    "Cash from Investing Activity+": {
+      "Mar 2014": -7143.0,
+      "Mar 2015": 586.0,
+      "Mar 2016": -4478.0,
+      "Mar 2017": -15834.0,
+      "Mar 2018": 5728.0,
+      "Mar 2019": 5876.0,
+      "Mar 2020": 12967.0,
+      "Mar 2021": -4539.0,
+      "Mar 2022": 3755.0,
+      "Mar 2023": 3460.0,
+      "Mar 2024": 10833.0,
+      "Mar 2025": 4874.0
+    },
+    "Cash from Financing Activity+": {
+      "Mar 2014": -5684.0,
+      "Mar 2015": -16914.0,
+      "Mar 2016": -9586.0,
+      "Mar 2017": -10891.0,
+      "Mar 2018": -26827.0,
+      "Mar 2019": -27825.0,
+      "Mar 2020": -39045.0,
+      "Mar 2021": -32023.0,
+      "Mar 2022": -32797.0,
+      "Mar 2023": -47224.0,
+      "Mar 2024": -47793.0,
+      "Mar 2025": -46724.0
+    },
+    "Net Cash Flow": {
       "Mar 2014": 115.0,
       "Mar 2015": -9.0,
       "Mar 2016": 3922.0,
@@ -351,111 +598,143 @@
     }
   },
   "ratios": {
-    "debtor_days": {
-      "Mar 2014": 82.0,
-      "Mar 2015": 85.0,
-      "Mar 2016": 81.0,
-      "Mar 2017": 65.0,
-      "Mar 2018": 71.0,
-      "Mar 2019": 71.0,
-      "Mar 2020": 80.0,
-      "Mar 2021": 68.0,
-      "Mar 2022": 68.0,
-      "Mar 2023": 82.0,
-      "Mar 2024": 83.0,
-      "Mar 2025": 88.0
-    },
-    "inventory_days": {
-      "Mar 2014": null,
-      "Mar 2015": null,
-      "Mar 2016": null,
-      "Mar 2017": null,
-      "Mar 2018": null,
-      "Mar 2019": null,
-      "Mar 2020": null,
-      "Mar 2021": null,
-      "Mar 2022": null,
-      "Mar 2023": null,
-      "Mar 2024": null,
-      "Mar 2025": null
-    },
-    "days_payable": {
-      "Mar 2014": null,
-      "Mar 2015": null,
-      "Mar 2016": null,
-      "Mar 2017": null,
-      "Mar 2018": null,
-      "Mar 2019": null,
-      "Mar 2020": null,
-      "Mar 2021": null,
-      "Mar 2022": null,
-      "Mar 2023": null,
-      "Mar 2024": null,
-      "Mar 2025": null
-    },
-    "ccc": {
-      "Mar 2014": 82.0,
-      "Mar 2015": 85.0,
-      "Mar 2016": 81.0,
-      "Mar 2017": 65.0,
-      "Mar 2018": 71.0,
-      "Mar 2019": 71.0,
-      "Mar 2020": 80.0,
-      "Mar 2021": 68.0,
-      "Mar 2022": 68.0,
-      "Mar 2023": 82.0,
-      "Mar 2024": 83.0,
-      "Mar 2025": 88.0
-    },
-    "wc_days": {
-      "Mar 2014": 52.0,
-      "Mar 2015": 33.0,
-      "Mar 2016": 65.0,
-      "Mar 2017": 62.0,
-      "Mar 2018": 58.0,
-      "Mar 2019": 68.0,
-      "Mar 2020": 69.0,
-      "Mar 2021": 62.0,
-      "Mar 2022": 30.0,
-      "Mar 2023": 25.0,
-      "Mar 2024": 28.0,
-      "Mar 2025": 31.0
-    },
-    "roce_pct": {
-      "Mar 2014": 0.61,
-      "Mar 2015": 0.53,
-      "Mar 2016": 0.52,
-      "Mar 2017": 0.42,
-      "Mar 2018": 0.41,
-      "Mar 2019": 0.53,
-      "Mar 2020": 0.54,
-      "Mar 2021": 0.53,
-      "Mar 2022": 0.62,
-      "Mar 2023": 0.64,
-      "Mar 2024": 0.75,
-      "Mar 2025": 0.78
-    }
+    "ratio_debtor_days": 88.0,
+    "ratio_cash_conversion_cycle": 88.0,
+    "ratio_working_capital_days": 31.0,
+    "ratio_roce_pct": 78.0
   },
   "growth": {
-    "sales_cagr_10y": 0.11,
-    "sales_cagr_5y": 0.1,
-    "sales_cagr_3y": 0.1,
-    "sales_cagr_ttm": 0.03,
-    "profit_cagr_10y": 0.1,
-    "profit_cagr_5y": 0.08,
-    "profit_cagr_3y": 0.08,
+    "sales_cagr_10y": 11.0,
+    "sales_cagr_5y": 10.0,
+    "sales_cagr_3y": 10.0,
+    "sales_cagr_ttm": 3.0,
+    "profit_cagr_10y": 10.0,
+    "profit_cagr_5y": 8.0,
+    "profit_cagr_3y": 8.0,
     "profit_cagr_ttm": 0.0,
-    "price_cagr_10y": 0.1,
-    "price_cagr_5y": 0.03,
-    "price_cagr_3y": -0.02,
-    "price_cagr_1y": -0.26,
-    "roe_10y": 0.46,
-    "roe_5y": 0.54,
-    "roe_3y": 0.59,
-    "roe_last_year": 0.65
+    "price_cagr_10y": 11.0,
+    "price_cagr_5y": 3.0,
+    "price_cagr_3y": -3.0,
+    "price_cagr_1y": -26.0,
+    "roe_10y": 46.0,
+    "roe_5y": 54.0,
+    "roe_3y": 59.0,
+    "roe_last_year": 65.0
   },
   "shareholding": {
-    "quarterly": {},
-    "yearly": {}
-  }
+    "quarterly": {
+      "promoters": {
+        "Dec 2022": 72.3,
+        "Mar 2023": 72.3,
+        "Jun 2023": 72.3,
+        "Sep 2023": 72.3,
+        "Dec 2023": 72.41,
+        "Mar 2024": 71.77,
+        "Jun 2024": 71.77,
+        "Sep 2024": 71.77,
+        "Dec 2024": 71.77,
+        "Mar 2025": 71.77,
+        "Jun 2025": 71.77,
+        "Sep 2025": 71.77
+      },
+      "fii": {
+        "Dec 2022": 12.94,
+        "Mar 2023": 12.72,
+        "Jun 2023": 12.46,
+        "Sep 2023": 12.47,
+        "Dec 2023": 12.46,
+        "Mar 2024": 12.7,
+        "Jun 2024": 12.35,
+        "Sep 2024": 12.66,
+        "Dec 2024": 12.68,
+        "Mar 2025": 12.04,
+        "Jun 2025": 11.48,
+        "Sep 2025": 10.33
+      },
+      "dii": {
+        "Dec 2022": 9.25,
+        "Mar 2023": 9.58,
+        "Jun 2023": 9.8,
+        "Sep 2023": 10.01,
+        "Dec 2023": 10.03,
+        "Mar 2024": 10.61,
+        "Jun 2024": 11.0,
+        "Sep 2024": 10.86,
+        "Dec 2024": 10.86,
+        "Mar 2025": 11.49,
+        "Jun 2025": 11.95,
+        "Sep 2025": 12.64
+      },
+      "government": {
+        "Dec 2022": 0.05,
+        "Mar 2023": 0.05,
+        "Jun 2023": 0.05,
+        "Sep 2023": 0.05,
+        "Dec 2023": 0.05,
+        "Mar 2024": 0.06,
+        "Jun 2024": 0.06,
+        "Sep 2024": 0.06,
+        "Dec 2024": 0.06,
+        "Mar 2025": 0.06,
+        "Jun 2025": 0.06,
+        "Sep 2025": 0.06
+      },
+      "public": {
+        "Dec 2022": 5.45,
+        "Mar 2023": 5.36,
+        "Jun 2023": 5.38,
+        "Sep 2023": 5.17,
+        "Dec 2023": 5.03,
+        "Mar 2024": 4.86,
+        "Jun 2024": 4.82,
+        "Sep 2024": 4.66,
+        "Dec 2024": 4.63,
+        "Mar 2025": 4.63,
+        "Jun 2025": 4.77,
+        "Sep 2025": 5.21
+      }
+    },
+    "latest": {
+      "promoters": 72.3,
+      "fii": 12.94,
+      "dii": 9.25,
+      "government": 0.05,
+      "public": 5.45
+    },
+    "pledge": {}
+  },
+  "peers": [],
+  "eps_ttm": 130.8,
+  "debt_to_equity": 0.11,
+  "sh_promoters_pct": 72.3,
+  "sh_fii_pct": 12.94,
+  "sh_dii_pct": 9.25,
+  "sh_public_pct": 5.45,
+  "sh_govt_pct": 0.05,
+  "sales_cagr_10y": 11.0,
+  "sales_cagr_5y": 10.0,
+  "sales_cagr_3y": 10.0,
+  "sales_cagr_ttm": 3.0,
+  "profit_cagr_10y": 10.0,
+  "profit_cagr_5y": 8.0,
+  "profit_cagr_3y": 8.0,
+  "profit_cagr_ttm": 0.0,
+  "price_cagr_10y": 11.0,
+  "price_cagr_5y": 3.0,
+  "price_cagr_3y": -3.0,
+  "price_cagr_1y": -26.0,
+  "roe_10y": 46.0,
+  "roe_5y": 54.0,
+  "roe_3y": 59.0,
+  "roe_last_year": 65.0,
+  "ratio_debtor_days": 88.0,
+  "ratio_cash_conversion_cycle": 88.0,
+  "ratio_working_capital_days": 31.0,
+  "ratio_roce_pct": 78.0,
+  "q_sales_latest": 54531.0,
+  "q_net_profit_latest": 11828.0,
+  "q_eps_latest": 32.69,
+  "pl_sales_ttm": 215338.0,
+  "pl_net_profit_ttm": 47328.0,
+  "_extracted_at": "2025-12-03T17:08:43.989130"
 }

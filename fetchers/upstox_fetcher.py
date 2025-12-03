@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/upstox_fetcher.py — v9.9
+# queen/fetchers/upstox_fetcher.py — v9.10
 # (Full timeframe support + FETCH override + DRY intervals)
 # ============================================================
 from __future__ import annotations
@@ -60,11 +60,13 @@ DEFAULT_INTERVALS = SETTINGS.DEFAULTS.get(
 # ============================================================
 # 🧩 Per-timeframe FETCH override helper
 # ============================================================
-def _min_rows_from_settings(token: str, fallback: int) -> int:
+def _min_rows_from_settings(token: str, fallback: Any) -> Any:
     """Allow per-timeframe overrides via SETTINGS.FETCH, e.g.:
     FETCH.MIN_ROWS_AUTO_BACKFILL_5M = 120
     FETCH.MIN_ROWS_AUTO_BACKFILL_15M = 90
     FETCH.MIN_ROWS_AUTO_BACKFILL = 80  # global
+
+    If no override found, returns `fallback` *as-is* (so we can use a sentinel).
     """
     try:
         fetch_cfg = SETTINGS.FETCH or {}
@@ -74,17 +76,21 @@ def _min_rows_from_settings(token: str, fallback: int) -> int:
     t = str(token or "").strip().lower()
     suffix = t.upper().replace(":", "")
     key_specific = f"MIN_ROWS_AUTO_BACKFILL_{suffix}"
+
     if key_specific in fetch_cfg:
         try:
             return int(fetch_cfg[key_specific])
         except Exception:
             pass
+
     if "MIN_ROWS_AUTO_BACKFILL" in fetch_cfg:
         try:
             return int(fetch_cfg["MIN_ROWS_AUTO_BACKFILL"])
         except Exception:
             pass
-    return int(fallback)
+
+    # IMPORTANT: do NOT int() the fallback; just return it.
+    return fallback
 
 # ============================================================
 # 🛠 HTTP + Backfill helpers
@@ -124,8 +130,11 @@ async def _intraday_via_historical(
     start: str | None = None,
     end: str | None = None,
 ) -> pl.DataFrame:
-    """For minutes/hours, fetch via historical endpoint to span yesterday+today (or any window).
-    Also safe for days/weeks/months (delegates wide by default).
+    """For minutes/hours, fetch via historical endpoint to span a window.
+
+    - If `start` / `end` provided, they define the explicit window (YYYY-MM-DD*).
+    - Otherwise, backfill window is inferred from `days` or `bars`.
+    - Also safe for days/weeks/months (delegates wide by default).
     """
     canon = to_fetcher_interval(interval)
     unit, interval_num_s = canon.split(":", 1)
@@ -161,8 +170,7 @@ except Exception:
     _MIN_ROWS_AF = {5: 120, 15: 80, 30: 60, 60: 40}
     _DEF_AF_DAYS = 2
 
-# --- add near other small helpers (below _min_rows_from_settings) ---
-# ---------- add this helper below _min_rows_from_settings ----------
+
 def _resolve_intraday_threshold(
     interval_token: str | int,
     unit: str,
@@ -170,12 +178,12 @@ def _resolve_intraday_threshold(
     explicit_thr: int | None,
 ) -> tuple[int, str]:
     """Decide the min-rows threshold and return (value, source_label).
+
     Precedence:
       1) explicit_thr (function arg)
       2) SETTINGS.FETCH.MIN_ROWS_AUTO_BACKFILL_{TOKEN} or global MIN_ROWS_AUTO_BACKFILL
       3) timeframes.MIN_ROWS_AUTO_BACKFILL table (minutes_key)
     """
-    # minutes_key aligns hours to minutes (1h → 60, 2h → 120, etc.)
     minutes_key = (interval_num * 60) if unit == "hours" else interval_num
 
     # 1) explicit
@@ -184,7 +192,6 @@ def _resolve_intraday_threshold(
 
     # 2) settings override (specific or global)
     token_str = str(interval_token or "5m").lower()
-    # here we want to detect if settings had anything; use an internal sentinel
     _sentinel = object()
     cfg_val = _min_rows_from_settings(token_str, _sentinel)  # type: ignore
     if cfg_val is not _sentinel:
@@ -194,7 +201,7 @@ def _resolve_intraday_threshold(
     default_thr = _MIN_ROWS_AF.get(minutes_key, 80)
     return int(default_thr), "defaults:MIN_ROWS_AUTO_BACKFILL"
 
-# ---------- full replacement for fetch_intraday_smart ----------
+
 async def fetch_intraday_smart(
     symbol: str,
     interval: str | int = "5m",
@@ -221,11 +228,15 @@ async def fetch_intraday_smart(
         interval_num=interval_num,
         explicit_thr=min_rows_auto_backfill,
     )
-    log.info(f"[UpstoxFetcher] threshold={thr} (source={thr_src}) for {symbol} @ {interval}")
+    log.info(
+        f"[UpstoxFetcher] threshold={thr} (source={thr_src}) "
+        f"for {symbol} @ {interval}"
+    )
 
     if primary.is_empty() or getattr(primary, "height", 0) < thr:
         log.info(
-            f"[UpstoxFetcher] {symbol} @ {interval}: {getattr(primary,'height',0)} < {thr} → bridging hist"
+            f"[UpstoxFetcher] {symbol} @ {interval}: "
+            f"{getattr(primary,'height',0)} < {thr} → bridging hist"
         )
         bridge = await _intraday_via_historical(
             symbol,
@@ -252,7 +263,8 @@ async def _fetch_json(url: str, label: str = "") -> Dict[str, Any]:
                 if data.get("status") != "success":
                     handle_api_error(data.get("code") or "UNKNOWN")
                 log.info(
-                    f"[UpstoxFetcher] ✅ {label} | {time.perf_counter() - start:.2f}s | Attempt {attempt}"
+                    f"[UpstoxFetcher] ✅ {label} | "
+                    f"{time.perf_counter() - start:.2f}s | Attempt {attempt}"
                 )
                 return data
             except Exception as e:
@@ -272,7 +284,9 @@ async def fetch_intraday(
     start: str | None = None,
     end: str | None = None,
 ) -> pl.DataFrame:
-    """Fetch intraday candles. If explicit backfill hints are supplied (days/bars/start/end),
+    """Fetch intraday candles.
+
+    If explicit backfill hints are supplied (days/bars/start/end),
     use historical minutes bridge. Otherwise fetch **only today's** intraday (pure).
     """
     canon = to_fetcher_interval(interval or DEFAULT_INTERVALS.get("intraday", "5m"))
@@ -280,13 +294,20 @@ async def fetch_intraday(
     interval_num = int(interval_num_s)
 
     if not validate_interval(unit, interval_num, intraday=True):
-        raise ValueError(f"Unsupported intraday interval '{interval}' for unit '{unit}'")
+        raise ValueError(
+            f"Unsupported intraday interval '{interval}' for unit '{unit}'"
+        )
 
     # Explicit backfill request → go via historical minutes
     if any([days, bars, start, end]):
         log.info(f"[Intraday] {symbol} → using historical minutes bridge for backfill")
         return await _intraday_via_historical(
-            symbol, interval, days=days, bars=bars, start=start, end=end
+            symbol,
+            interval,
+            days=days,
+            bars=bars,
+            start=start,
+            end=end,
         )
 
     # Normal intraday "today" call (pure)
@@ -297,7 +318,9 @@ async def fetch_intraday(
         return pl.DataFrame()
 
     url = f"{API_BASE_URL}{url_pattern}".format(
-        instrument_key=instrument_key, unit=unit, interval=interval_num
+        instrument_key=instrument_key,
+        unit=unit,
+        interval=interval_num,
     )
     data = await _fetch_json(url, f"Intraday {symbol}")
 
@@ -312,13 +335,16 @@ async def fetch_intraday(
 
 
 async def fetch_daily_range(
-    symbol: str, from_date: str, to_date: str, interval: str | int = "1d"
+    symbol: str,
+    from_date: str,
+    to_date: str,
+    interval: str | int = "1d",
 ) -> pl.DataFrame:
     """Fetch historical candles for a symbol/range.
+
     Historical supports units per schema: minutes|hours|days|weeks|months
     (e.g., 15m, 1h, 1d, 1w, 1mo)
     """
-    # Normalize via centralized helper (e.g., '1d' → 'days:1')
     canon = to_fetcher_interval(interval or DEFAULT_INTERVALS.get("daily", "1d"))
     unit, interval_num_s = canon.split(":", 1)
     interval_num = int(interval_num_s)
@@ -360,13 +386,13 @@ async def fetch_daily_range(
     meta = get_instrument_meta(symbol)
     df_final = finalize_candle_df(df, symbol, meta["isin"])
     log.info(
-        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → {len(df_final)} rows."
+        f"[Daily] {symbol} ({unit}:{interval_num}) {from_date}→{to_date} → "
+        f"{len(df_final)} rows."
     )
     return df_final
 
-
 # ============================================================
-# 🧠 Unified Dispatcher (now with backfill kwargs pass-through)
+# 🧠 Unified Dispatcher (now with intraday range support)
 # ============================================================
 async def fetch_unified(
     symbol: str,
@@ -382,11 +408,32 @@ async def fetch_unified(
     end: str | None = None,
     min_rows_auto_backfill: int | None = None,
 ) -> pl.DataFrame:
+    """Single entrypoint for all fetch styles.
+
+    - mode="intraday" with NO from/to → live intraday via fetch_intraday_smart
+    - mode="intraday" WITH from/to   → historical intraday via historical endpoint
+    - mode="daily"/"historical"      → historical (days/weeks/months) via fetch_daily_range
+    """
     mode = mode.lower()
 
     if mode in {"intraday", "minute", "min"}:
         use_interval = interval or DEFAULT_INTERVALS.get("intraday", "5m")
-        # Use the smart fetcher so early-morning is never an empty screen
+
+        # If caller provides from/to → treat this as historical intraday window
+        if from_date or to_date:
+            log.info(
+                f"[Unified] {symbol} intraday-range {from_date}→{to_date} @ {use_interval}"
+            )
+            return await _intraday_via_historical(
+                symbol,
+                use_interval,
+                days=days,
+                bars=bars,
+                start=from_date,
+                end=to_date,
+            )
+
+        # Otherwise: pure "live-smart" intraday
         return await fetch_intraday_smart(
             symbol,
             use_interval,
@@ -401,6 +448,9 @@ async def fetch_unified(
         if not (from_date and to_date):
             raise ValueError("from_date and to_date required for daily fetches.")
         use_interval = interval or DEFAULT_INTERVALS.get("daily", "1d")
+        log.info(
+            f"[Unified] {symbol} daily-range {from_date}→{to_date} @ {use_interval}"
+        )
         return await fetch_daily_range(symbol, from_date, to_date, use_interval)
 
     raise ValueError(f"Unknown mode: {mode}")

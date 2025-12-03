@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/fetchers/fetch_router.py — v9.7 (Final Intraday Context)
+# queen/fetchers/fetch_router.py — v9.8 (DRY Intraday Routing)
 # ============================================================
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ from queen.helpers.market import (
     sleep_until_next_candle,
 )
 from queen.settings import settings as SETTINGS
-from queen.settings.timeframes import DEFAULT_BACKFILL_DAYS_INTRADAY
 
 # ============================================================
 # ⚙️ Settings-driven config
@@ -88,29 +87,50 @@ async def _save_results(results: Dict[str, pl.DataFrame], out_path: Path) -> Non
     log.info(f"[Router] 💾 Saved results → {out_path}")
 
 # ============================================================
-# ⚡ Async Fetch Logic (with intraday context)
+# ⚡ Async Fetch Logic (thin wrapper around fetch_unified)
 # ============================================================
-async def _fetch_symbol(symbol, mode, from_date, to_date, interval, sem, **kwargs) -> pl.DataFrame:
+async def _fetch_symbol(
+    symbol,
+    mode,
+    from_date,
+    to_date,
+    interval,
+    sem,
+    **kwargs,
+) -> pl.DataFrame:
     async with sem:
         start = time.perf_counter()
         try:
             df = await fetch_unified(symbol, mode, from_date, to_date, interval, **kwargs)
             log.info(
-                f"[Fetch] ✅ {symbol}: {0 if df.is_empty() else len(df)} rows | {time.perf_counter() - start:.2f}s"
+                f"[Fetch] ✅ {symbol}: {0 if df.is_empty() else len(df)} rows | "
+                f"{time.perf_counter() - start:.2f}s"
             )
             return df
         except Exception as e:
             log.error(f"[Fetch] ❌ {symbol} failed → {e}")
             return pl.DataFrame()
 
-async def _fetch_batch(symbols, mode, from_date, to_date, interval) -> Dict[str, pl.DataFrame]:
+
+async def _fetch_batch(
+    symbols,
+    mode,
+    from_date,
+    to_date,
+    interval,
+) -> Dict[str, pl.DataFrame]:
+    """Batch wrapper — policy-free; all smartness lives in upstox_fetcher."""
     sem = asyncio.Semaphore(MAX_CONCURRENCY)
-    intraday_kwargs = {}
-    if mode.lower() == "intraday":
-        intraday_kwargs = {"days": DEFAULT_BACKFILL_DAYS_INTRADAY}
-        log.info(f"[Router] Intraday backfill context: {intraday_kwargs}")
+
     tasks = (
-        _fetch_symbol(sym, mode, from_date, to_date, interval, sem, **intraday_kwargs)
+        _fetch_symbol(
+            sym,
+            mode,
+            from_date,
+            to_date,
+            interval,
+            sem,
+        )
         for sym in symbols
     )
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -136,8 +156,13 @@ async def run_router(
         log.error("[Router] No symbols provided.")
         return
 
-    if mode.lower() == "daily" and (to_date is None or from_date is None):
-        warn_if_same_day_eod(from_date or "", to_date or datetime.now().strftime("%Y-%m-%d"))
+    mode_lower = mode.lower()
+
+    if mode_lower == "daily" and (to_date is None or from_date is None):
+        warn_if_same_day_eod(
+            from_date or "",
+            to_date or datetime.now().strftime("%Y-%m-%d"),
+        )
 
     # Read state defensively
     state = get_market_state()
@@ -151,20 +176,25 @@ async def run_router(
         f"session={session} | gate={gate} | at={stamp}"
     )
 
-    # Intraday + gate = skip if closed
-    if mode.lower() == "intraday" and use_gate and not is_open:
+    # Intraday + gate = skip if closed (for live-style runs)
+    if mode_lower == "intraday" and use_gate and not is_open:
         log.info("[Router] ⛳ Market not live (gate on). Skipping this run.")
         return
 
-    eff_from = from_date or datetime.now().strftime("%Y-%m-%d")
-    eff_to = to_date or eff_from
-
+    eff_from = from_date
+    eff_to = to_date
     eff_interval: str | int | None = interval
-    if mode.lower() == "daily":
+
+    if mode_lower == "daily":
+        # daily always uses historical service-day semantics
         eff_interval = None
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        eff_from = from_date or today_str
+        eff_to = to_date or eff_from
         target = current_historical_service_day()
         log.info(
-            f"[Router] Historical service day (effective): {target} | requested {eff_from}→{eff_to}"
+            f"[Router] Historical service day (effective): {target} | "
+            f"requested {eff_from}→{eff_to}"
         )
 
     # Concurrent fetch in batches
@@ -194,7 +224,11 @@ async def run_cycle(
     interval: str | int | None = None,
 ) -> None:
     await run_router(
-        symbols, mode=mode, from_date=from_date, to_date=to_date, interval=interval
+        symbols,
+        mode=mode,
+        from_date=from_date,
+        to_date=to_date,
+        interval=interval,
     )
 
 # ============================================================
@@ -218,25 +252,41 @@ async def run_scheduled(
     while True:
         state = get_market_state()
         if state.get("is_open"):
-            today = datetime.now().strftime("%Y-%m-%d")
-            log.info(f"[Router] Market LIVE — triggering fetch @ {state.get('timestamp')}")
-            intraday_interval = f"{interval_minutes}m"  # pass token, e.g. "5m"
-
-            await run_router(
-                symbols,
-                mode=mode,
-                from_date=today,
-                to_date=today,
-                interval=(intraday_interval if mode.lower() == "intraday" else None),
-                use_gate=False,
+            log.info(
+                f"[Router] Market LIVE — triggering fetch @ {state.get('timestamp')}"
             )
+
+            # For intraday scheduler we want **live** semantics (no from/to)
+            if mode.lower() == "intraday":
+                await run_router(
+                    symbols,
+                    mode=mode,
+                    from_date=None,
+                    to_date=None,
+                    interval=f"{interval_minutes}m",
+                    use_gate=False,
+                )
+            else:
+                today = datetime.now().strftime("%Y-%m-%d")
+                await run_router(
+                    symbols,
+                    mode=mode,
+                    from_date=today,
+                    to_date=today,
+                    interval=None,
+                    use_gate=False,
+                )
 
             # 🔄 periodic universe refresh
             cycle += 1
             if refresh_every_cycles > 0 and (cycle % refresh_every_cycles == 0):
                 try:
-                    df_new = load_instruments_df("INTRADAY" if mode.lower() == "intraday" else "MONTHLY")
-                    new_symbols = df_new["symbol"].to_list() if not df_new.is_empty() else []
+                    df_new = load_instruments_df(
+                        "INTRADAY" if mode.lower() == "intraday" else "MONTHLY"
+                    )
+                    new_symbols = (
+                        df_new["symbol"].to_list() if not df_new.is_empty() else []
+                    )
                     if new_symbols != symbols:
                         added = [s for s in new_symbols if s not in symbols]
                         removed = [s for s in symbols if s not in new_symbols]
@@ -254,10 +304,12 @@ async def run_scheduled(
 
         else:
             log.info(
-                f"[Router] Market closed — gate={state.get('gate')} | next={state.get('next_open')}"
+                f"[Router] Market closed — gate={state.get('gate')} | "
+                f"next={state.get('next_open')}"
             )
 
         await sleep_until_next_candle(interval_minutes)
+
 # ============================================================
 # 🧪 CLI Interface
 # ============================================================
@@ -270,8 +322,11 @@ def run_cli():
     parser.add_argument(
         "--interval",
         default=None,
-        help="Interval token (e.g. 1, 5m, 15m, 1h). "
-        "If omitted: daily uses 1d, intraday uses 5m (from settings.DEFAULT_INTERVALS).",
+        help=(
+            "Interval token (e.g. 1, 5m, 15m, 1h). "
+            "If omitted: daily uses 1d, intraday uses 5m "
+            "(from settings.DEFAULT_INTERVALS)."
+        ),
     )
     parser.add_argument("--auto", action="store_true", help="Enable continuous scheduler")
     parser.add_argument(
@@ -297,7 +352,7 @@ def run_cli():
                 df = load_instruments_df(
                     "INTRADAY" if args.mode == "intraday" else "MONTHLY"
                 )
-                symbols = df["symbol"].head(args.max_symbols).to_list()
+                symbols = df["symbol"].head(args.max).to_list()
                 log.info(f"[Router] Using top {len(symbols)} symbols from universe.")
             else:
                 symbols = args.symbols

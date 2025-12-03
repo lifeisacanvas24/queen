@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/services/scoring.py — v2.3 (Bible-integrated)
+# queen/services/scoring.py — v2.5
 # ------------------------------------------------------------
 # Actionable scoring + early-signal fusion (cockpit / TUI ready)
 #
@@ -9,6 +9,8 @@
 #   • Daily ATR + risk snapshot derived from intraday bars
 #   • Early signal fusion (registry signals + price-action fallback)
 #   • Position-aware decision ("BUY", "ADD", "HOLD", "EXIT", "AVOID")
+#   • Trend+Volume fusion override for false-bearish misclassifications
+#   • Sector-strength veto on top of Trend-first logic
 #   • Cockpit row builder with optional Pattern / Tactical / Bible fields
 #
 # Forward-only:
@@ -20,7 +22,10 @@
 #       - RScore_norm / VolX_norm / LBX_norm
 #   • Bible integration:
 #       - compute_indicators_plus_bible → bible_engine.compute_indicators_plus_bible
-#       - Trade_Status / Trade_Status_Label / Trade_Reason surfaced in cockpit row
+#   • Trend+Volume override:
+#       - maybe_apply_trend_volume_override() (Balanced Trend-First Model — PATCH B-2)
+#   • Sector veto:
+#       - compute_sector_strength() + log_sector_veto()
 # ============================================================
 
 from __future__ import annotations
@@ -30,12 +35,17 @@ from typing import Any, Dict, List, Optional, Tuple
 import polars as pl
 
 from queen.fetchers.nse_fetcher import fetch_nse_bands
-from queen.helpers.market import MARKET_TZ
+from queen.helpers.market import MARKET_TZ_KEY
 from queen.helpers.portfolio import compute_pnl, position_for
 from queen.services.bible_engine import (
     compute_indicators_plus_bible as bible_compute_plus,
 )
 from queen.technicals.indicators import core as ind
+from queen.technicals.fusion_trend_volume import (
+    maybe_apply_trend_volume_override,
+)
+from queen.technicals.sector_strength import compute_sector_strength
+from queen.helpers.diagnostic_override_logger import log_sector_veto
 
 
 # --------------- small utils -----------------
@@ -61,7 +71,7 @@ def _ema_last(
 
 # --------------- daily risk snapshot -----------------
 def _daily_ohlc_from_intraday(df: pl.DataFrame) -> pl.DataFrame:
-    """Compress intraday bars into 1 bar per session (IST date).
+    """Compress intraday bars into 1 bar per session (MARKET_TZ_KEY date).
 
     Expects columns: timestamp, open, high, low, close.
     """
@@ -79,14 +89,14 @@ def _daily_ohlc_from_intraday(df: pl.DataFrame) -> pl.DataFrame:
 
     dated = df.with_columns(
         pl.col("timestamp")
-        .dt.convert_time_zone(MARKET_TZ.key)
+        .dt.convert_time_zone(MARKET_TZ_KEY)
         .dt.date()
         .alias("d")
     )
 
     daily = (
         dated.sort("timestamp")
-        .group_by("d")  # Polars 1.x API
+        .group_by("d")
         .agg(
             pl.col("open").first().alias("open"),
             pl.col("high").max().alias("high"),
@@ -204,7 +214,9 @@ def compute_indicators(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
 # --------------- registry signals (optional) -----------------
 try:
     # expected to return dicts like {"score": float, "reasons":[...]} or similar
-    from queen.technicals.signals.pre_breakout import evaluate as _pre_breakout_eval
+    from queen.technicals.signals.pre_breakout import (
+        evaluate as _pre_breakout_eval,
+    )
 except Exception:
     _pre_breakout_eval = None  # type: ignore
 
@@ -286,7 +298,6 @@ def _early_bundle(
     Note:
       • Uses pre_breakout + squeeze_pulse if available.
       • Reversal/Tactical stacks are handled separately (Bible).
-
     """
     total = 0
     reasons: List[str] = []
@@ -311,6 +322,34 @@ def _early_bundle(
     return total, reasons
 
 
+# --------------- ladders & entries -----------------
+def _ladder_from_base(base: float, atr: Optional[float]) -> Tuple[float, List[str]]:
+    """Return (SL, [T1, T2, T3]) strings using ATR for spacing.
+
+    ATR here is *preferably* Daily_ATR (session volatility),
+    but will gracefully fall back to intraday ATR.
+    """
+    atr_val = atr or max(1.0, base * 0.01)
+    t1 = round(base + 0.5 * atr_val, 1)
+    t2 = round(base + 1.0 * atr_val, 1)
+    t3 = round(base + 1.5 * atr_val, 1)
+    sl = round(base - 1.0 * atr_val, 1)
+    return sl, [f"T1 {t1}", f"T2 {t2}", f"T3 {t3}"]
+
+
+def _non_position_entry(
+    cmp_: float,
+    vwap: Optional[float],
+    ema20: Optional[float],
+    cpr: Optional[float],
+    atr: Optional[float],
+) -> float:
+    """Entry for fresh positions – above strongest support with a small buffer."""
+    base = max(x for x in [cmp_, vwap, ema20, cpr] if x is not None)
+    buffer = max((atr or 0) * 0.10, cmp_ * 0.0025)  # 0.1×ATR or 0.25%
+    return round(base + buffer, 1)
+
+
 # --------------- Bible mega indd wrapper -----------------
 def compute_indicators_plus_bible(
     df: pl.DataFrame,
@@ -323,10 +362,58 @@ def compute_indicators_plus_bible(
 
     This is a thin wrapper over bible_engine.compute_indicators_plus_bible,
     using this module's compute_indicators() as the base snapshot.
+
+    IMPORTANT:
+      • We pre-populate a *generic* intraday entry/SL geometry for Bible's
+        Trade Validity block, but we DO NOT override any geometry the caller
+        may already have attached (entry / SL / stop_loss).
     """
     base = compute_indicators(df)
     if not base:
         return {}
+
+    # --- Generic geometry for Bible trade validity (if caller hasn't provided) ---
+    try:
+        cmp_ = float(base.get("CMP") or 0.0)
+    except Exception:
+        cmp_ = 0.0
+
+    vwap = base.get("VWAP")
+    ema20 = base.get("EMA20")
+    cpr = base.get("CPR")
+    atr_intraday = base.get("ATR")
+    daily_atr = base.get("Daily_ATR")
+    atr_for_ladder = daily_atr or atr_intraday
+
+    if cmp_ > 0 and atr_for_ladder is not None:
+        try:
+            # Only attach if geometry is missing
+            has_entry = base.get("entry") is not None or base.get("entry_price") is not None
+            has_sl = (
+                base.get("SL") is not None
+                or base.get("sl") is not None
+                or base.get("stop_loss") is not None
+            )
+
+            if not has_entry:
+                entry = _non_position_entry(cmp_, vwap, ema20, cpr, atr_for_ladder)
+                base["entry"] = entry
+                base.setdefault("entry_price", entry)
+            else:
+                # Use whichever entry we already have for SL ladder
+                entry = float(
+                    base.get("entry")
+                    or base.get("entry_price")
+                )
+
+            if not has_sl:
+                sl, _targets = _ladder_from_base(entry, atr_for_ladder)
+                base["SL"] = sl
+                base.setdefault("sl", sl)
+                base.setdefault("stop_loss", sl)
+        except Exception:
+            # Geometry is best-effort; never break Bible blocks
+            pass
 
     return bible_compute_plus(
         df,
@@ -335,6 +422,136 @@ def compute_indicators_plus_bible(
         interval=interval,
         pos=pos,
     )
+
+
+# --------------- sector veto helper -----------------
+def _apply_sector_veto_if_needed(
+    *,
+    symbol: str,
+    interval: str,
+    mode: str,
+    decision: str,
+    bias: str,
+    sector_ctx: Dict[str, Any],
+    risk_rating: Optional[str] = None,
+    regime_name: Optional[str] = None,
+) -> Tuple[str, str, Dict[str, Any]]:
+    """Clamp overly bullish decisions when sector is strongly down.
+
+    sector_ctx expects:
+      - sector_score (float -10..10)
+      - sector_bias  ("Bullish" / "Bearish" / "Neutral")
+      - sector_trend ("Strong Bullish" / "Bearish" / "Range" / ...)
+
+    Thresholds are dynamically adjusted based on:
+      - risk_rating ("Low" / "Medium" / "High")
+      - regime_name (e.g. "TREND", "RANGE", "VOLATILE", "BEAR")
+    """
+    score = sector_ctx.get("sector_score")
+    if score is None:
+        return decision, bias, sector_ctx
+
+    try:
+        score_f = float(score)
+    except Exception:
+        return decision, bias, sector_ctx
+
+    # --- 1) Base thresholds ---
+    soft_th = -3.0   # soft veto if score <= soft_th
+    hard_th = -7.0   # hard veto if score <= hard_th
+
+    # --- 2) Risk-aware tuning (ATR / Daily_ATR_Pct buckets) ---
+    # High risk → more strict; Low risk → more forgiving
+    if risk_rating == "High":
+        soft_th = -2.0
+        hard_th = -5.0
+    elif risk_rating == "Low":
+        soft_th = -4.0
+        hard_th = -8.0
+
+    # --- 3) Regime-aware tuning (macro / tactical regime) ---
+    if regime_name:
+        rn = str(regime_name).upper()
+        if "VOLATILE" in rn or "BEAR" in rn:
+            # market already shaky → be stricter; move thresholds closer to 0
+            soft_th = min(soft_th + 1.0, -1.0)
+            hard_th = min(hard_th + 1.0, -3.0)
+        elif "TREND" in rn:
+            # sustained trend → slightly more forgiving for leaders
+            soft_th -= 1.0
+            hard_th -= 1.0
+
+    # --- 4) Decide veto level based on tuned thresholds ---
+    if score_f <= hard_th:
+        level = 2  # hard veto: sector strong down
+    elif score_f <= soft_th:
+        level = 1  # soft veto: sector weak/medium down
+    else:
+        level = 0
+
+    if level == 0:
+        return decision, bias, sector_ctx
+
+    original_decision = decision
+    original_bias = bias
+    new_decision = decision
+    new_bias = bias
+    reason: Optional[str] = None
+
+    # HARD VETO: strong sector downtrend
+    if level == 2:
+        if decision in {"BUY", "ADD"} or (decision == "HOLD" and bias in {"Long", "Strong Long"}):
+            new_decision = "HOLD"
+            new_bias = "Neutral"
+            reason = "SectorStrongDown"
+
+    # SOFT VETO: moderate sector downtrend
+    elif level == 1:
+        if decision == "BUY":
+            new_decision = "HOLD"
+            new_bias = "Neutral"
+            reason = "SectorDown"
+        elif decision == "ADD":
+            new_decision = "HOLD"
+            new_bias = "Long"
+            reason = "SectorDown"
+
+    # No effective change
+    if not reason or (new_decision == original_decision and new_bias == original_bias):
+        return decision, bias, sector_ctx
+
+    # Mark veto in context
+    updated = dict(sector_ctx)
+    updated["sector_veto_applied"] = True
+    updated["sector_veto_reason"] = reason
+
+    # Log the veto (best-effort)
+    try:
+        log_sector_veto(
+            symbol=symbol,
+            sector=updated.get("sector_name") or updated.get("sector") or "UNKNOWN",
+            interval=interval,
+            mode=mode,
+            original_decision=original_decision,
+            original_bias=original_bias,
+            new_decision=new_decision,
+            new_bias=new_bias,
+            sector_score=score_f,
+            sector_bias=updated.get("sector_bias"),
+            sector_trend=updated.get("sector_trend"),
+            reason=reason,
+            extra={
+                "level": level,
+                "soft_th": soft_th,
+                "hard_th": hard_th,
+                "risk_rating": risk_rating,
+                "regime": regime_name,
+            },
+        )
+    except Exception:
+        pass
+
+    return new_decision, new_bias, updated
 
 
 # --------------- base tactical score -----------------
@@ -388,52 +605,6 @@ def score_symbol(indd: Dict[str, Any]) -> Tuple[float, List[str]]:
     return min(score, 10.0), tags
 
 
-# --------------- ladders & entries -----------------
-def _ladder_from_base(base: float, atr: Optional[float]) -> Tuple[float, List[str]]:
-    """Return (SL, [T1, T2, T3]) strings using ATR for spacing.
-
-    ATR here is *preferably* Daily_ATR (session volatility),
-    but will gracefully fall back to intraday ATR.
-    """
-    atr_val = atr or max(1.0, base * 0.01)
-    t1 = round(base + 0.5 * atr_val, 1)
-    t2 = round(base + 1.0 * atr_val, 1)
-    t3 = round(base + 1.5 * atr_val, 1)
-    sl = round(base - 1.0 * atr_val, 1)
-    return sl, [f"T1 {t1}", f"T2 {t2}", f"T3 {t3}"]
-
-
-def _non_position_entry(
-    cmp_: float,
-    vwap: Optional[float],
-    ema20: Optional[float],
-    cpr: Optional[float],
-    atr: Optional[float],
-) -> float:
-    """Entry for fresh positions – above strongest support with a small buffer."""
-    base = max(x for x in [cmp_, vwap, ema20, cpr] if x is not None)
-    buffer = max((atr or 0) * 0.10, cmp_ * 0.0025)  # 0.1×ATR or 0.25%
-    return round(base + buffer, 1)
-
-def compute_indicators_plus_bible(
-    df: pl.DataFrame,
-    interval: str = "15m",
-    *,
-    symbol: Optional[str] = None,
-    pos: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    base = compute_indicators(df)
-    if not base:
-        return {}
-
-    return bible_compute_plus(
-        df,
-        base_indicators=base,
-        symbol=symbol,
-        interval=interval,
-        pos=pos,
-    )
-
 # --------------- main action function -----------------
 def action_for(
     symbol: str,
@@ -446,14 +617,16 @@ def action_for(
     `indd` may contain:
       • Base indicators (CMP / RSI / ATR / VWAP / CPR / OBV / EMA*)
       • Daily risk snapshot (Daily_ATR / Daily_ATR_Pct / Risk_Rating / SL_Zone)
-      • _df              → for early-signal fusion
+      • _df              → for early-signal fusion / overrides
       • Optional advanced metrics:
           - PatternScore / PatternComponent / PatternBias / TopPattern
           - Reversal_Score / Reversal_Stack_Alert
           - Tactical_Index / regime
           - RScore_norm / VolX_norm / LBX_norm
           - Trend_Bias / Trend_Score / Trend_Label
-          - Bible Trade fields: Trade_Status / Trade_Status_Label / Trade_Reason / Trade_Score / Trade_Flags
+          - Bible Trade fields: Trade_Status / Trade_Status_Label /
+            Trade_Reason / Trade_Score / Trade_Flags
+          - sector_df / sector_ctx (for sector veto)
     """
     cmp_ = float(indd["CMP"])
     atr_intraday = indd.get("ATR")
@@ -466,6 +639,9 @@ def action_for(
     ema20 = indd.get("EMA20")
     ema50 = indd.get("EMA50")
     ema200 = indd.get("EMA200")
+
+    interval = indd.get("interval", "15m")
+    mode = indd.get("mode", "intraday")
 
     # --- Base indicator-driven score
     base_score, drivers = score_symbol(indd)
@@ -504,6 +680,68 @@ def action_for(
         else:
             decision = "AVOID"
             bias = "Weak"
+
+    # --- Tactical core outputs (if caller ran TacticalCore / Bible Tactical)
+    tactical_index = indd.get("Tactical_Index")
+    regime = indd.get("regime")  # may be dict or simple label
+    if isinstance(regime, dict):
+        regime_name = regime.get("name")
+        regime_label = regime.get("label")
+        regime_color = regime.get("color")
+    else:
+        regime_name = regime
+        regime_label = None
+        regime_color = None
+
+    # --- Trend + Volume fusion override (Balanced Trend-First Model / PATCH B-2)
+    tv_ctx: Dict[str, Any] = {
+        "TV_Override_Applied": False,
+        "TV_Override_Reason": None,
+        "TV_Override_Interval": interval,
+    }
+    try:
+        if df_ctx is not None and df_ctx.height >= 30:
+            decision, bias, tv_ctx = maybe_apply_trend_volume_override(
+                indd,
+                decision,
+                bias,
+                interval=interval,
+            )
+    except Exception:
+        # Overrides are best-effort; never break action_for
+        pass
+
+    # --- Sector veto (Hard/Soft) on top of trend-first logic
+    sector_ctx: Dict[str, Any] = {
+        "sector_score": None,
+        "sector_bias": None,
+        "sector_trend": None,
+    }
+    try:
+        # Prefer pre-computed context if caller attached it
+        raw_sector_ctx = indd.get("sector_ctx")
+        if isinstance(raw_sector_ctx, dict) and "sector_score" in raw_sector_ctx:
+            sector_ctx.update(raw_sector_ctx)
+        else:
+            sector_df = indd.get("sector_df")
+            if isinstance(sector_df, pl.DataFrame) and not sector_df.is_empty():
+                computed = compute_sector_strength(sector_df) or {}
+                sector_ctx.update(computed)
+
+        if sector_ctx.get("sector_score") is not None:
+            decision, bias, sector_ctx = _apply_sector_veto_if_needed(
+                symbol=symbol,
+                interval=interval,
+                mode=mode,
+                decision=decision,
+                bias=bias,
+                sector_ctx=sector_ctx,
+                risk_rating=indd.get("Risk_Rating"),
+                regime_name=regime_name,
+            )
+    except Exception:
+        # Sector veto is also best-effort; no hard dependency
+        pass
 
     # --- Targets & SL
     if held:
@@ -545,38 +783,20 @@ def action_for(
         else "At/Unknown"
     )
 
+    # Notes from early bundle / base drivers
     if early_reasons:
         notes.insert(0, "EARLY: " + ", ".join(early_reasons))
     if drivers:
         notes.append("Drivers: " + " ".join(drivers))
 
-    # --- Optional advanced metrics (Pattern / Tactical / Volatility)
-    pattern_score = (
-        indd.get("PatternScore")
-        if indd.get("PatternScore") is not None
-        else indd.get("PatternComponent")
-    )
-    pattern_bias = (
-        indd.get("PatternBias")
-        or indd.get("pattern_bias")
-        or indd.get("PatternDirection")
-    )
-    top_pattern = indd.get("TopPattern") or indd.get("pattern_name")
+    # TV override note
+    if tv_ctx.get("TV_Override_Applied"):
+        notes.append(tv_ctx.get("TV_Override_Reason") or "TV override applied")
 
-    reversal_score = indd.get("Reversal_Score")
-    reversal_alert = indd.get("Reversal_Stack_Alert")
-
-    # Tactical core outputs (if caller ran TacticalCore / Bible Tactical)
-    tactical_index = indd.get("Tactical_Index")
-    regime = indd.get("regime")  # may be dict or simple label
-    if isinstance(regime, dict):
-        regime_name = regime.get("name")
-        regime_label = regime.get("label")
-        regime_color = regime.get("color")
-    else:
-        regime_name = regime
-        regime_label = None
-        regime_color = None
+    # Sector veto note
+    if sector_ctx.get("sector_veto_applied"):
+        reason = sector_ctx.get("sector_veto_reason") or "Sector veto"
+        notes.append(f"Sector: {reason}")
 
     rscore_norm = indd.get("RScore_norm")
     volx_norm = indd.get("VolX_norm")
@@ -603,7 +823,6 @@ def action_for(
         elif trend_label:
             trend_line = f"Trend: {trend_label}"
     except Exception:
-        # keep it optional; don't break the row
         trend_line = None
 
     # --- Bible Trade Validity fields (if Bible mega indd was used)
@@ -612,6 +831,22 @@ def action_for(
     trade_reason = indd.get("Trade_Reason")
     trade_score = indd.get("Trade_Score")
     trade_flags = indd.get("Trade_Flags")
+
+    # Pattern / reversal / tactical already partly handled above
+    pattern_score = (
+        indd.get("PatternScore")
+        if indd.get("PatternScore") is not None
+        else indd.get("PatternComponent")
+    )
+    pattern_bias = (
+        indd.get("PatternBias")
+        or indd.get("pattern_bias")
+        or indd.get("PatternDirection")
+    )
+    top_pattern = indd.get("TopPattern") or indd.get("pattern_name")
+
+    reversal_score = indd.get("Reversal_Score")
+    reversal_alert = indd.get("Reversal_Stack_Alert")
 
     # --- Base cockpit row
     row: Dict[str, Any] = {
@@ -634,19 +869,15 @@ def action_for(
         "sl_zone": indd.get("SL_Zone"),
         "obv": indd.get("OBV"),
 
-        # -------------------------------
-        # ⭐ ADD THESE LINES
-        # -------------------------------
+        # EMAs (for UI + backcompat)
         "EMA20": indd.get("EMA20"),
         "EMA50": indd.get("EMA50"),
         "EMA200": indd.get("EMA200"),
 
-        # lower-case mirrors (good for UI/backcompat)
         "ema20": indd.get("EMA20"),
         "ema50": indd.get("EMA50"),
         "ema200": indd.get("EMA200"),
 
-        # still include old bias
         "ema_bias": indd.get("EMA_BIAS"),
 
         "cpr": cpr,
@@ -664,6 +895,19 @@ def action_for(
         ),
         "notes": " | ".join(notes) if notes else "—",
         "position": pos or {},
+
+        # TV override context for cockpit / drilldowns
+        "tv_ctx": tv_ctx,
+        "tv_override": bool(tv_ctx.get("TV_Override_Applied")),
+        "tv_reason": tv_ctx.get("TV_Override_Reason"),
+
+        # Sector context
+        "sector_ctx": sector_ctx,
+        "sector_score": sector_ctx.get("sector_score"),
+        "sector_bias": sector_ctx.get("sector_bias"),
+        "sector_trend": sector_ctx.get("sector_trend"),
+        "sector_veto": bool(sector_ctx.get("sector_veto_applied")),
+        "sector_veto_reason": sector_ctx.get("sector_veto_reason"),
     }
 
     # --- Attach Trade Validity fields if present (pure intraday classification)

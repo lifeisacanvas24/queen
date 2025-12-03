@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Signals</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <!-- Header Include -->
+    <div id="header-container">
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container is-fluid">
+
+            <!-- ===================== SCALP TAB ===================== -->
+            <div id="scalp" class="tab-content is-active">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">4</span></button>
+                    <button class="filter-pill" data-filter="scalp-long">Long <span class="count">2</span></button>
+                    <button class="filter-pill" data-filter="scalp-short">Short <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="scalp-breakout">Breakout <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- Scalp Long 1 - URGENT -->
+                    <div class="signal-card urgent" data-category="scalp-long">
+                        <div class="card-header action-scalp-long">
+                            <span class="action-text"><i class="fas fa-arrow-up"></i> SCALP LONG</span>
+                            <span class="timeframe">5-15 MIN</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">RELIANCE</div>
+                                    <div class="company-name">Reliance Industries</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹2,847.50</div>
+                                    <div class="price-change up">+1.25% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-urgent"><i class="fas fa-bolt"></i> ACT NOW</span>
+                                <span class="tag tag-bullish">Bullish</span>
+                                <span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 2.3x</span>
+                                <span class="tag tag-score-high">9/10</span>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-0.8%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+1.2%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.5</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">62</div><div class="tech-status tech-bullish">Bullish</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.2%</div><div class="tech-status tech-neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="fo-sentiment-box">
+                                <div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div>
+                                <div class="fo-grid">
+                                    <div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.25</div><div class="fo-signal bullish">Bullish</div></div>
+                                    <div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+2.5L</div><div class="fo-signal bullish">Long Build</div></div>
+                                    <div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹2,850</div><div class="fo-signal neutral">Near</div></div>
+                                    <div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">18%</div><div class="fo-signal neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="fvg-box">
+                                <div class="fvg-title"><i class="fas fa-arrows-up-down"></i> Smart Money Zones (FVG)</div>
+                                <div class="fvg-zones">
+                                    <div class="fvg-zone above"><div class="zone-label"><i class="fas fa-arrow-up"></i> FVG Above</div><div class="zone-value">₹2,865 - ₹2,880</div><div class="zone-type">Target</div></div>
+                                    <div class="fvg-zone below"><div class="zone-label"><i class="fas fa-arrow-down"></i> FVG Below</div><div class="zone-value">₹2,820 - ₹2,835</div><div class="zone-type">Support</div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹2,840 - ₹2,850</span></div>
+                                <div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹2,880 (+1.2%)</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹2,825 (-0.8%)</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Signal Strength</span><span>90%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 90%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scalp Short -->
+                    <div class="signal-card" data-category="scalp-short">
+                        <div class="card-header action-scalp-short">
+                            <span class="action-text"><i class="fas fa-arrow-down"></i> SCALP SHORT</span>
+                            <span class="timeframe">10-20 MIN</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">HDFCBANK</div>
+                                    <div class="company-name">HDFC Bank Ltd</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹1,678.30</div>
+                                    <div class="price-change down">-0.85% ↓</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-wait-signal"><i class="fas fa-hourglass-half"></i> WAIT</span>
+                                <span class="tag tag-bearish">Bearish</span>
+                                <span class="tag tag-breakdown">Breakdown</span>
+                                <span class="tag tag-score-high">8/10</span>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-0.9%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+1.8%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">38</div><div class="tech-status tech-bearish">Weak</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-bearish">▼ Cross</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Below</div><div class="tech-status tech-bearish">20/50</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.5%</div><div class="tech-status tech-neutral">High</div></div>
+                                </div>
+                            </div>
+                            <div class="fo-sentiment-box">
+                                <div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div>
+                                <div class="fo-grid">
+                                    <div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">0.68</div><div class="fo-signal bearish">Bearish</div></div>
+                                    <div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+1.8L</div><div class="fo-signal bearish">Short Build</div></div>
+                                    <div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,700</div><div class="fo-signal bearish">Above</div></div>
+                                    <div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">22%</div><div class="fo-signal neutral">Elevated</div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Trigger Below</span><span class="detail-value warning">₹1,675 (Wait)</span></div>
+                                <div class="detail-row"><span class="detail-label">Short Entry</span><span class="detail-value entry">₹1,670 - ₹1,675</span></div>
+                                <div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,655</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,690</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Signal Strength</span><span>80%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scalp Breakout UC -->
+                    <div class="signal-card" data-category="scalp-breakout">
+                        <div class="card-header action-breakout">
+                            <span class="action-text"><i class="fas fa-rocket"></i> BREAKOUT</span>
+                            <span class="timeframe">UC LOCKED</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">SMLMAH</div>
+                                    <div class="company-name">SML Mahindra</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹892.45</div>
+                                    <div class="price-change up">+5.00% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-uc"><i class="fas fa-lock"></i> UC HIT</span>
+                                <span class="tag tag-bullish">Extreme Bullish</span>
+                                <span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 4x</span>
+                                <span class="tag tag-score-high">10/10</span>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">82</div><div class="tech-status tech-overbought">OB</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">++</div><div class="tech-status tech-bullish">Strong▲</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Far Above</div><div class="tech-status tech-bullish">All</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">4.5%</div><div class="tech-status tech-overbought">V.High</div></div>
+                                </div>
+                            </div>
+                            <div class="fo-sentiment-box">
+                                <div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div>
+                                <div class="fo-grid">
+                                    <div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.85</div><div class="fo-signal bullish">V.Bullish</div></div>
+                                    <div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+5.2L</div><div class="fo-signal bullish">Massive</div></div>
+                                    <div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹850</div><div class="fo-signal bullish">Above</div></div>
+                                    <div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">45%</div><div class="fo-signal neutral">V.High</div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value special">UPPER CIRCUIT LOCKED</span></div>
+                                <div class="detail-row"><span class="detail-label">Circuit Price</span><span class="detail-value target">₹892.45</span></div>
+                                <div class="detail-row"><span class="detail-label">Pending Buyers</span><span class="detail-value">2,45,000 qty</span></div>
+                                <div class="detail-row"><span class="detail-label">Action</span><span class="detail-value entry">QUEUE FOR BTST</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Continuation Probability</span><span>95%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 95%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scalp Long 2 - Book Profit -->
+                    <div class="signal-card" data-category="scalp-long">
+                        <div class="card-header action-book-profit">
+                            <span class="action-text"><i class="fas fa-hand-holding-dollar"></i> BOOK PROFIT</span>
+                            <span class="timeframe">EXIT NOW</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">TCS</div>
+                                    <div class="company-name">Tata Consultancy</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹4,185.60</div>
+                                    <div class="price-change up">+0.95% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-holding"><i class="fas fa-wallet"></i> HOLDING</span>
+                                <span class="tag tag-bullish">T1 Hit ✓</span>
+                                <span class="tag tag-score-high">EXIT</span>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item" style="flex: 2;"><div class="label">Your Entry</div><div class="value">₹4,150</div></div>
+                                <div class="rr-item reward"><div class="label">P&L</div><div class="value">+0.86%</div></div>
+                                <div class="rr-item" style="background: rgba(52, 199, 89, 0.1);"><div class="label">Profit</div><div class="value" style="color: var(--apple-green);">₹+356</div></div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Target 1</span><span class="detail-value target">₹4,180 ✓ HIT</span></div>
+                                <div class="detail-row"><span class="detail-label">Momentum</span><span class="detail-value warning">Fading</span></div>
+                                <div class="detail-row"><span class="detail-label">Action</span><span class="detail-value target">BOOK FULL PROFIT</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Trade Complete</span><span>100%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 100%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== INTRADAY TAB ===================== -->
+            <div id="intraday" class="tab-content">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">5</span></button>
+                    <button class="filter-pill" data-filter="intraday-long">Long <span class="count">2</span></button>
+                    <button class="filter-pill" data-filter="intraday-short">Short <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="intraday-breakout">Breakout <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="intraday-reversal">Reversal <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- Intraday Long 1 -->
+                    <div class="signal-card" data-category="intraday-long">
+                        <div class="card-header action-buy">
+                            <span class="action-text"><i class="fas fa-arrow-up"></i> INTRADAY LONG</span>
+                            <span class="timeframe">1-4 HRS</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">INFY</div>
+                                    <div class="company-name">Infosys Ltd</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹1,542.75</div>
+                                    <div class="price-change up">+1.80% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-new"><i class="fas fa-star"></i> NEW</span>
+                                <span class="tag tag-above-vwap"><i class="fas fa-arrow-up"></i> Above VWAP</span>
+                                <span class="tag tag-bullish">Bullish</span>
+                                <span class="tag tag-score-high">8/10</span>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.5%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+2.8%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.9</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">58</div><div class="tech-status tech-bullish">Bullish</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.4%</div><div class="tech-status tech-neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="fo-sentiment-box">
+                                <div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div>
+                                <div class="fo-grid">
+                                    <div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.15</div><div class="fo-signal bullish">Bullish</div></div>
+                                    <div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+1.2L</div><div class="fo-signal bullish">Long Build</div></div>
+                                    <div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,540</div><div class="fo-signal neutral">At Level</div></div>
+                                    <div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">16%</div><div class="fo-signal neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="context-box">
+                                <div class="ctx-title">Intraday Context</div>
+                                <div class="ctx-content">
+                                    <span class="ctx-item positive"><i class="fas fa-check"></i> VWAP: ₹1,528</span>
+                                    <span class="ctx-item neutral">Range: ₹1,515 - ₹1,548</span>
+                                    <span class="ctx-item positive">Near High</span>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹1,535 - ₹1,545</span></div>
+                                <div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,585 (+2.8%)</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,520 (-1.5%)</span></div>
+                                <div class="detail-row"><span class="detail-label"><i class="fas fa-clock"></i> Exit Before</span><span class="detail-value warning">3:15 PM</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Signal Strength</span><span>85%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 85%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add more intraday cards here following the same pattern -->
+                </div>
+            </div>
+
+            <!-- ===================== BTST TAB ===================== -->
+            <div id="btst" class="tab-content">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">3</span></button>
+                    <button class="filter-pill" data-filter="btst-long">BTST Long <span class="count">2</span></button>
+                    <button class="filter-pill" data-filter="btst-momentum">Momentum <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- BTST Long 1 -->
+                    <div class="signal-card" data-category="btst-long">
+                        <div class="card-header action-btst-buy">
+                            <span class="action-text"><i class="fas fa-moon"></i> BTST BUY</span>
+                            <span class="timeframe">BUY TODAY</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">SBIN</div>
+                                    <div class="company-name">State Bank of India</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹628.45</div>
+                                    <div class="price-change up">+1.95% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-new"><i class="fas fa-star"></i> NEW</span>
+                                <span class="tag tag-bullish">Bullish Close</span>
+                                <span class="tag tag-fii-buy"><i class="fas fa-building-columns"></i> FII Buying</span>
+                                <span class="tag tag-score-high">8/10</span>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-2.1%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+3.5%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.7</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">56</div><div class="tech-status tech-bullish">Bullish</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.8%</div><div class="tech-status tech-neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="fo-sentiment-box">
+                                <div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment (Key for BTST)</div>
+                                <div class="fo-grid">
+                                    <div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.32</div><div class="fo-signal bullish">Bullish</div></div>
+                                    <div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+4.2L</div><div class="fo-signal bullish">Long Build</div></div>
+                                    <div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹625</div><div class="fo-signal bullish">Above</div></div>
+                                    <div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">19%</div><div class="fo-signal neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="context-box">
+                                <div class="ctx-title">BTST Context - Global Cues</div>
+                                <div class="ctx-content">
+                                    <span class="ctx-item positive"><i class="fas fa-globe"></i> SGX Nifty: +0.4%</span>
+                                    <span class="ctx-item positive"><i class="fas fa-flag-usa"></i> US Futures: Green</span>
+                                    <span class="ctx-item positive"><i class="fas fa-building-columns"></i> FII: Net Buyer</span>
+                                </div>
+                            </div>
+                            <div class="indicators-row">
+                                <div class="indicator-box">
+                                    <div class="ind-label"><span>Gap Up Probability</span><span>78%</span></div>
+                                    <div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 78%"></div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Buy Before</span><span class="detail-value warning">3:20 PM @ ₹625-630</span></div>
+                                <div class="detail-row"><span class="detail-label">Target (Tomorrow)</span><span class="detail-value target">₹645 - ₹650</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹615</span></div>
+                                <div class="detail-row"><span class="detail-label">Sell Time</span><span class="detail-value special">Tomorrow 9:30-10:00 AM</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>BTST Setup Quality</span><span>78%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 78%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== SWING TAB ===================== -->
+            <div id="swing" class="tab-content">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">4</span></button>
+                    <button class="filter-pill" data-filter="swing-long">Long <span class="count">2</span></button>
+                    <button class="filter-pill" data-filter="swing-breakout">Breakout <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="swing-watch">Watch <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- Swing Long 1 -->
+                    <div class="signal-card" data-category="swing-long">
+                        <div class="card-header action-buy">
+                            <span class="action-text"><i class="fas fa-wave-square"></i> SWING LONG</span>
+                            <span class="timeframe">5-10 DAYS</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">MARUTI</div>
+                                    <div class="company-name">Maruti Suzuki India</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹12,456.80</div>
+                                    <div class="price-change up">+0.85% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-new"><i class="fas fa-star"></i> NEW</span>
+                                <span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span>
+                                <span class="tag tag-sector"><i class="fas fa-car"></i> Auto</span>
+                                <span class="tag tag-score-high">8/10</span>
+                            </div>
+                            <div class="phase-indicator">
+                                <div class="phase-header">
+                                    <span class="phase-title">Wyckoff Phase</span>
+                                    <span class="phase-name markup">MARKUP (Bullish)</span>
+                                </div>
+                                <div class="phase-bar">
+                                    <div class="phase-segment acc inactive" style="width: 20%;"></div>
+                                    <div class="phase-segment brk inactive" style="width: 15%;"></div>
+                                    <div class="phase-segment mkp active" style="width: 25%;"></div>
+                                    <div class="phase-segment dst inactive" style="width: 20%;"></div>
+                                    <div class="phase-segment mkd inactive" style="width: 20%;"></div>
+                                </div>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-4.0%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+6.0%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.5</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Weekly Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">55</div><div class="tech-status tech-bullish">Bullish</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">50/200</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">2.5%</div><div class="tech-status tech-neutral">Normal</div></div>
+                                </div>
+                            </div>
+                            <div class="fvg-box">
+                                <div class="fvg-title"><i class="fas fa-arrows-up-down"></i> Weekly FVG</div>
+                                <div class="fvg-zones">
+                                    <div class="fvg-zone above"><div class="zone-label"><i class="fas fa-arrow-up"></i> Above</div><div class="zone-value">₹12,800 - ₹13,000</div><div class="zone-type">Target</div></div>
+                                    <div class="fvg-zone below"><div class="zone-label"><i class="fas fa-arrow-down"></i> Below</div><div class="zone-value">₹11,900 - ₹12,100</div><div class="zone-type">Support</div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹12,300 - ₹12,500</span></div>
+                                <div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹13,200 (+6%)</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹11,950 (-4%)</span></div>
+                                <div class="detail-row"><span class="detail-label">Hold</span><span class="detail-value">5-10 Days</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Setup Quality</span><span>82%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 82%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== POSITIONAL TAB ===================== -->
+            <div id="positional" class="tab-content">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">3</span></button>
+                    <button class="filter-pill" data-filter="positional-accumulate">Accumulate <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="positional-hold">Hold <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="positional-reduce">Reduce <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- Positional Accumulate -->
+                    <div class="signal-card" data-category="positional-accumulate">
+                        <div class="card-header action-accumulate">
+                            <span class="action-text"><i class="fas fa-layer-group"></i> ACCUMULATE</span>
+                            <span class="timeframe">2-4 WEEKS</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">HINDUNILVR</div>
+                                    <div class="company-name">Hindustan Unilever</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹2,456.80</div>
+                                    <div class="price-change up">+0.45% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-new"><i class="fas fa-star"></i> FRESH</span>
+                                <span class="tag tag-phase-accumulation"><i class="fas fa-layer-group"></i> Accumulation</span>
+                                <span class="tag tag-sector"><i class="fas fa-shopping-cart"></i> FMCG</span>
+                                <span class="tag tag-score-high">8/10</span>
+                            </div>
+                            <div class="phase-indicator">
+                                <div class="phase-header">
+                                    <span class="phase-title">Wyckoff Phase</span>
+                                    <span class="phase-name accumulation">ACCUMULATION</span>
+                                </div>
+                                <div class="phase-bar">
+                                    <div class="phase-segment acc active" style="width: 20%;"></div>
+                                    <div class="phase-segment brk inactive" style="width: 15%;"></div>
+                                    <div class="phase-segment mkp inactive" style="width: 25%;"></div>
+                                    <div class="phase-segment dst inactive" style="width: 20%;"></div>
+                                    <div class="phase-segment mkd inactive" style="width: 20%;"></div>
+                                </div>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item risk"><div class="label">Risk</div><div class="value">-5.5%</div></div>
+                                <div class="rr-item reward"><div class="label">Reward</div><div class="value">+10%</div></div>
+                                <div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.8</div></div>
+                            </div>
+                            <div class="technicals-box">
+                                <div class="tech-title"><i class="fas fa-chart-area"></i> Monthly Technicals</div>
+                                <div class="tech-grid">
+                                    <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">42</div><div class="tech-status tech-neutral">Neutral</div></div>
+                                    <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-neutral">Bottoming</div></div>
+                                    <div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Near</div><div class="tech-status tech-neutral">200 DMA</div></div>
+                                    <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.8%</div><div class="tech-status tech-neutral">Low</div></div>
+                                </div>
+                            </div>
+                            <div class="context-box">
+                                <div class="ctx-title">Positional Context</div>
+                                <div class="ctx-content">
+                                    <span class="ctx-item positive">Sector: Defensive</span>
+                                    <span class="ctx-item positive">RS: Strong</span>
+                                    <span class="ctx-item neutral">3 Tranches</span>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Accumulation Zone</span><span class="detail-value entry">₹2,400 - ₹2,480</span></div>
+                                <div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹2,700 (+10%)</span></div>
+                                <div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹2,320</span></div>
+                                <div class="detail-row"><span class="detail-label">Position Build</span><span class="detail-value special">3 Tranches (33%)</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Setup Quality</span><span>80%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== INVESTMENT TAB ===================== -->
+            <div id="investment" class="tab-content">
+                <div class="filter-bar">
+                    <button class="filter-pill active" data-filter="all">All <span class="count">2</span></button>
+                    <button class="filter-pill" data-filter="invest-accumulate">Accumulate <span class="count">1</span></button>
+                    <button class="filter-pill" data-filter="invest-core">Core Hold <span class="count">1</span></button>
+                </div>
+                <div class="signals-grid">
+                    <!-- Investment Core Hold -->
+                    <div class="signal-card" data-category="invest-core">
+                        <div class="card-header action-core-hold">
+                            <span class="action-text"><i class="fas fa-crown"></i> CORE HOLD</span>
+                            <span class="timeframe">FOREVER</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="symbol-row">
+                                <div>
+                                    <div class="symbol-name">HDFCBANK</div>
+                                    <div class="company-name">HDFC Bank Ltd</div>
+                                </div>
+                                <div class="price-section">
+                                    <div class="current-price">₹1,678.50</div>
+                                    <div class="price-change up">+0.55% ↑</div>
+                                </div>
+                            </div>
+                            <div class="tags-row">
+                                <span class="tag tag-holding"><i class="fas fa-wallet"></i> CORE HOLDING</span>
+                                <span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span>
+                                <span class="tag tag-sector"><i class="fas fa-building-columns"></i> Banking</span>
+                                <span class="tag tag-score-high">10/10</span>
+                            </div>
+                            <div class="phase-indicator">
+                                <div class="phase-header">
+                                    <span class="phase-title">Wyckoff Phase</span>
+                                    <span class="phase-name markup">MARKUP (Long Term)</span>
+                                </div>
+                                <div class="phase-bar">
+                                    <div class="phase-segment acc inactive" style="width: 20%;"></div>
+                                    <div class="phase-segment brk inactive" style="width: 15%;"></div>
+                                    <div class="phase-segment mkp active" style="width: 25%;"></div>
+                                    <div class="phase-segment dst inactive" style="width: 20%;"></div>
+                                    <div class="phase-segment mkd inactive" style="width: 20%;"></div>
+                                </div>
+                            </div>
+                            <div class="rr-box">
+                                <div class="rr-item" style="flex: 2;"><div class="label">Avg Cost</div><div class="value">₹1,420</div></div>
+                                <div class="rr-item reward"><div class="label">P&L</div><div class="value">+18.2%</div></div>
+                                <div class="rr-item" style="background: rgba(52, 199, 89, 0.1);"><div class="label">Weight</div><div class="value" style="color: var(--apple-green);">12%</div></div>
+                            </div>
+                            <div class="context-box">
+                                <div class="ctx-title">Core Holding Rationale</div>
+                                <div class="ctx-content">
+                                    <span class="ctx-item positive"><i class="fas fa-crown"></i> Market Leader</span>
+                                    <span class="ctx-item positive">Strong Moat</span>
+                                    <span class="ctx-item positive">Compounding Machine</span>
+                                </div>
+                            </div>
+                            <div class="indicators-row">
+                                <div class="indicator-box">
+                                    <div class="ind-label"><span>Fundamental</span><span>Excellent</span></div>
+                                    <div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 95%"></div></div>
+                                </div>
+                                <div class="indicator-box">
+                                    <div class="ind-label"><span>Quality</span><span>AAA</span></div>
+                                    <div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 98%"></div></div>
+                                </div>
+                            </div>
+                            <div class="trade-details">
+                                <div class="detail-row"><span class="detail-label">Action</span><span class="detail-value special">NEVER SELL - CORE</span></div>
+                                <div class="detail-row"><span class="detail-label">Add on Dips</span><span class="detail-value entry">Below ₹1,550</span></div>
+                                <div class="detail-row"><span class="detail-label">Portfolio Target</span><span class="detail-value target">15-20% Weight</span></div>
+                            </div>
+                            <div class="confidence-section">
+                                <div class="confidence-header"><span>Core Conviction</span><span>100%</span></div>
+                                <div class="confidence-bar"><div class="confidence-fill high" style="width: 100%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer Include -->
+    <div id="footer-container"></div>
+
+    <!-- Load includes -->
+    <script>
+        // Load Header
+        fetch('includes/header.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('header-container').innerHTML = data;
+                initializeAfterLoad();
+            });
+
+        // Load Footer
+        fetch('includes/footer.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('footer-container').innerHTML = data;
+            });
+
+        function initializeAfterLoad() {
+            // Re-initialize after header loads
+            setTimeout(() => {
+                if (typeof updateTime === 'function') updateTime();
+            }, 100);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!-- Footer Include -->
+<footer class="main-footer">
+    <div class="container is-fluid">
+        <p class="footer-text">Trading Signals Cockpit Pro &copy; 2024</p>
+    </div>
+</footer>
+
+<script>
+    // Update time
+    function updateTime() {
+        const now = new Date();
+        const el = document.getElementById('currentTime');
+        if (el) {
+            el.textContent = now.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // Main tab switching
+    document.querySelectorAll('.tab-list li').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.tab-list li').forEach(t => t.classList.remove('is-active'));
+            this.classList.add('is-active');
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('is-active');
+            });
+            const tabId = this.getAttribute('data-tab');
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) {
+                activeTab.classList.add('is-active');
+                activeTab.querySelectorAll('.filter-pill').forEach(pill => {
+                    pill.classList.remove('active');
+                    if (pill.getAttribute('data-filter') === 'all') {
+                        pill.classList.add('active');
+                    }
+                });
+                activeTab.querySelectorAll('.signal-card').forEach(card => {
+                    card.style.display = '';
+                });
+            }
+        });
+    });
+
+    // Sub-filter pill clicking
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+        pill.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabContent = this.closest('.tab-content');
+            if (!tabContent) return;
+            tabContent.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+            this.classList.add('active');
+            const filter = this.getAttribute('data-filter');
+            const cards = tabContent.querySelectorAll('.signal-card');
+            cards.forEach(card => {
+                const category = card.getAttribute('data-category');
+                if (filter === 'all' || category === filter) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    });
+</script>

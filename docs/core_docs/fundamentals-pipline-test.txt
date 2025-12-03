@@ -1,0 +1,65 @@
+# 1. Scrape data
+python -m queen.fetchers.fundamentals_scraper RELIANCE TCS HDFCBANK INFY
+
+# 2. Run full pipeline test
+python -c "
+from queen.helpers.fundamentals_polars_engine import load_all
+from queen.helpers.fundamentals_timeseries_engine import add_timeseries_features
+from queen.technicals.fundamentals_score_engine import score_and_filter
+from queen.technicals.fundamentals_gate import apply_comprehensive_gate
+from queen.settings.settings import PATHS
+
+# Load
+df = load_all(PATHS['FUNDAMENTALS_PROCESSED'])
+print(f'Loaded {df.height} symbols')
+
+# Add trends
+df = add_timeseries_features(df)
+
+# Score
+df = score_and_filter(df)
+
+# Gate
+df = apply_comprehensive_gate(df)
+
+# Results
+print(df.select(['Symbol', 'PowerScore', 'Intrinsic_Bucket', 'Fundamental_Pass', 'Gate_Pass']).head(10))
+"
+
+# Show fundamentals for a symbol
+python -m queen.cli.fundamentals_cli show TCS
+
+# Run scoring on all data
+python -m queen.cli.fundamentals_cli score --all
+
+# Run scoring with gating
+python -m queen.cli.fundamentals_cli score --all --gate
+
+# Compare symbols
+python -m queen.cli.fundamentals_cli compare TCS INFY WIPRO
+
+# Show sector rankings
+python -m queen.cli.fundamentals_cli sector "Information Technology"
+
+# Show all sectors summary
+python -m queen.cli.fundamentals_cli sector
+
+# Export to CSV with scores
+python -m queen.cli.fundamentals_cli export --output fundamentals.csv --scored
+
+# Run full pipeline (scrape + load + score + gate)
+python -m queen.cli.fundamentals_cli pipeline --symbols TCS RELIANCE HDFCBANK --workers 3
+
+# List available symbols
+python -m queen.cli.fundamentals_cli list
+
+fundamentals_cli.py (v2.0)
+Available Commands
+Command	Description	Example
+show	View fundamentals for a symbol	show TCS
+score	Run scoring pipeline	score --all --gate
+compare	Compare multiple symbols	compare TCS INFY WIPRO
+sector	Show sector rankings	sector "Information Technology"
+export	Export to CSV	export --output data.csv --scored
+pipeline	Run full pipeline (scrape+score+gate)	pipeline --symbols TCS RELIANCE
+list	List available symbols	list

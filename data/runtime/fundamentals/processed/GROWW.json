@@ -1,99 +1,156 @@
 {
   "symbol": "GROWW",
-  "sector": "Financial Services Financial Services Capital Markets Stockbroking & Allied",
-  "top_ratios": {
-    "market_cap": 97500.0,
-    "current_price": 158.0,
-    "high": 194.0,
-    "low": 112.0,
-    "pe_ratio": 64.3,
-    "book_value": null,
-    "dividend_yield": 0.0,
-    "roce": 65.3,
-    "roe": 50.0,
-    "face_value": 2.0
-  },
+  "company_name": "Billionbrains Garage Ventures Ltd",
+  "sector": "Financial Services",
+  "industry": "Financial Services",
+  "broad_sector": "Financial Services",
+  "bse_code": "544603",
+  "week_52_high": 194.0,
+  "week_52_low": 112.0,
+  "market_cap": 97172.0,
+  "current_price": 157.0,
+  "pe_ratio": 64.1,
+  "dividend_yield": 0.0,
+  "roce_pct": 65.3,
+  "roe_pct": 50.0,
+  "face_value": 2.0,
+  "about": "Incorporated in 2017, Groww is a Bengaluru-based fintech company that provides retail investors direct-to-customer digital investment platform, providing multiple financial products and services.[1]",
+  "pros": [
+    "Company has reduced debt.",
+    "Company is almost debt free.",
+    "Company has a good return on equity (ROE) track record: 3 Years ROE 28.1%",
+    "Debtor days have improved from 90.6 to 35.8 days."
+  ],
   "quarters": {
-    "q_op": {
+    "Sales+": {
+      "Sep 2024": 802.0,
+      "Jun 2025": 623.0,
+      "Sep 2025": 688.0
+    },
+    "Expenses+": {
+      "Sep 2024": 390.0,
+      "Jun 2025": 266.0,
+      "Sep 2025": 265.0
+    },
+    "Operating Profit": {
       "Sep 2024": 412.0,
       "Jun 2025": 357.0,
       "Sep 2025": 423.0
     },
-    "q_opm": {
-      "Sep 2024": 0.51,
-      "Jun 2025": 0.57,
-      "Sep 2025": 0.61
+    "OPM %": {
+      "Sep 2024": 51.0,
+      "Jun 2025": 57.0,
+      "Sep 2025": 61.0
     },
-    "q_interest": {
+    "Other Income+": {
+      "Sep 2024": 35.0,
+      "Jun 2025": 41.0,
+      "Sep 2025": 68.0
+    },
+    "Interest": {
       "Sep 2024": 1.0,
       "Jun 2025": 0.0,
       "Sep 2025": 0.0
     },
-    "q_depreciation": {
+    "Depreciation": {
       "Sep 2024": 5.0,
       "Jun 2025": 6.0,
       "Sep 2025": 6.0
     },
-    "q_pbt": {
+    "Profit before tax": {
       "Sep 2024": 441.0,
       "Jun 2025": 392.0,
       "Sep 2025": 485.0
     },
-    "q_tax": {
-      "Sep 2024": 0.25,
-      "Jun 2025": 0.22,
-      "Sep 2025": 0.27
+    "Tax %": {
+      "Sep 2024": 25.0,
+      "Jun 2025": 22.0,
+      "Sep 2025": 27.0
     },
-    "q_eps": {
+    "Net Profit+": {
+      "Sep 2024": 330.0,
+      "Jun 2025": 306.0,
+      "Sep 2025": 354.0
+    },
+    "EPS in Rs": {
       "Sep 2024": 10.6,
       "Jun 2025": 1.46,
       "Sep 2025": 0.59
+    },
+    "Raw PDF": {
+      "Sep 2024": "",
+      "Jun 2025": "",
+      "Sep 2025": ""
     }
   },
   "profit_loss": {
-    "pl_op": {
+    "Sales+": {
+      "Mar 2022": 186.0,
+      "Mar 2023": 1012.0,
+      "Mar 2024": 1939.0,
+      "Mar 2025": 2909.0
+    },
+    "Expenses+": {
+      "Mar 2022": 424.0,
+      "Mar 2023": 580.0,
+      "Mar 2024": 1703.0,
+      "Mar 2025": 900.0
+    },
+    "Operating Profit": {
       "Mar 2022": -238.0,
       "Mar 2023": 432.0,
       "Mar 2024": 237.0,
       "Mar 2025": 2008.0
     },
-    "pl_opm": {
-      "Mar 2022": -1.28,
-      "Mar 2023": 0.43,
-      "Mar 2024": 0.12,
-      "Mar 2025": 0.69
+    "OPM %": {
+      "Mar 2022": -128.0,
+      "Mar 2023": 43.0,
+      "Mar 2024": 12.0,
+      "Mar 2025": 69.0
     },
-    "pl_interest": {
+    "Other Income+": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 9.0,
+      "Mar 2024": -1164.0,
+      "Mar 2025": 2.0
+    },
+    "Interest": {
       "Mar 2022": 0.0,
       "Mar 2023": 2.0,
       "Mar 2024": 3.0,
       "Mar 2025": 2.0
     },
-    "pl_depr": {
+    "Depreciation": {
       "Mar 2022": 3.0,
       "Mar 2023": 12.0,
       "Mar 2024": 18.0,
       "Mar 2025": 21.0
     },
-    "pl_pbt": {
+    "Profit before tax": {
       "Mar 2022": -241.0,
       "Mar 2023": 427.0,
       "Mar 2024": -947.0,
       "Mar 2025": 1987.0
     },
-    "pl_taxpct": {
+    "Tax %": {
       "Mar 2022": 0.0,
-      "Mar 2023": 0.05,
-      "Mar 2024": 0.1,
-      "Mar 2025": 0.25
+      "Mar 2023": 5.0,
+      "Mar 2024": 10.0,
+      "Mar 2025": 25.0
     },
-    "pl_eps": {
+    "Net Profit+": {
+      "Mar 2022": -241.0,
+      "Mar 2023": 406.0,
+      "Mar 2024": -1042.0,
+      "Mar 2025": 1492.0
+    },
+    "EPS in Rs": {
       "Mar 2022": -2157.83,
       "Mar 2023": 59.55,
       "Mar 2024": -153.01,
       "Mar 2025": 8.16
     },
-    "pl_div_payout": {
+    "Dividend Payout %": {
       "Mar 2022": 0.0,
       "Mar 2023": 0.0,
       "Mar 2024": 0.0,
@@ -101,42 +158,70 @@
     }
   },
   "balance_sheet": {
-    "bs_equity_cap": {
+    "Equity Capital": {
       "Mar 2022": 0.11,
       "Mar 2023": 21.0,
       "Mar 2024": 21.0,
       "Mar 2025": 366.0,
       "Sep 2025": 1198.0
     },
-    "bs_reserves": {
+    "Reserves": {
       "Mar 2022": 2465.0,
       "Mar 2023": 2980.0,
       "Mar 2024": 1971.0,
       "Mar 2025": 3606.0,
       "Sep 2025": 5128.0
     },
-    "bs_total_liabilities": {
+    "Borrowings+": {
+      "Mar 2022": 0.0,
+      "Mar 2023": 73.0,
+      "Mar 2024": 64.0,
+      "Mar 2025": 60.0,
+      "Sep 2025": 7.0
+    },
+    "Other Liabilities+": {
+      "Mar 2022": 139.0,
+      "Mar 2023": 131.0,
+      "Mar 2024": 2299.0,
+      "Mar 2025": 210.0,
+      "Sep 2025": 699.0
+    },
+    "Total Liabilities": {
       "Mar 2022": 2605.0,
       "Mar 2023": 3205.0,
       "Mar 2024": 4355.0,
       "Mar 2025": 4241.0,
       "Sep 2025": 7033.0
     },
-    "bs_cwip": {
+    "Fixed Assets+": {
+      "Mar 2022": 9.0,
+      "Mar 2023": 41.0,
+      "Mar 2024": 29.0,
+      "Mar 2025": 31.0,
+      "Sep 2025": 23.0
+    },
+    "CWIP": {
       "Mar 2022": 0.0,
       "Mar 2023": 0.0,
       "Mar 2024": 0.0,
       "Mar 2025": 0.0,
       "Sep 2025": 0.0
     },
-    "bs_investments": {
+    "Investments": {
       "Mar 2022": 852.0,
       "Mar 2023": 1785.0,
       "Mar 2024": 2210.0,
       "Mar 2025": 3325.0,
       "Sep 2025": 4923.0
     },
-    "bs_total_assets": {
+    "Other Assets+": {
+      "Mar 2022": 1744.0,
+      "Mar 2023": 1379.0,
+      "Mar 2024": 2116.0,
+      "Mar 2025": 886.0,
+      "Sep 2025": 2086.0
+    },
+    "Total Assets": {
       "Mar 2022": 2605.0,
       "Mar 2023": 3205.0,
       "Mar 2024": 4355.0,
@@ -145,7 +230,25 @@
     }
   },
   "cash_flow": {
-    "cf_net": {
+    "Cash from Operating Activity+": {
+      "Mar 2022": -397.0,
+      "Mar 2023": 351.0,
+      "Mar 2024": 505.0,
+      "Mar 2025": -23.0
+    },
+    "Cash from Investing Activity+": {
+      "Mar 2022": -1482.0,
+      "Mar 2023": -211.0,
+      "Mar 2024": -605.0,
+      "Mar 2025": -330.0
+    },
+    "Cash from Financing Activity+": {
+      "Mar 2022": 1875.0,
+      "Mar 2023": -5.0,
+      "Mar 2024": 12.0,
+      "Mar 2025": 395.0
+    },
+    "Net Cash Flow": {
       "Mar 2022": -4.0,
       "Mar 2023": 135.0,
       "Mar 2024": -88.0,
@@ -153,41 +256,48 @@
     }
   },
   "ratios": {
-    "debtor_days": {
-      "Mar 2022": 277.0,
-      "Mar 2023": 106.0,
-      "Mar 2024": 130.0,
-      "Mar 2025": 36.0
+    "ratio_debtor_days": 36.0,
+    "ratio_inventory_days": "",
+    "ratio_days_payable": "",
+    "ratio_cash_conversion_cycle": 36.0,
+    "ratio_working_capital_days": 44.0,
+    "ratio_roce_pct": 65.0
+  },
+  "growth": {},
+  "shareholding": {
+    "quarterly": {
+      "promoters": {
+        "Nov 2025": 27.81
+      },
+      "fii": {
+        "Nov 2025": 57.14
+      },
+      "dii": {
+        "Nov 2025": 4.07
+      },
+      "public": {
+        "Nov 2025": 10.98
+      }
     },
-    "inventory_days": {
-      "Mar 2022": null,
-      "Mar 2023": null,
-      "Mar 2024": null,
-      "Mar 2025": null
-    },
-    "days_payable": {
-      "Mar 2022": null,
-      "Mar 2023": null,
-      "Mar 2024": null,
-      "Mar 2025": null
-    },
-    "ccc": {
-      "Mar 2022": 277.0,
-      "Mar 2023": 106.0,
-      "Mar 2024": 130.0,
-      "Mar 2025": 36.0
-    },
-    "wc_days": {
-      "Mar 2022": 236.0,
-      "Mar 2023": 161.0,
-      "Mar 2024": -161.0,
-      "Mar 2025": 44.0
-    },
-    "roce_pct": {
-      "Mar 2022": null,
-      "Mar 2023": 0.15,
-      "Mar 2024": 0.15,
-      "Mar 2025": 0.65
+    "latest": {
+      "promoters": 27.81,
+      "fii": 57.14,
+      "dii": 4.07,
+      "public": 10.98
     }
-  }
+  },
+  "peers": [],
+  "debt_to_equity": 0.0,
+  "sh_promoters_pct": 27.81,
+  "sh_fii_pct": 57.14,
+  "sh_dii_pct": 4.07,
+  "sh_public_pct": 10.98,
+  "sh_govt_pct": null,
+  "ratio_debtor_days": 36.0,
+  "ratio_inventory_days": "",
+  "ratio_days_payable": "",
+  "ratio_cash_conversion_cycle": 36.0,
+  "ratio_working_capital_days": 44.0,
+  "ratio_roce_pct": 65.0,
+  "_extracted_at": "2025-12-02T13:32:04.257462"
 }

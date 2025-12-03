@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Signals Cockpit - Enhanced Pro</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-dark: #0f1419;
+            --bg-card: #1a1f2e;
+            --bg-card-hover: #232a3b;
+            --text-primary: #ffffff;
+            --text-secondary: #8899a6;
+            --accent-green: #00c853;
+            --accent-red: #ff1744;
+            --accent-blue: #2196f3;
+            --accent-yellow: #ffc107;
+            --accent-purple: #7c4dff;
+            --accent-cyan: #00bcd4;
+            --accent-orange: #ff9800;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-primary);
+        }
+
+        .main-header {
+            background: rgba(26, 31, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .market-status {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .market-status .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.open { background: var(--accent-green); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes urgentPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .stats-bar {
+            background: rgba(0,0,0,0.3);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .stat-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .stat-chip i { font-size: 0.9rem; }
+        .stat-chip.bullish i { color: var(--accent-green); }
+        .stat-chip.bearish i { color: var(--accent-red); }
+        .stat-chip.neutral i { color: var(--accent-yellow); }
+        .stat-chip.special i { color: var(--accent-cyan); }
+
+        .main-tabs {
+            background: rgba(26, 31, 46, 0.8);
+            padding: 0 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            overflow-x: auto;
+        }
+
+        .main-tabs ul {
+            display: flex;
+            gap: 0;
+            border-bottom: none;
+        }
+
+        .main-tabs li { list-style: none; }
+
+        .main-tabs li a {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 1.25rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-weight: 500;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .main-tabs li a:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .main-tabs li.is-active a {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        .tab-badge {
+            background: rgba(255,255,255,0.15);
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .sub-pills {
+            background: rgba(0,0,0,0.2);
+            padding: 1rem 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .pill {
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .pill:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .pill.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+
+        .pill .count {
+            background: rgba(0,0,0,0.3);
+            padding: 0.1rem 0.4rem;
+            border-radius: 8px;
+            margin-left: 0.4rem;
+            font-size: 0.7rem;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 1.5rem;
+        }
+
+        .tab-content.is-active { display: block; }
+
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .signal-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.3s;
+        }
+
+        .signal-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255,255,255,0.15);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .signal-card.urgent {
+            border-color: var(--accent-orange);
+            animation: urgentPulse 2s infinite;
+        }
+
+        .card-header {
+            padding: 0.9rem 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        .card-header .action-text {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-header .timeframe {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.2);
+            font-weight: 500;
+        }
+
+        .action-strong-buy { background: linear-gradient(135deg, #00c853, #00e676); color: #000; }
+        .action-buy { background: linear-gradient(135deg, #4caf50, #66bb6a); color: #fff; }
+        .action-scalp-long { background: linear-gradient(135deg, #26a69a, #4db6ac); color: #fff; }
+        .action-scalp-short { background: linear-gradient(135deg, #ef5350, #e53935); color: #fff; }
+        .action-breakout { background: linear-gradient(135deg, #00bcd4, #26c6da); color: #000; }
+        .action-reversal { background: linear-gradient(135deg, #7c4dff, #b388ff); color: #fff; }
+        .action-short { background: linear-gradient(135deg, #f44336, #e53935); color: #fff; }
+        .action-sell { background: linear-gradient(135deg, #ff5252, #ff1744); color: #fff; }
+        .action-hold { background: linear-gradient(135deg, #ffc107, #ffca28); color: #000; }
+        .action-watch { background: linear-gradient(135deg, #ff9800, #ffa726); color: #000; }
+        .action-book-profit { background: linear-gradient(135deg, #8bc34a, #9ccc65); color: #000; }
+        .action-trail { background: linear-gradient(135deg, #2196f3, #42a5f5); color: #fff; }
+        .action-accumulate { background: linear-gradient(135deg, #673ab7, #7e57c2); color: #fff; }
+        .action-btst-buy { background: linear-gradient(135deg, #1565c0, #1976d2); color: #fff; }
+        .action-reduce { background: linear-gradient(135deg, #ff7043, #ff5722); color: #fff; }
+        .action-core-hold { background: linear-gradient(135deg, #5c6bc0, #7986cb); color: #fff; }
+
+        .card-body { padding: 1rem; }
+
+        .symbol-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.8rem;
+        }
+
+        .symbol-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .company-name {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .price-section { text-align: right; }
+
+        .current-price {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .price-change {
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .price-change.up { color: var(--accent-green); }
+        .price-change.down { color: var(--accent-red); }
+
+        .tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .tag {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .tag-uc { background: #00e676; color: #000; }
+        .tag-lc { background: #ff1744; color: #fff; }
+        .tag-bullish { background: rgba(0, 200, 83, 0.15); color: #00e676; border: 1px solid rgba(0, 200, 83, 0.3); }
+        .tag-bearish { background: rgba(255, 23, 68, 0.15); color: #ff5252; border: 1px solid rgba(255, 23, 68, 0.3); }
+        .tag-neutral { background: rgba(255, 193, 7, 0.15); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.3); }
+        .tag-breakout { background: rgba(0, 188, 212, 0.2); color: #00e5ff; border: 1px solid rgba(0, 188, 212, 0.3); }
+        .tag-breakdown { background: rgba(255, 23, 68, 0.2); color: #ff5252; border: 1px solid rgba(255, 23, 68, 0.3); }
+        .tag-volume { background: rgba(124, 77, 255, 0.2); color: #b388ff; border: 1px solid rgba(124, 77, 255, 0.3); }
+        .tag-reversal { background: rgba(255, 152, 0, 0.2); color: #ffb74d; border: 1px solid rgba(255, 152, 0, 0.3); }
+        .tag-holding { background: rgba(33, 150, 243, 0.9); color: #fff; }
+        .tag-new { background: rgba(0, 200, 83, 0.9); color: #fff; }
+        .tag-score-high { background: #00c853; color: #000; }
+        .tag-score-mid { background: #ffc107; color: #000; }
+        .tag-score-low { background: #ff5252; color: #fff; }
+        .tag-urgent { background: #ff5722; color: #fff; animation: pulse 1s infinite; }
+        .tag-wait-signal { background: rgba(158, 158, 158, 0.3); color: #bdbdbd; border: 1px solid rgba(158, 158, 158, 0.5); }
+        .tag-phase-accumulation { background: rgba(76, 175, 80, 0.25); color: #81c784; border: 1px solid rgba(76, 175, 80, 0.4); }
+        .tag-phase-markup { background: rgba(0, 200, 83, 0.25); color: #00e676; border: 1px solid rgba(0, 200, 83, 0.4); }
+        .tag-phase-distribution { background: rgba(255, 152, 0, 0.25); color: #ffb74d; border: 1px solid rgba(255, 152, 0, 0.4); }
+        .tag-phase-markdown { background: rgba(244, 67, 54, 0.25); color: #e57373; border: 1px solid rgba(244, 67, 54, 0.4); }
+        .tag-sector { background: rgba(103, 58, 183, 0.2); color: #b388ff; border: 1px solid rgba(103, 58, 183, 0.3); }
+        .tag-fii-buy { background: rgba(0, 200, 83, 0.2); color: #69f0ae; border: 1px solid rgba(0, 200, 83, 0.3); }
+        .tag-above-vwap { background: rgba(0, 200, 83, 0.2); color: #69f0ae; border: 1px solid rgba(0, 200, 83, 0.3); }
+        .tag-below-vwap { background: rgba(255, 23, 68, 0.2); color: #ff5252; border: 1px solid rgba(255, 23, 68, 0.3); }
+
+        .trade-details {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 0.7rem;
+            margin-bottom: 0.7rem;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            font-size: 0.78rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .detail-row:last-child { border-bottom: none; }
+
+        .detail-label { color: var(--text-secondary); }
+
+        .detail-value { font-weight: 600; color: var(--text-primary); }
+        .detail-value.entry { color: var(--accent-blue); }
+        .detail-value.target { color: var(--accent-green); }
+        .detail-value.stoploss { color: var(--accent-red); }
+        .detail-value.warning { color: var(--accent-yellow); }
+        .detail-value.special { color: var(--accent-cyan); }
+
+        .rr-box {
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 0.7rem;
+        }
+
+        .rr-item {
+            flex: 1;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+            padding: 0.4rem;
+            text-align: center;
+        }
+
+        .rr-item .label {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .rr-item .value { font-size: 0.85rem; font-weight: 700; }
+        .rr-item.risk .value { color: var(--accent-red); }
+        .rr-item.reward .value { color: var(--accent-green); }
+        .rr-item.ratio .value { color: var(--accent-cyan); }
+
+        .technicals-box {
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            padding: 0.5rem 0.7rem;
+            margin-bottom: 0.7rem;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .technicals-box .tech-title {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .technicals-box .tech-title i { color: var(--accent-blue); }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.4rem;
+        }
+
+        .tech-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            padding: 0.3rem;
+            text-align: center;
+        }
+
+        .tech-item .tech-label {
+            font-size: 0.55rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .tech-item .tech-value { font-size: 0.7rem; font-weight: 700; }
+        .tech-item .tech-status { font-size: 0.55rem; }
+
+        .tech-bullish { color: var(--accent-green); }
+        .tech-bearish { color: var(--accent-red); }
+        .tech-neutral { color: var(--accent-yellow); }
+        .tech-overbought { color: var(--accent-orange); }
+        .tech-oversold { color: var(--accent-cyan); }
+
+        .fo-sentiment-box {
+            background: rgba(103, 58, 183, 0.15);
+            border-radius: 8px;
+            padding: 0.5rem 0.7rem;
+            margin-bottom: 0.7rem;
+            border-left: 3px solid var(--accent-purple);
+        }
+
+        .fo-sentiment-box .fo-title {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .fo-sentiment-box .fo-title i { color: var(--accent-purple); }
+
+        .fo-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.4rem;
+        }
+
+        .fo-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            padding: 0.3rem;
+            text-align: center;
+        }
+
+        .fo-item .fo-label { font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; }
+        .fo-item .fo-value { font-size: 0.75rem; font-weight: 700; }
+        .fo-item .fo-signal { font-size: 0.55rem; padding: 0.1rem 0.2rem; border-radius: 3px; display: inline-block; }
+
+        .fo-signal.bullish { background: rgba(0,200,83,0.3); color: #69f0ae; }
+        .fo-signal.bearish { background: rgba(255,23,68,0.3); color: #ff5252; }
+        .fo-signal.neutral { background: rgba(255,193,7,0.3); color: #ffc107; }
+
+        .fvg-box {
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 8px;
+            padding: 0.5rem 0.7rem;
+            margin-bottom: 0.7rem;
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .fvg-box .fvg-title {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .fvg-box .fvg-title i { color: var(--accent-cyan); }
+
+        .fvg-zones { display: flex; gap: 0.4rem; }
+
+        .fvg-zone {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            padding: 0.4rem;
+        }
+
+        .fvg-zone .zone-label {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+
+        .fvg-zone .zone-label i { font-size: 0.55rem; }
+        .fvg-zone.above .zone-label i { color: var(--accent-green); }
+        .fvg-zone.below .zone-label i { color: var(--accent-red); }
+        .fvg-zone .zone-value { font-size: 0.75rem; font-weight: 600; }
+        .fvg-zone.above .zone-value { color: var(--accent-green); }
+        .fvg-zone.below .zone-value { color: var(--accent-cyan); }
+        .fvg-zone .zone-type { font-size: 0.55rem; color: var(--text-secondary); }
+
+        .indicators-row { display: flex; gap: 0.4rem; margin-bottom: 0.7rem; }
+
+        .indicator-box {
+            flex: 1;
+            background: rgba(0,0,0,0.15);
+            border-radius: 6px;
+            padding: 0.4rem;
+        }
+
+        .indicator-box .ind-label {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.2rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .indicator-bar {
+            height: 5px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .indicator-fill { height: 100%; border-radius: 3px; }
+        .indicator-fill.volume-high { background: linear-gradient(90deg, #7c4dff, #b388ff); }
+        .indicator-fill.volume-normal { background: linear-gradient(90deg, #78909c, #90a4ae); }
+        .indicator-fill.momentum-strong { background: linear-gradient(90deg, #00c853, #69f0ae); }
+        .indicator-fill.momentum-weak { background: linear-gradient(90deg, #ff5252, #ff8a80); }
+
+        .phase-indicator {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 0.5rem 0.7rem;
+            margin-bottom: 0.7rem;
+        }
+
+        .phase-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.3rem;
+        }
+
+        .phase-title { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; }
+        .phase-name { font-size: 0.75rem; font-weight: 600; }
+        .phase-name.accumulation { color: #81c784; }
+        .phase-name.markup { color: #00e676; }
+        .phase-name.distribution { color: #ffb74d; }
+        .phase-name.markdown { color: #e57373; }
+
+        .phase-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; }
+        .phase-segment { height: 100%; }
+        .phase-segment.active { opacity: 1; }
+        .phase-segment.inactive { opacity: 0.3; }
+        .phase-segment.acc { background: #81c784; }
+        .phase-segment.brk { background: #00e5ff; }
+        .phase-segment.mkp { background: #00e676; }
+        .phase-segment.dst { background: #ffb74d; }
+        .phase-segment.mkd { background: #e57373; }
+
+        .confidence-section { margin-top: 0.4rem; }
+
+        .confidence-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            margin-bottom: 0.2rem;
+            color: var(--text-secondary);
+        }
+
+        .confidence-bar {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-fill { height: 100%; border-radius: 2px; }
+        .confidence-fill.high { background: linear-gradient(90deg, #00c853, #69f0ae); }
+        .confidence-fill.medium { background: linear-gradient(90deg, #ffc107, #ffeb3b); }
+        .confidence-fill.low { background: linear-gradient(90deg, #ff5252, #ff8a80); }
+
+        .context-box {
+            background: rgba(0,0,0,0.15);
+            border-radius: 6px;
+            padding: 0.4rem 0.6rem;
+            margin-bottom: 0.7rem;
+            border-left: 3px solid var(--accent-purple);
+        }
+
+        .context-box .ctx-title { font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.2rem; }
+        .context-box .ctx-content { font-size: 0.75rem; color: var(--text-primary); display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .ctx-item { display: flex; align-items: center; gap: 0.2rem; }
+        .ctx-item.positive { color: var(--accent-green); }
+        .ctx-item.negative { color: var(--accent-red); }
+        .ctx-item.neutral { color: var(--accent-yellow); }
+
+        @media (max-width: 768px) {
+            .signals-grid { grid-template-columns: 1fr; }
+            .main-tabs li a { padding: 0.8rem; font-size: 0.75rem; }
+            .tech-grid, .fo-grid { grid-template-columns: repeat(2, 1fr); }
+            .fvg-zones { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="main-header">
+        <div class="is-flex is-justify-content-space-between is-align-items-center">
+            <div>
+                <h1 class="header-title"><i class="fas fa-chart-line mr-2"></i>Trading Signals Cockpit Pro</h1>
+            </div>
+            <div class="has-text-right">
+                <div class="market-status"><span class="status-dot open"></span> Market Open</div>
+                <div class="market-status" id="currentTime"></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="stats-bar">
+        <div class="stat-chip bullish"><i class="fas fa-arrow-trend-up"></i><span><strong>12</strong> Buy</span></div>
+        <div class="stat-chip bearish"><i class="fas fa-arrow-trend-down"></i><span><strong>4</strong> Sell</span></div>
+        <div class="stat-chip neutral"><i class="fas fa-pause"></i><span><strong>6</strong> Hold</span></div>
+        <div class="stat-chip special"><i class="fas fa-lock"></i><span><strong>2</strong> UC</span></div>
+    </div>
+
+    <nav class="main-tabs">
+        <ul>
+            <li class="is-active" data-tab="scalp"><a><i class="fas fa-bolt"></i> Scalp <span class="tab-badge">4</span></a></li>
+            <li data-tab="intraday"><a><i class="fas fa-sun"></i> Intraday <span class="tab-badge">5</span></a></li>
+            <li data-tab="btst"><a><i class="fas fa-moon"></i> BTST <span class="tab-badge">3</span></a></li>
+            <li data-tab="swing"><a><i class="fas fa-wave-square"></i> Swing <span class="tab-badge">4</span></a></li>
+            <li data-tab="positional"><a><i class="fas fa-calendar-alt"></i> Positional <span class="tab-badge">3</span></a></li>
+            <li data-tab="investment"><a><i class="fas fa-piggy-bank"></i> Investment <span class="tab-badge">2</span></a></li>
+        </ul>
+    </nav>
+
+    <!-- ===================== SCALP TAB ===================== -->
+    <div id="scalp" class="tab-content is-active">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">4</span></button>
+            <button class="pill" data-filter="scalp-long">Long <span class="count">2</span></button>
+            <button class="pill" data-filter="scalp-short">Short <span class="count">1</span></button>
+            <button class="pill" data-filter="scalp-breakout">Breakout <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- Scalp Long 1 -->
+            <div class="signal-card urgent" data-category="scalp-long">
+                <div class="card-header action-scalp-long"><span class="action-text"><i class="fas fa-arrow-up"></i> SCALP LONG</span><span class="timeframe">5-15 MIN</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">RELIANCE</div><div class="company-name">Reliance Industries</div></div><div class="price-section"><div class="current-price">₹2,847.50</div><div class="price-change up">+1.25% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-urgent"><i class="fas fa-bolt"></i> ACT NOW</span><span class="tag tag-bullish">Bullish</span><span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 2.3x</span><span class="tag tag-score-high">9/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-0.8%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+1.2%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.5</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">62</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.2%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.25</div><div class="fo-signal bullish">Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+2.5L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹2,850</div><div class="fo-signal neutral">Near</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">18%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="fvg-box"><div class="fvg-title"><i class="fas fa-arrows-up-down"></i> Smart Money Zones (FVG)</div><div class="fvg-zones"><div class="fvg-zone above"><div class="zone-label"><i class="fas fa-arrow-up"></i> FVG Above</div><div class="zone-value">₹2,865 - ₹2,880</div><div class="zone-type">Target</div></div><div class="fvg-zone below"><div class="zone-label"><i class="fas fa-arrow-down"></i> FVG Below</div><div class="zone-value">₹2,820 - ₹2,835</div><div class="zone-type">Support</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹2,840 - ₹2,850</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹2,880 (+1.2%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹2,825 (-0.8%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Signal Strength</span><span>90%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 90%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Scalp Short -->
+            <div class="signal-card" data-category="scalp-short">
+                <div class="card-header action-scalp-short"><span class="action-text"><i class="fas fa-arrow-down"></i> SCALP SHORT</span><span class="timeframe">10-20 MIN</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">HDFCBANK</div><div class="company-name">HDFC Bank Ltd</div></div><div class="price-section"><div class="current-price">₹1,678.30</div><div class="price-change down">-0.85% ↓</div></div></div>
+                    <div class="tags-row"><span class="tag tag-wait-signal"><i class="fas fa-hourglass-half"></i> WAIT</span><span class="tag tag-bearish">Bearish</span><span class="tag tag-breakdown">Breakdown</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-0.9%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+1.8%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">38</div><div class="tech-status tech-bearish">Weak</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-bearish">▼ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Below</div><div class="tech-status tech-bearish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.5%</div><div class="tech-status tech-neutral">High</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">0.68</div><div class="fo-signal bearish">Bearish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+1.8L</div><div class="fo-signal bearish">Short Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,700</div><div class="fo-signal bearish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">22%</div><div class="fo-signal neutral">Elevated</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Trigger Below</span><span class="detail-value warning">₹1,675 (Wait)</span></div><div class="detail-row"><span class="detail-label">Short Entry</span><span class="detail-value entry">₹1,670 - ₹1,675</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,655</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,690</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Signal Strength</span><span>80%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Scalp Breakout UC -->
+            <div class="signal-card" data-category="scalp-breakout">
+                <div class="card-header action-breakout"><span class="action-text"><i class="fas fa-rocket"></i> BREAKOUT</span><span class="timeframe">UC LOCKED</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">SMLMAH</div><div class="company-name">SML Mahindra</div></div><div class="price-section"><div class="current-price">₹892.45</div><div class="price-change up">+5.00% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-uc"><i class="fas fa-lock"></i> UC HIT</span><span class="tag tag-bullish">Extreme Bullish</span><span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 4x</span><span class="tag tag-score-high">10/10</span></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">82</div><div class="tech-status tech-overbought">OB</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">++</div><div class="tech-status tech-bullish">Strong▲</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Far Above</div><div class="tech-status tech-bullish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">4.5%</div><div class="tech-status tech-overbought">V.High</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.85</div><div class="fo-signal bullish">V.Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+5.2L</div><div class="fo-signal bullish">Massive</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹850</div><div class="fo-signal bullish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">45%</div><div class="fo-signal neutral">V.High</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Status</span><span class="detail-value special">UPPER CIRCUIT LOCKED</span></div><div class="detail-row"><span class="detail-label">Circuit Price</span><span class="detail-value target">₹892.45</span></div><div class="detail-row"><span class="detail-label">Pending Buyers</span><span class="detail-value">2,45,000 qty</span></div><div class="detail-row"><span class="detail-label">Action</span><span class="detail-value entry">QUEUE FOR BTST</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Continuation Probability</span><span>95%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 95%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Scalp Long 2 - Book Profit -->
+            <div class="signal-card" data-category="scalp-long">
+                <div class="card-header action-book-profit"><span class="action-text"><i class="fas fa-hand-holding-dollar"></i> BOOK PROFIT</span><span class="timeframe">EXIT NOW</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">TCS</div><div class="company-name">Tata Consultancy</div></div><div class="price-section"><div class="current-price">₹4,185.60</div><div class="price-change up">+0.95% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-holding"><i class="fas fa-wallet"></i> HOLDING</span><span class="tag tag-bullish">T1 Hit ✓</span><span class="tag tag-score-high">EXIT</span></div>
+                    <div class="rr-box"><div class="rr-item" style="flex: 2;"><div class="label">Your Entry</div><div class="value" style="color: var(--text-primary);">₹4,150</div></div><div class="rr-item reward"><div class="label">P&L</div><div class="value">+0.86%</div></div><div class="rr-item" style="background: rgba(0,200,83,0.2);"><div class="label">Profit</div><div class="value" style="color: #69f0ae;">₹+356</div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Target 1</span><span class="detail-value target">₹4,180 ✓ HIT</span></div><div class="detail-row"><span class="detail-label">Momentum</span><span class="detail-value warning">Fading</span></div><div class="detail-row"><span class="detail-label">Action</span><span class="detail-value target">BOOK FULL PROFIT</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Trade Complete</span><span>100%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 100%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== INTRADAY TAB ===================== -->
+    <div id="intraday" class="tab-content">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">5</span></button>
+            <button class="pill" data-filter="intraday-long">Long <span class="count">2</span></button>
+            <button class="pill" data-filter="intraday-short">Short <span class="count">1</span></button>
+            <button class="pill" data-filter="intraday-breakout">Breakout <span class="count">1</span></button>
+            <button class="pill" data-filter="intraday-reversal">Reversal <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- Intraday Long 1 -->
+            <div class="signal-card" data-category="intraday-long">
+                <div class="card-header action-buy"><span class="action-text"><i class="fas fa-arrow-up"></i> INTRADAY LONG</span><span class="timeframe">1-4 HRS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">INFY</div><div class="company-name">Infosys Ltd</div></div><div class="price-section"><div class="current-price">₹1,542.75</div><div class="price-change up">+1.80% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-above-vwap"><i class="fas fa-arrow-up"></i> Above VWAP</span><span class="tag tag-bullish">Bullish</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.5%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+2.8%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.9</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">58</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.4%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.15</div><div class="fo-signal bullish">Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+1.2L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,540</div><div class="fo-signal neutral">At Level</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">16%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Intraday Context</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-check"></i> VWAP: ₹1,528</span><span class="ctx-item neutral">Range: ₹1,515 - ₹1,548</span><span class="ctx-item positive">Near High</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹1,535 - ₹1,545</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,585 (+2.8%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,520 (-1.5%)</span></div><div class="detail-row"><span class="detail-label"><i class="fas fa-clock"></i> Exit Before</span><span class="detail-value warning">3:15 PM</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Signal Strength</span><span>85%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 85%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Intraday Long 2 -->
+            <div class="signal-card" data-category="intraday-long">
+                <div class="card-header action-buy"><span class="action-text"><i class="fas fa-arrow-up"></i> INTRADAY LONG</span><span class="timeframe">2-4 HRS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">ICICIBANK</div><div class="company-name">ICICI Bank Ltd</div></div><div class="price-section"><div class="current-price">₹1,125.40</div><div class="price-change up">+1.45% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-above-vwap"><i class="fas fa-arrow-up"></i> Above VWAP</span><span class="tag tag-bullish">Bullish</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.0%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+2.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">61</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.2%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.18</div><div class="fo-signal bullish">Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+2.1L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,120</div><div class="fo-signal neutral">Near</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">15%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Intraday Context</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-check"></i> VWAP: ₹1,115</span><span class="ctx-item positive">Banking Strong</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹1,120 - ₹1,128</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,150 (+2.2%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,112 (-1.0%)</span></div><div class="detail-row"><span class="detail-label"><i class="fas fa-clock"></i> Exit Before</span><span class="detail-value warning">3:15 PM</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Signal Strength</span><span>80%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Intraday Short -->
+            <div class="signal-card" data-category="intraday-short">
+                <div class="card-header action-short"><span class="action-text"><i class="fas fa-arrow-down"></i> INTRADAY SHORT</span><span class="timeframe">2-4 HRS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">TATASTEEL</div><div class="company-name">Tata Steel Ltd</div></div><div class="price-section"><div class="current-price">₹142.35</div><div class="price-change down">-2.15% ↓</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-below-vwap"><i class="fas fa-arrow-down"></i> Below VWAP</span><span class="tag tag-bearish">Bearish</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.2%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+3.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2.5</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">32</div><div class="tech-status tech-bearish">Weak</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-bearish">▼ Strong</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Below</div><div class="tech-status tech-bearish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">2.1%</div><div class="tech-status tech-neutral">High</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">0.55</div><div class="fo-signal bearish">V.Bearish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+3.5L</div><div class="fo-signal bearish">Short Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹145</div><div class="fo-signal bearish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">28%</div><div class="fo-signal neutral">High</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Intraday Context</div><div class="ctx-content"><span class="ctx-item negative">VWAP: ₹144.50</span><span class="ctx-item negative">Support Broken</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Short Entry</span><span class="detail-value entry">₹143.50 - ₹144.00</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹138.00</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹146.00</span></div><div class="detail-row"><span class="detail-label"><i class="fas fa-clock"></i> Exit Before</span><span class="detail-value warning">3:15 PM</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Signal Strength</span><span>82%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 82%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Intraday Breakout -->
+            <div class="signal-card" data-category="intraday-breakout">
+                <div class="card-header action-breakout"><span class="action-text"><i class="fas fa-rocket"></i> INTRADAY BREAKOUT</span><span class="timeframe">1-3 HRS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">BAJFINANCE</div><div class="company-name">Bajaj Finance Ltd</div></div><div class="price-section"><div class="current-price">₹6,892.50</div><div class="price-change up">+2.35% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-urgent"><i class="fas fa-bolt"></i> ACT NOW</span><span class="tag tag-breakout"><i class="fas fa-chart-line"></i> Breakout</span><span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 3.2x</span><span class="tag tag-score-high">9/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.5%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+3.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">72</div><div class="tech-status tech-overbought">Strong</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">++</div><div class="tech-status tech-bullish">▲ Strong</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">2.5%</div><div class="tech-status tech-overbought">High</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.45</div><div class="fo-signal bullish">V.Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+4.8L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹6,800</div><div class="fo-signal bullish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">24%</div><div class="fo-signal neutral">Elevated</div></div></div></div>
+                    <div class="fvg-box"><div class="fvg-title"><i class="fas fa-arrows-up-down"></i> FVG Zones</div><div class="fvg-zones"><div class="fvg-zone above"><div class="zone-label"><i class="fas fa-arrow-up"></i> Above</div><div class="zone-value">₹7,050 - ₹7,100</div><div class="zone-type">Target</div></div><div class="fvg-zone below"><div class="zone-label"><i class="fas fa-arrow-down"></i> Below</div><div class="zone-value">₹6,750 - ₹6,800</div><div class="zone-type">Support</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Breakout Level</span><span class="detail-value special">₹6,850 ✓ CROSSED</span></div><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹6,880 - ₹6,910</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹7,100 (+3.0%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹6,780 (-1.5%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Breakout Strength</span><span>88%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 88%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Intraday Reversal -->
+            <div class="signal-card" data-category="intraday-reversal">
+                <div class="card-header action-reversal"><span class="action-text"><i class="fas fa-rotate"></i> INTRADAY REVERSAL</span><span class="timeframe">2-4 HRS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">AXISBANK</div><div class="company-name">Axis Bank Ltd</div></div><div class="price-section"><div class="current-price">₹1,078.25</div><div class="price-change up">+0.65% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-reversal"><i class="fas fa-rotate"></i> Reversal</span><span class="tag tag-bullish">At Support</span><span class="tag tag-score-mid">7/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-0.8%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+1.8%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2.2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">28</div><div class="tech-status tech-oversold">Oversold</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-neutral">Bottoming</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Near</div><div class="tech-status tech-neutral">50 EMA</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.5%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.35</div><div class="fo-signal bullish">Contrarian</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">-1.2L</div><div class="fo-signal bullish">Short Cover</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,090</div><div class="fo-signal bullish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">20%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Reversal Context</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-check"></i> Hammer Candle</span><span class="ctx-item positive">Strong Support ₹1,070</span><span class="ctx-item neutral">Wait Confirm</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹1,070 - ₹1,080</span></div><div class="detail-row"><span class="detail-label">Confirm</span><span class="detail-value warning">Close above ₹1,082</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,098 (+1.8%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,065 (-0.8%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Reversal Probability</span><span>72%</span></div><div class="confidence-bar"><div class="confidence-fill medium" style="width: 72%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== BTST TAB ===================== -->
+    <div id="btst" class="tab-content">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">3</span></button>
+            <button class="pill" data-filter="btst-long">BTST Long <span class="count">2</span></button>
+            <button class="pill" data-filter="btst-momentum">Momentum <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- BTST Long 1 -->
+            <div class="signal-card" data-category="btst-long">
+                <div class="card-header action-btst-buy"><span class="action-text"><i class="fas fa-moon"></i> BTST BUY</span><span class="timeframe">BUY TODAY</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">SBIN</div><div class="company-name">State Bank of India</div></div><div class="price-section"><div class="current-price">₹628.45</div><div class="price-change up">+1.95% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-bullish">Bullish Close</span><span class="tag tag-fii-buy"><i class="fas fa-building-columns"></i> FII Buying</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-2.1%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+3.5%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.7</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">56</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.8%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment (Key for BTST)</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.32</div><div class="fo-signal bullish">Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+4.2L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹625</div><div class="fo-signal bullish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">19%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">BTST Context - Global Cues</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-globe"></i> SGX Nifty: +0.4%</span><span class="ctx-item positive"><i class="fas fa-flag-usa"></i> US Futures: Green</span><span class="ctx-item positive"><i class="fas fa-building-columns"></i> FII: Net Buyer</span></div></div>
+                    <div class="indicators-row"><div class="indicator-box"><div class="ind-label"><span>Gap Up Probability</span><span>78%</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 78%"></div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Buy Before</span><span class="detail-value warning">3:20 PM @ ₹625-630</span></div><div class="detail-row"><span class="detail-label">Target (Tomorrow)</span><span class="detail-value target">₹645 - ₹650</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹615</span></div><div class="detail-row"><span class="detail-label">Sell Time</span><span class="detail-value special">Tomorrow 9:30-10:00 AM</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>BTST Setup Quality</span><span>78%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 78%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- BTST Long 2 -->
+            <div class="signal-card" data-category="btst-long">
+                <div class="card-header action-btst-buy"><span class="action-text"><i class="fas fa-moon"></i> BTST BUY</span><span class="timeframe">BUY TODAY</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">KOTAKBANK</div><div class="company-name">Kotak Mahindra Bank</div></div><div class="price-section"><div class="current-price">₹1,845.60</div><div class="price-change up">+1.25% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-bullish">Strong Close</span><span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 1.8x</span><span class="tag tag-score-mid">7/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-1.8%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+2.8%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.5</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">58</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">20/50</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.5%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.22</div><div class="fo-signal bullish">Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+2.8L</div><div class="fo-signal bullish">Long Build</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹1,840</div><div class="fo-signal neutral">Near</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">17%</div><div class="fo-signal neutral">Normal</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">BTST Context</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-globe"></i> SGX Nifty: +0.3%</span><span class="ctx-item positive"><i class="fas fa-building-columns"></i> Banking Strong</span></div></div>
+                    <div class="indicators-row"><div class="indicator-box"><div class="ind-label"><span>Gap Up Probability</span><span>72%</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 72%"></div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Buy Before</span><span class="detail-value warning">3:20 PM @ ₹1,840-1,850</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹1,895 - ₹1,910</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹1,812</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>BTST Quality</span><span>72%</span></div><div class="confidence-bar"><div class="confidence-fill medium" style="width: 72%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- BTST Momentum -->
+            <div class="signal-card" data-category="btst-momentum">
+                <div class="card-header action-strong-buy"><span class="action-text"><i class="fas fa-rocket"></i> BTST MOMENTUM</span><span class="timeframe">HIGH MOM</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">TATAPOWER</div><div class="company-name">Tata Power Company</div></div><div class="price-section"><div class="current-price">₹428.75</div><div class="price-change up">+4.25% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-urgent"><i class="fas fa-bolt"></i> MOMENTUM</span><span class="tag tag-breakout"><i class="fas fa-chart-line"></i> Breakout</span><span class="tag tag-volume"><i class="fas fa-chart-bar"></i> Vol 4.5x</span><span class="tag tag-score-high">9/10</span></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-2.5%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+5.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">75</div><div class="tech-status tech-overbought">Strong</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">++</div><div class="tech-status tech-bullish">▲ Strong</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">3.2%</div><div class="tech-status tech-overbought">High</div></div></div></div>
+                    <div class="fo-sentiment-box"><div class="fo-title"><i class="fas fa-layer-group"></i> F&O Sentiment</div><div class="fo-grid"><div class="fo-item"><div class="fo-label">PCR</div><div class="fo-value">1.65</div><div class="fo-signal bullish">V.Bullish</div></div><div class="fo-item"><div class="fo-label">OI</div><div class="fo-value">+6.5L</div><div class="fo-signal bullish">Massive</div></div><div class="fo-item"><div class="fo-label">Max Pain</div><div class="fo-value">₹415</div><div class="fo-signal bullish">Above</div></div><div class="fo-item"><div class="fo-label">IV</div><div class="fo-value">32%</div><div class="fo-signal neutral">High</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Momentum Context</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-bolt"></i> Energy Sector Rally</span><span class="ctx-item positive"><i class="fas fa-fire"></i> Continuation Expected</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹425 - ₹430</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹450+ (+5%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹418</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Momentum Score</span><span>88%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 88%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== SWING TAB ===================== -->
+    <div id="swing" class="tab-content">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">4</span></button>
+            <button class="pill" data-filter="swing-long">Long <span class="count">2</span></button>
+            <button class="pill" data-filter="swing-breakout">Breakout <span class="count">1</span></button>
+            <button class="pill" data-filter="swing-watch">Watch <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- Swing Long 1 -->
+            <div class="signal-card" data-category="swing-long">
+                <div class="card-header action-buy"><span class="action-text"><i class="fas fa-wave-square"></i> SWING LONG</span><span class="timeframe">5-10 DAYS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">MARUTI</div><div class="company-name">Maruti Suzuki India</div></div><div class="price-section"><div class="current-price">₹12,456.80</div><div class="price-change up">+0.85% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span><span class="tag tag-sector"><i class="fas fa-car"></i> Auto</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name markup">MARKUP (Bullish)</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp active" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-4.0%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+6.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.5</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Weekly Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">55</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">50/200</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">2.5%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="fvg-box"><div class="fvg-title"><i class="fas fa-arrows-up-down"></i> Weekly FVG</div><div class="fvg-zones"><div class="fvg-zone above"><div class="zone-label"><i class="fas fa-arrow-up"></i> Above</div><div class="zone-value">₹12,800 - ₹13,000</div><div class="zone-type">Target</div></div><div class="fvg-zone below"><div class="zone-label"><i class="fas fa-arrow-down"></i> Below</div><div class="zone-value">₹11,900 - ₹12,100</div><div class="zone-type">Support</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹12,300 - ₹12,500</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹13,200 (+6%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹11,950 (-4%)</span></div><div class="detail-row"><span class="detail-label">Hold</span><span class="detail-value">5-10 Days</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Setup Quality</span><span>82%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 82%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Swing Long 2 -->
+            <div class="signal-card" data-category="swing-long">
+                <div class="card-header action-buy"><span class="action-text"><i class="fas fa-wave-square"></i> SWING LONG</span><span class="timeframe">7-14 DAYS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">TITAN</div><div class="company-name">Titan Company Ltd</div></div><div class="price-section"><div class="current-price">₹3,456.20</div><div class="price-change up">+1.25% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> NEW</span><span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span><span class="tag tag-sector"><i class="fas fa-gem"></i> Consumer</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name markup">MARKUP</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp active" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-3.5%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+7.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Weekly Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">58</div><div class="tech-status tech-bullish">Bullish</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">+</div><div class="tech-status tech-bullish">▲ Cross</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">2.2%</div><div class="tech-status tech-neutral">Normal</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹3,400 - ₹3,480</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹3,700 (+7%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹3,340 (-3.5%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Setup Quality</span><span>80%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Swing Breakout -->
+            <div class="signal-card" data-category="swing-breakout">
+                <div class="card-header action-breakout"><span class="action-text"><i class="fas fa-rocket"></i> SWING BREAKOUT</span><span class="timeframe">5-12 DAYS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">LTIM</div><div class="company-name">LTIMindtree Ltd</div></div><div class="price-section"><div class="current-price">₹5,234.50</div><div class="price-change up">+2.85% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-urgent"><i class="fas fa-bolt"></i> BREAKOUT</span><span class="tag tag-breakout"><i class="fas fa-chart-line"></i> Weekly BO</span><span class="tag tag-sector"><i class="fas fa-laptop-code"></i> IT</span><span class="tag tag-score-high">9/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name markup">BREAKOUT → MARKUP</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk active" style="width: 15%;"></div><div class="phase-segment mkp inactive" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-4.0%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+8.0%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:2</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Weekly Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">68</div><div class="tech-status tech-bullish">Strong</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">++</div><div class="tech-status tech-bullish">▲ Strong</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Above</div><div class="tech-status tech-bullish">All</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">3.0%</div><div class="tech-status tech-overbought">High</div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Breakout Level</span><span class="detail-value special">₹5,150 ✓ CROSSED</span></div><div class="detail-row"><span class="detail-label">Entry</span><span class="detail-value entry">₹5,200 - ₹5,280</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹5,650 (+8%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹5,025 (-4%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Breakout Strength</span><span>85%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 85%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Swing Watch -->
+            <div class="signal-card" data-category="swing-watch">
+                <div class="card-header action-watch"><span class="action-text"><i class="fas fa-eye"></i> SWING WATCH</span><span class="timeframe">WAIT</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">BHARTIARTL</div><div class="company-name">Bharti Airtel Ltd</div></div><div class="price-section"><div class="current-price">₹1,456.30</div><div class="price-change up">+0.45% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-wait-signal"><i class="fas fa-hourglass-half"></i> WATCH</span><span class="tag tag-phase-accumulation"><i class="fas fa-layer-group"></i> Accumulation</span><span class="tag tag-sector"><i class="fas fa-signal"></i> Telecom</span><span class="tag tag-score-mid">7/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name accumulation">ACCUMULATION</span></div><div class="phase-bar"><div class="phase-segment acc active" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp inactive" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Weekly Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">48</div><div class="tech-status tech-neutral">Neutral</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-neutral">Flat</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Near</div><div class="tech-status tech-neutral">50 EMA</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.8%</div><div class="tech-status tech-neutral">Low</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Watch Criteria</div><div class="ctx-content"><span class="ctx-item neutral"><i class="fas fa-hourglass-half"></i> Wait for ₹1,480</span><span class="ctx-item neutral">Consolidating</span><span class="ctx-item positive">Strong Support ₹1,420</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Trigger Level</span><span class="detail-value warning">₹1,480 (Wait)</span></div><div class="detail-row"><span class="detail-label">Entry (if triggers)</span><span class="detail-value entry">₹1,480 - ₹1,500</span></div><div class="detail-row"><span class="detail-label">Potential Target</span><span class="detail-value target">₹1,600 (+8%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Setup Quality</span><span>70%</span></div><div class="confidence-bar"><div class="confidence-fill medium" style="width: 70%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== POSITIONAL TAB ===================== -->
+    <div id="positional" class="tab-content">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">3</span></button>
+            <button class="pill" data-filter="positional-accumulate">Accumulate <span class="count">1</span></button>
+            <button class="pill" data-filter="positional-hold">Hold <span class="count">1</span></button>
+            <button class="pill" data-filter="positional-reduce">Reduce <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- Positional Accumulate -->
+            <div class="signal-card" data-category="positional-accumulate">
+                <div class="card-header action-accumulate"><span class="action-text"><i class="fas fa-layer-group"></i> ACCUMULATE</span><span class="timeframe">2-4 WEEKS</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">HINDUNILVR</div><div class="company-name">Hindustan Unilever</div></div><div class="price-section"><div class="current-price">₹2,456.80</div><div class="price-change up">+0.45% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> FRESH</span><span class="tag tag-phase-accumulation"><i class="fas fa-layer-group"></i> Accumulation</span><span class="tag tag-sector"><i class="fas fa-shopping-cart"></i> FMCG</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name accumulation">ACCUMULATION</span></div><div class="phase-bar"><div class="phase-segment acc active" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp inactive" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item risk"><div class="label">Risk</div><div class="value">-5.5%</div></div><div class="rr-item reward"><div class="label">Reward</div><div class="value">+10%</div></div><div class="rr-item ratio"><div class="label">R:R</div><div class="value">1:1.8</div></div></div>
+                    <div class="technicals-box"><div class="tech-title"><i class="fas fa-chart-area"></i> Monthly Technicals</div><div class="tech-grid"><div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value">42</div><div class="tech-status tech-neutral">Neutral</div></div><div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value">-</div><div class="tech-status tech-neutral">Bottoming</div></div><div class="tech-item"><div class="tech-label">EMA</div><div class="tech-value">Near</div><div class="tech-status tech-neutral">200 DMA</div></div><div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value">1.8%</div><div class="tech-status tech-neutral">Low</div></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Positional Context</div><div class="ctx-content"><span class="ctx-item positive">Sector: Defensive</span><span class="ctx-item positive">RS: Strong</span><span class="ctx-item neutral">3 Tranches</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Accumulation Zone</span><span class="detail-value entry">₹2,400 - ₹2,480</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹2,700 (+10%)</span></div><div class="detail-row"><span class="detail-label">Stop Loss</span><span class="detail-value stoploss">₹2,320</span></div><div class="detail-row"><span class="detail-label">Position Build</span><span class="detail-value special">3 Tranches (33%)</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Setup Quality</span><span>80%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 80%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Positional Hold -->
+            <div class="signal-card" data-category="positional-hold">
+                <div class="card-header action-hold"><span class="action-text"><i class="fas fa-hand"></i> HOLD</span><span class="timeframe">MAINTAIN</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">ASIANPAINT</div><div class="company-name">Asian Paints Ltd</div></div><div class="price-section"><div class="current-price">₹2,845.60</div><div class="price-change up">+0.65% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-holding"><i class="fas fa-wallet"></i> HOLDING</span><span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span><span class="tag tag-sector"><i class="fas fa-paint-roller"></i> Consumer</span><span class="tag tag-score-high">8/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name markup">MARKUP (Trend)</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp active" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item" style="flex: 2;"><div class="label">Your Entry</div><div class="value" style="color: var(--text-primary);">₹2,680</div></div><div class="rr-item reward"><div class="label">P&L</div><div class="value">+6.2%</div></div><div class="rr-item" style="background: rgba(0,200,83,0.2);"><div class="label">Profit</div><div class="value" style="color: #69f0ae;">₹+1,656</div></div></div>
+                    <div class="context-box"><div class="ctx-title">Hold Rationale</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-check"></i> Trend Intact</span><span class="ctx-item positive">Above 50 DMA</span><span class="ctx-item positive">Target: ₹3,100</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Current Trail SL</span><span class="detail-value stoploss">₹2,720 (Lock Profit)</span></div><div class="detail-row"><span class="detail-label">Target</span><span class="detail-value target">₹3,100 (+9%)</span></div><div class="detail-row"><span class="detail-label">Action</span><span class="detail-value special">HOLD & TRAIL</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Trend Strength</span><span>85%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 85%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Positional Reduce -->
+            <div class="signal-card" data-category="positional-reduce">
+                <div class="card-header action-reduce"><span class="action-text"><i class="fas fa-arrow-down"></i> REDUCE</span><span class="timeframe">BOOK PARTIAL</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">ADANIENT</div><div class="company-name">Adani Enterprises</div></div><div class="price-section"><div class="current-price">₹2,856.40</div><div class="price-change down">-1.25% ↓</div></div></div>
+                    <div class="tags-row"><span class="tag tag-holding"><i class="fas fa-wallet"></i> HOLDING</span><span class="tag tag-phase-distribution"><i class="fas fa-exclamation-triangle"></i> Distribution</span><span class="tag tag-bearish">Weakness</span><span class="tag tag-score-low">5/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name distribution">DISTRIBUTION (⚠️)</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp inactive" style="width: 25%;"></div><div class="phase-segment dst active" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item" style="flex: 2;"><div class="label">Your Entry</div><div class="value" style="color: var(--text-primary);">₹2,650</div></div><div class="rr-item reward"><div class="label">P&L</div><div class="value">+7.8%</div></div><div class="rr-item" style="background: rgba(0,200,83,0.2);"><div class="label">Profit</div><div class="value" style="color: #69f0ae;">₹+2,064</div></div></div>
+                    <div class="context-box"><div class="ctx-title">Warning Signs</div><div class="ctx-content"><span class="ctx-item negative"><i class="fas fa-exclamation"></i> Distribution Pattern</span><span class="ctx-item negative">Volume Declining</span><span class="ctx-item neutral">Book 50% Now</span></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Action</span><span class="detail-value warning">BOOK 50% PROFIT</span></div><div class="detail-row"><span class="detail-label">Tight SL for Rest</span><span class="detail-value stoploss">₹2,750</span></div><div class="detail-row"><span class="detail-label">Reason</span><span class="detail-value special">Distribution Phase</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Risk Level</span><span>HIGH</span></div><div class="confidence-bar"><div class="confidence-fill low" style="width: 65%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== INVESTMENT TAB ===================== -->
+    <div id="investment" class="tab-content">
+        <div class="sub-pills">
+            <button class="pill active" data-filter="all">All <span class="count">2</span></button>
+            <button class="pill" data-filter="invest-accumulate">Accumulate <span class="count">1</span></button>
+            <button class="pill" data-filter="invest-core">Core Hold <span class="count">1</span></button>
+        </div>
+        <div class="signals-grid">
+            <!-- Investment Accumulate -->
+            <div class="signal-card" data-category="invest-accumulate">
+                <div class="card-header action-accumulate"><span class="action-text"><i class="fas fa-coins"></i> ACCUMULATE</span><span class="timeframe">LONG TERM</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">ITC</div><div class="company-name">ITC Limited</div></div><div class="price-section"><div class="current-price">₹465.80</div><div class="price-change up">+0.35% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-new"><i class="fas fa-star"></i> FRESH</span><span class="tag tag-phase-accumulation"><i class="fas fa-layer-group"></i> Accumulation</span><span class="tag tag-bullish">Strong Fundamentals</span><span class="tag tag-score-high">9/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name accumulation">ACCUMULATION (Long Term)</span></div><div class="phase-bar"><div class="phase-segment acc active" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp inactive" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="context-box"><div class="ctx-title">Investment Thesis</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-percentage"></i> Div Yield: 3.2%</span><span class="ctx-item positive"><i class="fas fa-chart-pie"></i> Portfolio: 5-8%</span><span class="ctx-item positive">Defensive + Growth</span></div></div>
+                    <div class="indicators-row"><div class="indicator-box"><div class="ind-label"><span>Valuation</span><span>Fair Value</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 70%"></div></div></div><div class="indicator-box"><div class="ind-label"><span>Quality Score</span><span>A+</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 90%"></div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Ideal Zone</span><span class="detail-value entry">₹450 - ₹470</span></div><div class="detail-row"><span class="detail-label">12M Target</span><span class="detail-value target">₹550+ (+18%)</span></div><div class="detail-row"><span class="detail-label">Dividend Yield</span><span class="detail-value target">~3.2% Annual</span></div><div class="detail-row"><span class="detail-label">Portfolio Weight</span><span class="detail-value special">5-8%</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Investment Grade</span><span>A+</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 90%"></div></div></div>
+                </div>
+            </div>
+
+            <!-- Investment Core Hold -->
+            <div class="signal-card" data-category="invest-core">
+                <div class="card-header action-core-hold"><span class="action-text"><i class="fas fa-crown"></i> CORE HOLD</span><span class="timeframe">FOREVER</span></div>
+                <div class="card-body">
+                    <div class="symbol-row"><div><div class="symbol-name">HDFCBANK</div><div class="company-name">HDFC Bank Ltd</div></div><div class="price-section"><div class="current-price">₹1,678.50</div><div class="price-change up">+0.55% ↑</div></div></div>
+                    <div class="tags-row"><span class="tag tag-holding"><i class="fas fa-wallet"></i> CORE HOLDING</span><span class="tag tag-phase-markup"><i class="fas fa-chart-line"></i> Markup</span><span class="tag tag-sector"><i class="fas fa-building-columns"></i> Banking</span><span class="tag tag-score-high">10/10</span></div>
+                    <div class="phase-indicator"><div class="phase-header"><span class="phase-title">Wyckoff Phase</span><span class="phase-name markup">MARKUP (Long Term)</span></div><div class="phase-bar"><div class="phase-segment acc inactive" style="width: 20%;"></div><div class="phase-segment brk inactive" style="width: 15%;"></div><div class="phase-segment mkp active" style="width: 25%;"></div><div class="phase-segment dst inactive" style="width: 20%;"></div><div class="phase-segment mkd inactive" style="width: 20%;"></div></div></div>
+                    <div class="rr-box"><div class="rr-item" style="flex: 2;"><div class="label">Avg Cost</div><div class="value" style="color: var(--text-primary);">₹1,420</div></div><div class="rr-item reward"><div class="label">P&L</div><div class="value">+18.2%</div></div><div class="rr-item" style="background: rgba(0,200,83,0.2);"><div class="label">Weight</div><div class="value" style="color: #69f0ae;">12%</div></div></div>
+                    <div class="context-box"><div class="ctx-title">Core Holding Rationale</div><div class="ctx-content"><span class="ctx-item positive"><i class="fas fa-crown"></i> Market Leader</span><span class="ctx-item positive">Strong Moat</span><span class="ctx-item positive">Compounding Machine</span></div></div>
+                    <div class="indicators-row"><div class="indicator-box"><div class="ind-label"><span>Fundamental</span><span>Excellent</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 95%"></div></div></div><div class="indicator-box"><div class="ind-label"><span>Quality</span><span>AAA</span></div><div class="indicator-bar"><div class="indicator-fill momentum-strong" style="width: 98%"></div></div></div></div>
+                    <div class="trade-details"><div class="detail-row"><span class="detail-label">Action</span><span class="detail-value special">NEVER SELL - CORE</span></div><div class="detail-row"><span class="detail-label">Add on Dips</span><span class="detail-value entry">Below ₹1,550</span></div><div class="detail-row"><span class="detail-label">Portfolio Target</span><span class="detail-value target">15-20% Weight</span></div></div>
+                    <div class="confidence-section"><div class="confidence-header"><span>Core Conviction</span><span>100%</span></div><div class="confidence-bar"><div class="confidence-fill high" style="width: 100%"></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // Main tab switching
+        document.querySelectorAll('.main-tabs li').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Remove active from all tabs
+                document.querySelectorAll('.main-tabs li').forEach(t => t.classList.remove('is-active'));
+
+                // Add active to clicked tab
+                this.classList.add('is-active');
+
+                // Hide all tab contents
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('is-active');
+                    content.style.display = 'none';
+                });
+
+                // Show selected tab content
+                const tabId = this.getAttribute('data-tab');
+                const activeTab = document.getElementById(tabId);
+                if (activeTab) {
+                    activeTab.classList.add('is-active');
+                    activeTab.style.display = 'block';
+
+                    // Reset pills to 'All'
+                    activeTab.querySelectorAll('.pill').forEach(pill => {
+                        pill.classList.remove('active');
+                        if (pill.getAttribute('data-filter') === 'all') {
+                            pill.classList.add('active');
+                        }
+                    });
+
+                    // Show all cards
+                    activeTab.querySelectorAll('.signal-card').forEach(card => {
+                        card.style.display = '';
+                    });
+                }
+            });
+        });
+
+        // Sub-filter pill clicking
+        document.querySelectorAll('.pill').forEach(pill => {
+            pill.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Find parent tab content
+                const tabContent = this.closest('.tab-content');
+                if (!tabContent) return;
+
+                // Remove active from all pills in this tab
+                tabContent.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+
+                // Add active to clicked pill
+                this.classList.add('active');
+
+                // Get filter value
+                const filter = this.getAttribute('data-filter');
+
+                // Filter cards
+                const cards = tabContent.querySelectorAll('.signal-card');
+                cards.forEach(card => {
+                    const category = card.getAttribute('data-category');
+                    if (filter === 'all' || category === filter) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        // Initialize - make sure first tab is visible
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstTab = document.querySelector('.main-tabs li.is-active');
+            if (firstTab) {
+                const tabId = firstTab.getAttribute('data-tab');
+                const tabContent = document.getElementById(tabId);
+                if (tabContent) {
+                    tabContent.style.display = 'block';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

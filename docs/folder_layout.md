@@ -10,6 +10,7 @@ queen/
 │   │   └── terminal/
 ├── cli/
 │   │   ├── __init__.py
+│   │   ├── debug_fetch_unified.py
 │   │   ├── fundamentals_cli.py
 │   │   ├── g_upstox_client.py
 │   │   ├── list_master.py
@@ -19,7 +20,9 @@ queen/
 │   │   ├── live_monitor_cli.py
 │   │   ├── monitor_stream.py
 │   │   ├── morning_intel.py
+│   │   ├── replay_actionable.py
 │   │   ├── run_strategy.py
+│   │   ├── scan_signals.py
 │   │   ├── show_snapshot.py
 │   │   ├── symbol_scan.py
 │   │   ├── universe_scanner.py
@@ -47,6 +50,7 @@ queen/
 ├── docs/
 │   │   ├── core/
 │   │   │   │   │   ├── feedback-fixes.txt
+│   │   │   │   │   ├── new-gpt-roadmap.txt
 │   │   │   │   │   ├── part-1-n-part-2-road-map.txt
 │   │   │   │   │   ├── part-1.txt
 │   │   │   │   │   ├── part-2.txt
@@ -56,6 +60,10 @@ queen/
 │   │   │   │   │   └── TODO.MD
 │   │   ├── core_docs/
 │   │   │   │   │   ├── bible-flow.txt
+│   │   │   │   │   ├── claude-discussions-more.md
+│   │   │   │   │   ├── claude-discussions.md
+│   │   │   │   │   ├── claude-timeframes.md
+│   │   │   │   │   ├── feedback-from-chatgpt.txt
 │   │   │   │   │   ├── master-todo.txt
 │   │   │   │   │   ├── quant.md
 │   │   │   │   │   ├── todo-index-20-11-2025-nov.txt
@@ -88,7 +96,12 @@ queen/
 │   │   ├── todo-for-24.txt
 │   │   └── transfering-chat.txt
 ├── dustbin/
+│   │   ├── all_eq.json
+│   │   ├── all_fo.json
+│   │   ├── all_options.json
 │   │   ├── all_symbols.json
+│   │   ├── complete.json
+│   │   ├── extract_instruments.py
 │   │   ├── from_kiwi_bible.py
 │   │   ├── fundamental_data.csv
 │   │   ├── fundamental_data.parquet
@@ -106,13 +119,16 @@ queen/
 │   │   ├── g_nse_fecther_cache.py
 │   │   ├── nse_fetcher.py
 │   │   ├── nse_fetcher_new.py
+│   │   ├── options_chain.py
 │   │   └── upstox_fetcher.py
 ├── helpers/
 │   │   ├── __init__.py
 │   │   ├── candle_adapter.py
 │   │   ├── candles.py
 │   │   ├── common.py
+│   │   ├── diagnostic_override_logger.py
 │   │   ├── fetch_utils.py
+│   │   ├── fno_universe.py
 │   │   ├── fundamentals_adapter.py
 │   │   ├── fundamentals_polars_engine.py
 │   │   ├── fundamentals_registry.py
@@ -126,6 +142,8 @@ queen/
 │   │   ├── io.py
 │   │   ├── logger.py
 │   │   ├── market.py
+│   │   ├── options_catalog.py
+│   │   ├── options_schema.py
 │   │   ├── path_manager.py
 │   │   ├── pl_compat.py
 │   │   ├── portfolio.py
@@ -185,6 +203,7 @@ queen/
 │   │   │   │   │   │   │   │   │   ├── live.html
 │   │   │   │   │   │   │   │   │   ├── summary.html
 │   │   │   │   │   │   │   │   │   └── upcoming.html
+│   │   │   │   │   ├── index-gemini.html
 │   │   │   │   │   ├── index.html
 │   │   │   │   │   └── summary.html
 │   │   ├── g_fastapi_upstox.py
@@ -209,6 +228,7 @@ queen/
 ├── settings/
 │   │   ├── __init__.py
 │   │   ├── cockpit_schema.py
+│   │   ├── fno_universe.py
 │   │   ├── formulas.py
 │   │   ├── fundamentals_map.py
 │   │   ├── indicator_policy.py
@@ -229,7 +249,10 @@ queen/
 │   │   └── weights.py
 ├── strategies/
 │   │   ├── fusion.py
-│   │   └── meta_strategy_cycle.py
+│   │   ├── meta_strategy_cycle.py
+│   │   ├── playbook.py
+│   │   ├── tv_fusion copy.py
+│   │   └── tv_fusion.py
 ├── technicals/
 │   │   ├── indicators/
 │   │   │   │   │   ├── __init__.py
@@ -292,8 +315,16 @@ queen/
 │   │   ├── __init__.py
 │   │   ├── fundamentals_gate.py
 │   │   ├── fundamentals_score_engine.py
+│   │   ├── fusion_trend_volume.py
 │   │   ├── master_index.py
-│   │   └── registry.py
+│   │   ├── options_sentiment.py
+│   │   ├── registry.py
+│   │   ├── sector_strength.py
+│   │   ├── trend_strength.py
+│   │   ├── trend_strength_daily.py
+│   │   ├── trend_strength_intraday.py
+│   │   ├── volume_strength.py
+│   │   └── volume_strength_intraday.py
 ├── tests/
 │   │   ├── __init__.py
 │   │   ├── fundamentals_devcheck.py

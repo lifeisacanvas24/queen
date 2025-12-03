@@ -125,12 +125,23 @@ DEFAULTS: Dict[str, Any] = {
 BROKERS = {
     "upstox": {
         "retry": {"max_retries": 3, "timeout": 10, "backoff_base": 2},
-        "rate_limits": {"max_per_second": 50, "max_per_minute": 500, "max_per_30_minute": 2000},
+        "rate_limits": {
+            "max_per_second": 50,
+            "max_per_minute": 500,
+            "max_per_30_minute": 2000,
+        },
+        # Existing equity / historical schema
         "api_schema": str(PATHS["STATIC"] / "api_upstox.json"),
+        # NEW: dedicated options schema (for option-chain endpoints)
+        "api_schema_options": str(PATHS["STATIC"] / "api_upstox_options.json"),
     },
     "zerodha": {
         "retry": {"max_retries": 3, "timeout": 10, "backoff_base": 2},
-        "rate_limits": {"max_per_second": 20, "max_per_minute": 200, "max_per_30_minute": 1000},
+        "rate_limits": {
+            "max_per_second": 20,
+            "max_per_minute": 200,
+            "max_per_30_minute": 1000,
+        },
         "api_schema": str(PATHS["STATIC"] / "api_zerodha.json"),
     },
 }
