@@ -10,6 +10,7 @@ queen/
 │   │   └── terminal/
 ├── cli/
 │   │   ├── __init__.py
+│   │   ├── debug_decisions.py
 │   │   ├── debug_fetch_unified.py
 │   │   ├── fundamentals_cli.py
 │   │   ├── g_upstox_client.py
@@ -24,6 +25,7 @@ queen/
 │   │   ├── run_strategy.py
 │   │   ├── scan_signals.py
 │   │   ├── show_snapshot.py
+│   │   ├── sim_stats.py
 │   │   ├── symbol_scan.py
 │   │   ├── universe_scanner.py
 │   │   └── validate_registry.py
@@ -62,8 +64,12 @@ queen/
 │   │   │   │   │   ├── bible-flow.txt
 │   │   │   │   │   ├── claude-discussions-more.md
 │   │   │   │   │   ├── claude-discussions.md
+│   │   │   │   │   ├── claude-pcr-fvg-indicators.png
+│   │   │   │   │   ├── claude-timeframe.html
+│   │   │   │   │   ├── claude-timeframe.png
 │   │   │   │   │   ├── claude-timeframes.md
 │   │   │   │   │   ├── feedback-from-chatgpt.txt
+│   │   │   │   │   ├── fundamentals-pipline-test.txt
 │   │   │   │   │   ├── master-todo.txt
 │   │   │   │   │   ├── quant.md
 │   │   │   │   │   ├── todo-index-20-11-2025-nov.txt
@@ -120,6 +126,7 @@ queen/
 │   │   ├── nse_fetcher.py
 │   │   ├── nse_fetcher_new.py
 │   │   ├── options_chain.py
+│   │   ├── screener_scraper.py
 │   │   └── upstox_fetcher.py
 ├── helpers/
 │   │   ├── __init__.py
@@ -203,7 +210,15 @@ queen/
 │   │   │   │   │   │   │   │   │   ├── live.html
 │   │   │   │   │   │   │   │   │   ├── summary.html
 │   │   │   │   │   │   │   │   │   └── upcoming.html
-│   │   │   │   │   ├── index-gemini.html
+│   │   │   │   │   ├── new-design/
+│   │   │   │   │   │   │   │   │   ├── split-version/
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── css/
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   └── styles.css
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── includes/
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── footer.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   └── header.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   └── index.html
+│   │   │   │   │   │   │   │   │   └── index.html
 │   │   │   │   │   ├── index.html
 │   │   │   │   │   └── summary.html
 │   │   ├── g_fastapi_upstox.py
@@ -211,15 +226,14 @@ queen/
 │   │   └── state.py
 ├── services/
 │   │   ├── __init__.py
+│   │   ├── actionable_row.py
 │   │   ├── bible_engine.py
 │   │   ├── cockpit_row.py
 │   │   ├── enrich_instruments.py
 │   │   ├── enrich_tactical.py
 │   │   ├── forecast.py
 │   │   ├── history.py
-│   │   ├── ladder_state-newgpt.py
 │   │   ├── ladder_state.py
-│   │   ├── live copy.py
 │   │   ├── live.py
 │   │   ├── morning.py
 │   │   ├── scoring.py
@@ -243,15 +257,17 @@ queen/
 │   │   ├── README_settings.md
 │   │   ├── regimes.py
 │   │   ├── settings.py
+│   │   ├── sim_settings.py
 │   │   ├── tactical.py
 │   │   ├── timeframes.py
 │   │   ├── universe.py
 │   │   └── weights.py
 ├── strategies/
+│   │   ├── _late_exit.py
+│   │   ├── decision_engine.py
 │   │   ├── fusion.py
 │   │   ├── meta_strategy_cycle.py
 │   │   ├── playbook.py
-│   │   ├── tv_fusion copy.py
 │   │   └── tv_fusion.py
 ├── technicals/
 │   │   ├── indicators/
@@ -268,6 +284,14 @@ queen/
 │   │   │   │   │   ├── volatility_fusion.py
 │   │   │   │   │   ├── volume_chaikin.py
 │   │   │   │   │   └── volume_mfi.py
+│   │   ├── microstructure/
+│   │   │   │   │   ├── cpr.py
+│   │   │   │   │   ├── phases.py
+│   │   │   │   │   ├── risk.py
+│   │   │   │   │   ├── state_objects.py
+│   │   │   │   │   ├── structure.py
+│   │   │   │   │   ├── volume.py
+│   │   │   │   │   └── vwap.py
 │   │   ├── patterns/
 │   │   │   │   │   ├── __init__.py
 │   │   │   │   │   ├── composite.py
