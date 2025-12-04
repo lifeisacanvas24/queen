@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-# ============================================================
-# queen/cli/debug_decisions.py — v0.1
-# ------------------------------------------------------------
-# Bar-by-bar decision vs action_tag vs context for a symbol.
-# Example:
-#   python -m queen.cli.debug_decisions --symbol FORCEMOT --interval 15
-# ============================================================
+# queen/cli/debug_decisions.py — v0.2 (updated)
 from __future__ import annotations
 
 import argparse
@@ -22,24 +16,9 @@ def main() -> None:
         description="Debug decision/action_tag stream for a symbol."
     )
     parser.add_argument("--symbol", required=True, help="Symbol, e.g. FORCEMOT")
-    parser.add_argument(
-        "--interval",
-        type=int,
-        default=15,
-        help="Intraday interval in minutes (default: 15).",
-    )
-    parser.add_argument(
-        "--book",
-        type=str,
-        default="all",
-        help="Book name (default: all).",
-    )
-    parser.add_argument(
-        "--warmup",
-        type=int,
-        default=1,
-        help="Warmup bars before emitting rows (default: 1).",
-    )
+    parser.add_argument("--interval", type=int, default=15, help="Interval in minutes")
+    parser.add_argument("--book", type=str, default="all", help="Book name (default: all).")
+    parser.add_argument("--warmup", type=int, default=1, help="Warmup bars (default:1).")
     args = parser.parse_args()
 
     sym = args.symbol.upper()
@@ -55,19 +34,16 @@ def main() -> None:
         auto_side="long",
     )
 
-    log.info(
-        f"[DebugDecisions] Replaying {sym} @ {args.interval}m "
-        f"(book={args.book}, warmup={args.warmup})"
-    )
+    log.info(f"[DebugDecisions] Replaying {sym} @ {args.interval}m (book={args.book})")
 
     payload: Dict[str, Any] = {}
     try:
-        payload = asyncio.run(replay_actionable(cfg))  # type: ignore[name-defined]
-    except NameError:
-        # Lazy import to avoid circulars if needed
-        import asyncio  # noqa: WPS433
-
-        payload = asyncio.run(replay_actionable(cfg))
+        import asyncio  # lazy import
+        payload = asyncio.run(replay_actionable(cfg))  # type: ignore
+    except Exception as e:
+        log.exception(f"[DebugDecisions] replay failed: {e}")
+        print("[DebugDecisions] replay failed.")
+        return
 
     rows = payload.get("rows") or []
     if not rows:
@@ -75,13 +51,17 @@ def main() -> None:
         return
 
     df = pl.DataFrame(rows)
-
     if "timestamp" in df.columns:
         df = df.sort("timestamp")
 
+    # Updated wanted list (includes sim fields you requested)
     wanted = [
         "timestamp",
         "decision",
+        "sim_effective_decision",
+        "sim_ignored_signal",
+        "sim_trade_id",
+        "sim_trail_stop",
         "action_tag",
         "playbook",
         "time_bucket",

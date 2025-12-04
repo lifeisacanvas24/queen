@@ -1,43 +1,41 @@
 # queen/services/actionable_row.py
-# Single-file actionable-row engine with price-based sizing, capped pyramids,
-# add-only-when-green and trailing-stop protection. Generates trade ids per
-# entry→exit (Option 1).
+#!/usr/bin/env python3
+"""Unified actionable-row engine with integrated synthetic simulator (long-only).
+Features:
+ - price-based unit sizing (_compute_unit_size)
+ - capped pyramiding (MAX_PYRAMID_UNITS)
+ - ADD-only-when-green (ADD_ONLY_WHEN_GREEN + ADD_MIN_UNREAL_PCT)
+ - trailing stop protection (TRAIL_PCT)
+ - trade_id generation and per-row sim fields:
+     sim_trade_id, sim_effective_decision, sim_ignored_signal,
+     sim_skipped_add (per-row), sim_skip_reason, sim_trail_stop, sim_peak
+"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
-import polars as pl
+import polars as pl  # used by other parts; keep import for consistency
 
 from queen.helpers.logger import log
 from queen.services.cockpit_row import build_cockpit_row
 
-# Optional: strategy overlays (playbook, tv, action_tag, risk_mode)
+# optional: apply strategy overlays (playbook / tv / action_tag / risk_mode)
 try:
     from queen.strategies.fusion import apply_strategies as _apply_strategies
 except Exception:  # pragma: no cover
     _apply_strategies = None
 
-# Tunables from settings
-try:
-    from queen.settings.sim_settings import (
-        ADD_MIN_UNREAL_PCT,
-        ADD_ONLY_WHEN_GREEN,
-        MAX_PYRAMID_UNITS,
-        MAX_UNITS,
-        MIN_UNITS,
-        NOTIONAL_PER_UNIT_DEFAULT,
-        TRAIL_PCT,
-    )
-except Exception:  # pragma: no cover
-    # sane defaults if settings import fails
-    MAX_PYRAMID_UNITS = 3.0
-    NOTIONAL_PER_UNIT_DEFAULT = 3_000.0
-    TRAIL_PCT = 0.04
-    ADD_ONLY_WHEN_GREEN = True
-    ADD_MIN_UNREAL_PCT = 0.0
-    MIN_UNITS = 1.0
-    MAX_UNITS = 50.0
+# sim tunables (centralized)
+from queen.settings.sim_settings import (
+    ADD_MIN_UNREAL_PCT,
+    ADD_ONLY_WHEN_GREEN,
+    MAX_PYRAMID_UNITS,
+    NOTIONAL_PER_UNIT_DEFAULT,
+    SIM_MAX_UNITS,
+    SIM_MIN_UNITS,
+    TRAIL_PCT,
+)
 
 
 def _to_float(val: Any) -> Optional[float]:
@@ -50,60 +48,43 @@ def _to_float(val: Any) -> Optional[float]:
 
 
 def _init_sim_state(sim_state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Normalise / seed the simulation state dict.
-
-    Fields:
-      • side          → "FLAT" | "LONG"
-      • qty           → synthetic size (can be fractional)
-      • avg           → synthetic average entry
-      • realized_pnl  → cumulative booked PnL
-      • unit_size     → synthetic 'one unit' size for this symbol
-      • sim_peak      → peak CMP observed while LONG (for trailing stop)
-      • trade_counter → integer used to create trade ids
-      • current_trade_id
-      • current_trade_skipped_adds
-    """
+    """Normalise / seed simulation state that persists between bars."""
     base = {
-        "side": "FLAT",
+        "side": "FLAT",              # current synthetic side
         "qty": 0.0,
         "avg": None,
         "realized_pnl": 0.0,
         "unit_size": 1.0,
         "sim_peak": None,
-        "trade_counter": 0,  # counts trades for this symbol/session
-        "current_trade_id": None,
-        "current_trade_skipped_adds": 0,
+        # trade id management
+        "next_trade_id": 1,         # integer trade id generator
+        "current_trade_id": None,   # active trade id while LONG
     }
     if not sim_state:
         return base
-
     out = dict(base)
     out.update({k: v for k, v in sim_state.items() if k in base})
     out["side"] = (out.get("side") or "FLAT").upper()
     out["qty"] = float(out.get("qty") or 0.0)
-    out["realized_pnl"] = float(out.get("realized_pnl") or 0.0)
     try:
         out["unit_size"] = float(out.get("unit_size") or 1.0)
     except Exception:
         out["unit_size"] = 1.0
-
-    try:
-        out["trade_counter"] = int(out.get("trade_counter") or 0)
-    except Exception:
-        out["trade_counter"] = 0
-
-    try:
-        out["current_trade_skipped_adds"] = int(
-            out.get("current_trade_skipped_adds") or 0
-        )
-    except Exception:
-        out["current_trade_skipped_adds"] = 0
-
     if out.get("sim_peak") is not None:
         try:
             out["sim_peak"] = float(out["sim_peak"])
         except Exception:
             out["sim_peak"] = None
+    try:
+        out["next_trade_id"] = int(out.get("next_trade_id") or 1)
+    except Exception:
+        out["next_trade_id"] = 1
+    # current_trade_id may be None or int
+    if out.get("current_trade_id") is not None:
+        try:
+            out["current_trade_id"] = int(out["current_trade_id"])
+        except Exception:
+            out["current_trade_id"] = None
     return out
 
 
@@ -111,23 +92,18 @@ def _compute_unit_size(
     row: Dict[str, Any],
     *,
     notional_per_unit: float = NOTIONAL_PER_UNIT_DEFAULT,
-    min_units: float = MIN_UNITS,
-    max_units: float = MAX_UNITS,
+    min_units: float = SIM_MIN_UNITS,
+    max_units: float = SIM_MAX_UNITS,
 ) -> float:
-    """Price-based synthetic unit sizing.
-
-    Aim: each unit ≈ notional_per_unit rupees of exposure.
-    """
+    """Price-based synthetic unit sizing: aim for notional exposure per unit."""
     cmp_px = _to_float(row.get("cmp") or row.get("entry"))
     if cmp_px is None or cmp_px <= 0:
         return float(min_units)
-
     raw = notional_per_unit / cmp_px
     try:
         units = float(max(1, int(raw)))
     except Exception:
         units = raw
-
     if units < min_units:
         units = min_units
     if units > max_units:
@@ -141,23 +117,13 @@ def _step_auto_long_sim(
     *,
     eod_force: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Auto-position simulation — long-only:
-
-    - price-based unit sizing (_compute_unit_size)
-    - capped pyramiding (MAX_PYRAMID_UNITS)
-    - ADD only when position is profitable (ADD-Only-When-Green)
-    - Trailing stop (TRAIL_PCT)
-    - Trade bookkeeping: trade_id per entry→exit (Option 1)
-    """
-    # Defensive keys (diagnostics)
+    """Auto-position long-only simulator with trade_id + diagnostics."""
+    # Ensure diagnostic keys exist
     row.setdefault("sim_forced_eod", False)
     row.setdefault("sim_exit_reason", None)
-    row.setdefault("sim_ignored_signal", False)
-    row.setdefault("sim_effective_decision", None)
     row.setdefault("sim_skipped_add", 0)
-    row.setdefault("sim_trade_id", None)
-    row.setdefault("sim_trade_open", False)
-    row.setdefault("sim_trade_close", False)
+    row.setdefault("sim_skip_reason", None)
+    row.setdefault("sim_ignored_signal", False)
 
     state = _init_sim_state(sim_state)
 
@@ -167,49 +133,35 @@ def _step_auto_long_sim(
     realized = state["realized_pnl"]
     unit_size = state.get("unit_size", 1.0)
     sim_peak = state.get("sim_peak")
-    trade_counter = state.get("trade_counter", 0)
+    next_trade_id = state.get("next_trade_id", 1)
     current_trade_id = state.get("current_trade_id")
-    current_trade_skipped_adds = state.get("current_trade_skipped_adds", 0)
 
-    decision = (row.get("decision") or "").upper()
+    decision_in = (row.get("decision") or "").upper()
     trade_status = (row.get("trade_status") or "").upper()
 
     cmp_px = _to_float(row.get("cmp"))
     entry_px = _to_float(row.get("entry")) or cmp_px
 
-    # By default, assume simulator follows original decision; write sim_effective_decision later
-    sim_effective_decision = decision
+    # default effective decision mirrors incoming one; we'll set sim_effective_decision
+    sim_effective_decision = decision_in
     sim_ignored_signal = False
+    sim_skipped_add = 0
 
-    # --------------------------------------------------------
-    # FLAT -> open
-    # --------------------------------------------------------
+    # ---------- FLAT => open ----------
     if side == "FLAT":
-        if decision in {"BUY", "ADD"} and entry_px is not None:
-            # New trade: increment counter, create trade id
-            trade_counter += 1
-            current_trade_id = f"T{trade_counter}"
-            current_trade_skipped_adds = 0
-
+        if decision_in in {"BUY", "ADD"} and entry_px is not None:
             unit_size = _compute_unit_size(row)
             side = "LONG"
             qty = float(unit_size)
             avg = entry_px
             sim_peak = float(cmp_px if cmp_px is not None else entry_px)
+            # new trade id assigned on entry
+            current_trade_id = int(next_trade_id)
+            next_trade_id += 1
+            sim_effective_decision = "BUY"
             row["sim_exit_reason"] = None
 
-            # mark trade open on this row
-            row["sim_trade_id"] = current_trade_id
-            row["sim_trade_open"] = True
-            row["sim_trade_close"] = False
-            row["sim_trade_skipped_adds"] = 0
-
-            sim_effective_decision = decision
-            sim_ignored_signal = False
-
-    # --------------------------------------------------------
-    # LONG -> possible trail/add/exit
-    # --------------------------------------------------------
+    # ---------- LONG ----------
     elif side == "LONG":
         # update peak
         try:
@@ -219,81 +171,73 @@ def _step_auto_long_sim(
         except Exception:
             pass
 
-        # compute current unreal (for ADD-only-when-green)
+        # compute current unreal (absolute and percent)
         current_unreal = None
         current_unreal_pct = None
         try:
             if avg is not None and cmp_px is not None and qty > 0:
                 current_unreal = (cmp_px - avg) * qty
-                current_unreal_pct = ((cmp_px - avg) / avg * 100.0) if avg else None
+                current_unreal_pct = (cmp_px - avg) / avg * 100.0
         except Exception:
             current_unreal = None
             current_unreal_pct = None
 
-        # Trailing stop evaluation (highest priority)
+        # trailing stop (highest priority)
         if sim_peak is not None and cmp_px is not None:
             try:
                 sim_trail_stop = sim_peak * (1.0 - float(TRAIL_PCT))
                 row["sim_trail_stop"] = sim_trail_stop
                 row["sim_peak"] = sim_peak
                 if cmp_px <= sim_trail_stop:
-                    # book realized pnl and flatten
+                    # book realized pnl and flatten trade
                     try:
                         realized += (cmp_px - avg) * qty
                     except Exception:
                         pass
                     row["sim_exit_reason"] = "TRAILING_STOP"
                     row["sim_forced_eod"] = False
-
-                    # mark trade close
-                    row["sim_trade_id"] = current_trade_id
-                    row["sim_trade_close"] = True
-                    row["sim_trade_open"] = False
-                    row["sim_trade_skipped_adds"] = current_trade_skipped_adds
-
+                    sim_effective_decision = "EXIT"
                     side = "FLAT"
+                    # stamp trade_id on exit row before clearing
+                    row["sim_trade_id"] = current_trade_id
+                    current_trade_id = None
                     qty = 0.0
                     avg = None
                     sim_peak = None
-
-                    sim_effective_decision = "EXIT"
-                    sim_ignored_signal = False
+                    # done with this bar
             except Exception:
                 pass
         else:
             row.setdefault("sim_trail_stop", None)
             row.setdefault("sim_peak", sim_peak)
 
-        # If still LONG (no trailing-stop exit), consider ADD/HARD_EXIT
+        # Still LONG? consider ADD/BUY or hard exit
         if side == "LONG":
-            if decision in {"BUY", "ADD"} and entry_px is not None:
+            if decision_in in {"BUY", "ADD"} and entry_px is not None:
+                # refresh unit size if invalid
                 if unit_size <= 0:
                     unit_size = _compute_unit_size(row)
 
-                # ADD-only-when-green guard
+                # ADD-only-when-green checks
                 allow_add = True
-                if (
-                    ADD_ONLY_WHEN_GREEN
-                    and decision == "ADD"
-                ):
-                    # require current_unreal_pct > ADD_MIN_UNREAL_PCT
-                    if current_unreal_pct is None or current_unreal_pct <= float(ADD_MIN_UNREAL_PCT):
+                if decision_in == "ADD" and ADD_ONLY_WHEN_GREEN:
+                    # require positive unreal AND at least ADD_MIN_UNREAL_PCT (percentage)
+                    if current_unreal is None or current_unreal <= 0.0:
                         allow_add = False
+                    else:
+                        if ADD_MIN_UNREAL_PCT and current_unreal_pct is not None:
+                            if current_unreal_pct < float(ADD_MIN_UNREAL_PCT):
+                                allow_add = False
 
-                if decision == "ADD" and not allow_add:
-                    # Skip averaging down — do not increase qty.
-                    current_trade_skipped_adds += 1
-                    row["sim_skipped_add"] = int(row.get("sim_skipped_add", 0)) + 1
-                    # don't mutate external decision — write sim_ignored_signal
+                if decision_in == "ADD" and not allow_add:
+                    # mark as ignored for sim
                     sim_ignored_signal = True
+                    sim_skipped_add = 1
                     sim_effective_decision = "NO_ACTION"
-                    # annotate trade-level in row (open trade)
-                    row["sim_trade_id"] = current_trade_id
-                    row["sim_trade_open"] = True
-                    row["sim_trade_close"] = False
-                    row["sim_trade_skipped_adds"] = current_trade_skipped_adds
+                    row["sim_skip_reason"] = "ADD_SKIPPED_NOT_IN_PROFIT"
+                    # don't mutate incoming decision; create sim_effective_decision instead
                 else:
-                    # proceed with pyramid (cap to MAX_PYRAMID_UNITS)
+                    # perform pyramid (cap by MAX_PYRAMID_UNITS * unit_size)
                     prev_qty = qty
                     desired_new_qty = qty + float(unit_size)
                     max_qty_allowed = float(unit_size) * float(MAX_PYRAMID_UNITS)
@@ -301,7 +245,6 @@ def _step_auto_long_sim(
                         new_qty = prev_qty
                     else:
                         new_qty = min(desired_new_qty, max_qty_allowed)
-
                     added_qty = new_qty - prev_qty
                     if new_qty > 0 and added_qty > 0:
                         try:
@@ -310,54 +253,36 @@ def _step_auto_long_sim(
                         except Exception:
                             avg = entry_px
                         qty = new_qty
+                    sim_effective_decision = decision_in
 
-                    # annotate row trade id/open
-                    row["sim_trade_id"] = current_trade_id
-                    row["sim_trade_open"] = True
-                    row["sim_trade_close"] = False
-                    row["sim_trade_skipped_adds"] = current_trade_skipped_adds
-
-                    sim_effective_decision = decision
-                    sim_ignored_signal = False
-
-            # Hard exit conditions: explicit EXIT/AVOID or broker trade_status == EXIT
-            hard_exit = (decision in {"EXIT", "AVOID"}) or (trade_status == "EXIT")
+            # hard exits (explicit EXIT/AVOID or trade_status == 'EXIT')
+            hard_exit = (decision_in in {"EXIT", "AVOID"}) or (trade_status == "EXIT")
             exit_signal = hard_exit or eod_force
-
             if exit_signal and cmp_px is not None and avg is not None and qty > 0:
                 try:
                     realized += (cmp_px - avg) * qty
                 except Exception:
                     pass
-
-                # mark trade close
-                row["sim_trade_id"] = current_trade_id
-                row["sim_trade_close"] = True
-                row["sim_trade_open"] = False
-                row["sim_trade_skipped_adds"] = current_trade_skipped_adds
-
                 if eod_force:
                     row["sim_forced_eod"] = True
                     row["sim_exit_reason"] = "EOD_FORCED"
                 else:
                     row["sim_forced_eod"] = False
                     row["sim_exit_reason"] = "HARD_EXIT"
-
-                # reset state trade info
+                sim_effective_decision = "EXIT"
+                # stamp trade id on exit
+                row["sim_trade_id"] = current_trade_id
                 current_trade_id = None
-                current_trade_skipped_adds = 0
-
                 side = "FLAT"
                 qty = 0.0
                 avg = None
                 sim_peak = None
 
-                sim_effective_decision = "EXIT"
-                sim_ignored_signal = False
-
-    # --------------------------------------------------------
-    # Post-transition: compute unreal + totals
-    # --------------------------------------------------------
+    # write per-row sim fields (after processing)
+    row["sim_side"] = side
+    row["sim_qty"] = float(qty)
+    row["sim_avg"] = avg
+    # unrealised p&l
     unreal = None
     unreal_pct = None
     if side == "LONG" and cmp_px is not None and avg is not None and qty > 0:
@@ -366,42 +291,32 @@ def _step_auto_long_sim(
             unreal_pct = (cmp_px - avg) / avg * 100.0
         except Exception:
             pass
-
-    total_pnl = None
-    try:
-        total_pnl = (unreal or 0.0) + (realized or 0.0)
-    except Exception:
-        total_pnl = unreal or realized
-
-    # --------------------------------------------------------
-    # Write synthetic fields (diagnostics & persistence)
-    # --------------------------------------------------------
-    row["sim_side"] = side
-    row["sim_qty"] = float(qty)
-    row["sim_avg"] = avg
     row["sim_pnl"] = unreal
     row["sim_pnl_pct"] = unreal_pct
     row["sim_realized_pnl"] = realized
-    row["sim_total_pnl"] = total_pnl
+    try:
+        row["sim_total_pnl"] = (unreal or 0.0) + (realized or 0.0)
+    except Exception:
+        row["sim_total_pnl"] = unreal or realized
 
+    # sim_trade_id: if currently in trade, set it for the row (entry/holds)
+    if current_trade_id is not None:
+        row["sim_trade_id"] = int(current_trade_id)
+    else:
+        # if not set by exit logic, ensure key present (None)
+        row.setdefault("sim_trade_id", None)
+
+    # sim_effective_decision / ignored flag / skipped_add tally (per-row)
+    row["sim_effective_decision"] = sim_effective_decision or None
+    row["sim_ignored_signal"] = bool(sim_ignored_signal)
+    row["sim_skipped_add"] = int(sim_skipped_add or 0)
+
+    # expose unit size / peak / trail stop for observability
     row["sim_unit_size"] = float(unit_size)
     row["sim_peak"] = sim_peak
     row.setdefault("sim_trail_stop", row.get("sim_trail_stop"))
 
-    # trade bookkeeping fields
-    row["sim_trade_id"] = row.get("sim_trade_id") or current_trade_id
-    row["sim_trade_open"] = bool(row.get("sim_trade_open", False))
-    row["sim_trade_close"] = bool(row.get("sim_trade_close", False))
-    row["sim_trade_skipped_adds"] = int(row.get("sim_trade_skipped_adds", 0))
-
-    # sim effect / ignored signal (do NOT mutate original 'decision')
-    row["sim_effective_decision"] = sim_effective_decision or None
-    row["sim_ignored_signal"] = bool(sim_ignored_signal)
-
-    # expose how many adds skipped on this row (helpful)
-    row.setdefault("sim_skipped_add", row.get("sim_skipped_add", 0))
-
-    # Persist next_state (important: keep trade_counter & current trade info)
+    # prepare next_state
     next_state: Dict[str, Any] = {
         "side": side,
         "qty": float(qty),
@@ -409,9 +324,8 @@ def _step_auto_long_sim(
         "realized_pnl": realized,
         "unit_size": float(unit_size),
         "sim_peak": sim_peak,
-        "trade_counter": int(trade_counter),
-        "current_trade_id": current_trade_id,
-        "current_trade_skipped_adds": int(current_trade_skipped_adds),
+        "next_trade_id": int(next_trade_id),
+        "current_trade_id": int(current_trade_id) if current_trade_id is not None else None,
     }
     return row, next_state
 
@@ -430,7 +344,7 @@ def build_actionable_row(
     sim_state: Dict[str, Any] | None = None,
     eod_force: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any] | None]:
-    """Build a unified actionable row. Sim runs only when pos_mode == 'auto'."""
+    """Build actionable row and optionally run the synthetic sim when pos_mode == 'auto'."""
     if df is None or getattr(df, "is_empty", lambda: True)():
         return {}, sim_state
 
@@ -472,9 +386,7 @@ def build_actionable_row(
                 risk=row.get("risk_mode"),
             )
         except Exception as e:
-            log.exception(
-                f"[build_actionable_row] strategy overlay failed → {symbol}: {e}"
-            )
+            log.exception(f"[build_actionable_row] strategy overlay failed → {symbol}: {e}")
 
     row["held"] = bool(eff_pos)
 
