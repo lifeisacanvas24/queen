@@ -1,21 +1,37 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/cli/replay_actionable.py — v3.1 (Forward-Compatible)
+# queen/cli/replay_actionable.py — v3.3
 # ------------------------------------------------------------
 # Historical intraday actionable replay (dev analysis tool)
 #
 # Principles:
-#   • EXACTLY same pipeline as live:
+#   • EXACT same pipeline as live:
 #         DF → build_actionable_row → strategies → output
 #   • Replay is only a *lens*, not a different engine.
-#   • Supports synthetic position simulation (pos_mode="auto")
-#   • Supports pos_mode="flat" | "live" | "auto"
+#   • Supports synthetic position simulation via build_actionable_row
+#     with:
+#         pos_mode = "flat" | "live" | "auto"
+#         auto_side = "long" | "short" | "both"
 #
-# v3.1:
-#   • Adds external long-only auto-position sim (Option A + EXIT):
-#       - ENTRY: flat + BUY → open 1x LONG at cmp
-#       - EXIT:  LONG + (EXIT/AVOID or exit-like trade_status) → book PnL & flatten
-#       - No ADD / scaling yet (kept intentionally simple for audit-first behaviour)
+# Semantics (as agreed):
+#   • AVOID = entry filter, NEVER exits an existing position
+#   • HOLD  = maintain current position (no open/close/add)
+#   • Long side:
+#         BUY       → open / add long
+#         ADD       → add to long
+#         EXIT      → close long
+#   • Short side:
+#         SELL      → open / add short
+#         ADD_SHORT → add to short
+#         EXIT_SHORT→ close short
+#   • EOD:
+#         In intraday auto-mode, last bar can force EXIT/EXIT_SHORT
+#         via eod_force=True passed into build_actionable_row.
+#
+# Notes:
+#   • There is NO legacy internal simulator here anymore.
+#     All sim logic (trade_id, trail, skipped_adds, explicit
+#     short/long semantics, etc.) lives in queen/services/actionable_row.py.
 # ============================================================
 
 from __future__ import annotations
@@ -50,8 +66,16 @@ class ReplayConfig:
     final_only: bool = False
 
     # Position mode
+    #   "flat" → no sim, just decisions
+    #   "live" → use positions_map as starting state (portfolio-aware)
+    #   "auto" → synthetic sim (long / short / both) for intraday what-if
     pos_mode: str = "flat"         # "flat" | "live" | "auto"
-    auto_side: str = "long"        # "long" | "both"
+
+    # Auto-sim bias:
+    #   "long"  → only long-side decisions (BUY/ADD/EXIT)
+    #   "short" → only short-side decisions (SELL/ADD_SHORT/EXIT_SHORT)
+    #   "both"  → both vocabularies allowed (engine chooses)
+    auto_side: str = "both"        # "long" | "short" | "both"
 
     # Position map — only used if pos_mode == "live"
     positions_map: Optional[Dict[str, Any]] = None
@@ -68,127 +92,27 @@ def _json_safe_row(row: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(v, (list, dict, float, int, str, bool)):
             out[k] = v
         else:
+            # Best-effort JSONable coercion; fail silently per-field.
             try:
                 out[k] = json.loads(json.dumps(v))
             except Exception:
-                # skip non-serializable junk
                 pass
     return out
-
-
-# ------------------------------------------------------------
-# Auto-position simulation (Option A + EXIT)
-# ------------------------------------------------------------
-def _apply_auto_position_sim(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Long-only, audit-first auto-position simulation (Option A + EXIT).
-
-    Rules:
-      • ENTRY:
-          - If we are flat and decision == "BUY" and cmp exists
-          - → Open 1x LONG at cmp.
-      • NO ADD / SCALE (v1):
-          - We do not increase size on ADD yet. One clean unit only.
-      • EXIT:
-          - If we are LONG and:
-                decision in {"EXIT", "AVOID"} OR
-                trade_status in {"EXIT", "FORCE_EXIT", "STOPPED_OUT"}
-            → Book PnL into sim_realized_pnl and flatten.
-      • PNL:
-          - sim_pnl, sim_pnl_pct: unrealised PnL on the *current open* position.
-          - sim_realized_pnl: cumulative closed PnL.
-          - sim_total_pnl = sim_realized_pnl + (sim_pnl or 0).
-
-    Assumptions:
-      • rows are sorted by time ascending for a single (symbol, interval).
-      • each row has at least: cmp, decision (and optionally trade_status).
-    """
-    side: str | None = None   # None or "LONG"
-    qty: float = 0.0
-    avg: float | None = None
-    realized: float = 0.0
-
-    for row in rows:
-        cmp_val = row.get("cmp")
-        decision = (row.get("decision") or "").upper()
-        trade_status = (row.get("trade_status") or "").upper()
-
-        # -----------------------------
-        # 1) ENTRY: flat → BUY
-        # -----------------------------
-        if side is None and decision == "BUY" and cmp_val is not None:
-            try:
-                px = float(cmp_val)
-            except Exception:
-                px = None
-
-            if px is not None:
-                side = "LONG"
-                qty = 1.0
-                avg = px
-
-        # -----------------------------
-        # 2) EXIT: LONG → flat
-        # -----------------------------
-        exit_signal = decision in {"EXIT", "AVOID"} or trade_status in {
-            "EXIT",
-            "FORCE_EXIT",
-            "STOPPED_OUT",
-        }
-
-        if side == "LONG" and exit_signal and cmp_val is not None and avg is not None:
-            try:
-                px = float(cmp_val)
-            except Exception:
-                px = None
-
-            if px is not None:
-                unreal = (px - avg) * qty
-                realized += unreal
-
-            # flatten position
-            side = None
-            qty = 0.0
-            avg = None
-
-        # -----------------------------
-        # 3) Unrealised PnL if in position
-        # -----------------------------
-        sim_pnl: float | None = None
-        sim_pnl_pct: float | None = None
-
-        if side == "LONG" and cmp_val is not None and avg is not None:
-            try:
-                px = float(cmp_val)
-            except Exception:
-                px = None
-
-            if px is not None:
-                sim_pnl = (px - avg) * qty
-                try:
-                    sim_pnl_pct = (px - avg) / avg * 100.0
-                except Exception:
-                    sim_pnl_pct = None
-
-        sim_total = realized + (sim_pnl or 0.0)
-
-        # -----------------------------
-        # 4) Surface into row
-        # -----------------------------
-        row["sim_side"] = side
-        row["sim_qty"] = qty if side is not None else 0.0
-        row["sim_avg"] = avg
-        row["sim_pnl"] = sim_pnl
-        row["sim_pnl_pct"] = sim_pnl_pct
-        row["sim_realized_pnl"] = realized
-        row["sim_total_pnl"] = sim_total
-
-    return rows
 
 
 # ------------------------------------------------------------
 # Historical intraday fetcher (unified)
 # ------------------------------------------------------------
 async def _fetch_intraday_range(cfg: ReplayConfig) -> pl.DataFrame:
+    """Fetch intraday candles using the same unified fetcher as live.
+
+    Returns:
+        Polars DataFrame with at least:
+            - timestamp
+            - open, high, low, close, volume
+            - (any other engine-required fields)
+
+    """
     iv = f"{cfg.interval_min}m"
 
     # Historical mode
@@ -204,7 +128,7 @@ async def _fetch_intraday_range(cfg: ReplayConfig) -> pl.DataFrame:
         )
         return ensure_sorted(df) if not df.is_empty() else df
 
-    # Live intraday (default)
+    # Live intraday (default: today-only)
     df = await fetch_unified(
         cfg.symbol,
         mode="intraday",
@@ -219,8 +143,16 @@ async def _fetch_intraday_range(cfg: ReplayConfig) -> pl.DataFrame:
 # Main replay function — unified pipeline
 # ------------------------------------------------------------
 async def replay_actionable(cfg: ReplayConfig) -> Dict[str, Any]:
+    """Replay intraday candles through the exact same pipeline as live.
+
+    DF → build_actionable_row → (strategies, sim) → actionable rows
+    """
     df = await _fetch_intraday_range(cfg)
     if df.is_empty():
+        log.info(
+            f"[ReplayActionable] No data for {cfg.symbol} "
+            f"{cfg.date_from}→{cfg.date_to} @ {cfg.interval_min}m"
+        )
         return {
             "symbol": cfg.symbol,
             "interval": f"{cfg.interval_min}m",
@@ -235,38 +167,47 @@ async def replay_actionable(cfg: ReplayConfig) -> Dict[str, Any]:
     interval_str = f"{cfg.interval_min}m"
     n = df.height
 
+    # Warmup logic: ensure at least some bars to seed indicators
     effective_warmup = cfg.warmup
     if effective_warmup >= n:
         effective_warmup = max(1, n)
 
+    # Simulator state is carried across slices so that
+    # build_actionable_row can maintain:
+    #   • trade_id
+    #   • trailing stops
+    #   • pyramid (ADD/ADD_SHORT) history
+    #   • FLAT/LONG/SHORT sim-side and PnL
     sim_state: Dict[str, Any] | None = None
 
     for i in range(n):
-        # skip until warmup bars are available
+        # Skip until warmup bars are available
         if i + 1 < effective_warmup:
             continue
 
         df_slice = df.slice(0, i + 1)
 
-        # intraday-only philosophy: force exit on LAST bar in auto-mode
+        # Intraday-only philosophy: in pos_mode="auto" we treat the last
+        # bar as "EOD", and ask build_actionable_row to flatten if any
+        # synthetic position is still open.
         eod_force = bool(cfg.pos_mode == "auto" and i == n - 1)
 
-        try:
-            row, sim_state = build_actionable_row(
-                symbol=cfg.symbol,
-                df=df_slice,
-                interval=interval_str,
-                book=cfg.book,
-                pos_mode=cfg.pos_mode,
-                auto_side=cfg.auto_side,
-                positions_map=cfg.positions_map,
-                cmp_anchor=None,
-                sim_state=sim_state,
-                eod_force=eod_force,
-            )
-        except Exception as e:
-            log.exception(f"[Replay] {cfg.symbol} slice {i} failed → {e}")
-            continue
+        # Let build_actionable_row handle:
+        #   • decision (BUY/ADD/EXIT/SELL/ADD_SHORT/EXIT_SHORT/HOLD/AVOID)
+        #   • sim semantics (long vs short)
+        #   • PnL state (sim_side, sim_qty, sim_avg, sim_pnl, ...)
+        row, sim_state = build_actionable_row(
+            symbol=cfg.symbol,
+            df=df_slice,
+            interval=interval_str,
+            book=cfg.book,
+            pos_mode=cfg.pos_mode,
+            auto_side=cfg.auto_side,
+            positions_map=cfg.positions_map,
+            cmp_anchor=None,
+            sim_state=sim_state,
+            eod_force=eod_force,
+        )
 
         # Ensure timestamp is present
         try:
@@ -274,13 +215,11 @@ async def replay_actionable(cfg: ReplayConfig) -> Dict[str, Any]:
             if ts_val is not None:
                 row.setdefault("timestamp", ts_val)
         except Exception:
+            # If timestamp is missing, we still return data; callers like
+            # scan_signals / sim_stats will fail loudly if they require it.
             pass
 
         rows.append(_json_safe_row(row))
-
-    # ❌ REMOVE: external _apply_auto_position_sim — Option A already ran inline
-    # if cfg.pos_mode == "auto" and rows:
-    #     rows = _apply_auto_position_sim(rows)
 
     if cfg.final_only and rows:
         rows = [rows[-1]]
@@ -294,12 +233,14 @@ async def replay_actionable(cfg: ReplayConfig) -> Dict[str, Any]:
         "count": len(rows),
         "rows": rows,
     }
+
+
 # ------------------------------------------------------------
 # CLI
 # ------------------------------------------------------------
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Historical Intraday actionable replay (forward-compatible)."
+        description="Historical Intraday actionable replay (same pipeline as live)."
     )
 
     parser.add_argument("--symbol", required=True)
@@ -320,8 +261,9 @@ def main() -> None:
     parser.add_argument(
         "--auto-side",
         type=str,
-        choices=["long", "both"],
-        default="long",
+        choices=["long", "short", "both"],
+        default="both",
+        help='Auto-sim side bias: "long", "short", or "both".',
     )
 
     args = parser.parse_args()
@@ -338,7 +280,7 @@ def main() -> None:
         auto_side=args.auto_side,
     )
 
-    async def _run():
+    async def _run() -> None:
         payload = await replay_actionable(cfg)
         print(json.dumps(payload, ensure_ascii=False))
 

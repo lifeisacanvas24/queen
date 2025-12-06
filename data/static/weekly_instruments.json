@@ -12,6 +12,14 @@
     "isin": "NSE_EQ|INE0Z4F01028"
   },
   {
+    "symbol": "LTIM",
+    "isin": "NSE_EQ|INE214T01019"
+  },
+  {
+    "symbol": "LTTS",
+    "isin": "NSE_EQ|INE010V01017"
+  },
+  {
     "symbol": "DATAPATTNS",
     "isin": "NSE_EQ|INE0IX101010"
   },

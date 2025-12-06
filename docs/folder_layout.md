@@ -1,7 +1,6 @@
 ```plaintext
 queen/
 ├── alerts/
-│   │   ├── evaluator copy.py
 │   │   ├── evaluator.py
 │   │   ├── rules.py
 │   │   └── state.py
@@ -25,6 +24,7 @@ queen/
 │   │   ├── run_strategy.py
 │   │   ├── scan_signals.py
 │   │   ├── show_snapshot.py
+│   │   ├── signal_summary.py
 │   │   ├── sim_stats.py
 │   │   ├── symbol_scan.py
 │   │   ├── universe_scanner.py
@@ -38,7 +38,6 @@ queen/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
 │   │   ├── alert_daemon.py
-│   │   ├── alert_v2 copy.py
 │   │   ├── alert_v2.py
 │   │   ├── live_engine.py
 │   │   ├── live_engine_cli.py
@@ -61,6 +60,7 @@ queen/
 │   │   │   │   │   ├── roadmap.txt
 │   │   │   │   │   └── TODO.MD
 │   │   ├── core_docs/
+│   │   │   │   │   ├── ADDITIONAL_INDICATORS_ROADMAP.md
 │   │   │   │   │   ├── bible-flow.txt
 │   │   │   │   │   ├── claude-discussions-more.md
 │   │   │   │   │   ├── claude-discussions.md
@@ -68,12 +68,19 @@ queen/
 │   │   │   │   │   ├── claude-timeframe.html
 │   │   │   │   │   ├── claude-timeframe.png
 │   │   │   │   │   ├── claude-timeframes.md
+│   │   │   │   │   ├── DRY_AUDIT_REPORT.md
 │   │   │   │   │   ├── feedback-from-chatgpt.txt
 │   │   │   │   │   ├── fundamentals-pipline-test.txt
 │   │   │   │   │   ├── master-todo.txt
+│   │   │   │   │   ├── OLD_QUEEN_MASTER_PLAN.md
 │   │   │   │   │   ├── quant.md
+│   │   │   │   │   ├── QUEEN_INVENTORY.md
+│   │   │   │   │   ├── QUEEN_MASTER_PLAN.md
+│   │   │   │   │   ├── SIM_PLAYBOOK.MD
+│   │   │   │   │   ├── sim_readme.MD
 │   │   │   │   │   ├── todo-index-20-11-2025-nov.txt
 │   │   │   │   │   └── upcoming-todo-20-11-2025-nov.txt
+│   │   ├── ai_documentation.md
 │   │   ├── alerts-fastapi.txt
 │   │   ├── ATR-DYNAMIC.png
 │   │   ├── Breakout_Bible_v10.pdf
@@ -121,6 +128,7 @@ queen/
 │   │   │   │   │   └── convert_instruments_to_master.py
 │   │   ├── __init__.py
 │   │   ├── fetch_router.py
+│   │   ├── fundamentals_scraper-working.py
 │   │   ├── fundamentals_scraper.py
 │   │   ├── g_nse_fecther_cache.py
 │   │   ├── nse_fetcher.py
@@ -157,6 +165,7 @@ queen/
 │   │   ├── rate_limiter.py
 │   │   ├── schema_adapter.py
 │   │   ├── shareholding_fetcher.py
+│   │   ├── swing_detection.py
 │   │   ├── ta_math.py
 │   │   ├── tactical_regime_adapter.py
 │   │   └── verify.py
@@ -218,7 +227,8 @@ queen/
 │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── footer.html
 │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   └── header.html
 │   │   │   │   │   │   │   │   │   │   │   │   │   │   └── index.html
-│   │   │   │   │   │   │   │   │   └── index.html
+│   │   │   │   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   │   │   │   └── queen_cockpit_v2.html
 │   │   │   │   │   ├── index.html
 │   │   │   │   │   └── summary.html
 │   │   ├── g_fastapi_upstox.py
@@ -233,14 +243,17 @@ queen/
 │   │   ├── enrich_tactical.py
 │   │   ├── forecast.py
 │   │   ├── history.py
+│   │   ├── ladder_guardrails.py
 │   │   ├── ladder_state.py
 │   │   ├── live.py
 │   │   ├── morning.py
 │   │   ├── scoring.py
 │   │   ├── symbol_scan.py
-│   │   └── tactical_pipeline.py
+│   │   ├── tactical_pipeline.py
+│   │   └── trade_state.py
 ├── settings/
 │   │   ├── __init__.py
+│   │   ├── breakout_settings.py
 │   │   ├── cockpit_schema.py
 │   │   ├── fno_universe.py
 │   │   ├── formulas.py
@@ -256,6 +269,7 @@ queen/
 │   │   ├── profiles.py
 │   │   ├── README_settings.md
 │   │   ├── regimes.py
+│   │   ├── risk.py
 │   │   ├── settings.py
 │   │   ├── sim_settings.py
 │   │   ├── tactical.py
@@ -278,24 +292,36 @@ queen/
 │   │   │   │   │   ├── breadth_cumulative.py
 │   │   │   │   │   ├── breadth_momentum.py
 │   │   │   │   │   ├── core.py
+│   │   │   │   │   ├── delta_volume.py
 │   │   │   │   │   ├── keltner.py
 │   │   │   │   │   ├── momentum_macd.py
 │   │   │   │   │   ├── state.py
 │   │   │   │   │   ├── volatility_fusion.py
 │   │   │   │   │   ├── volume_chaikin.py
-│   │   │   │   │   └── volume_mfi.py
+│   │   │   │   │   ├── volume_confirmation.py
+│   │   │   │   │   ├── volume_mfi.py
+│   │   │   │   │   └── volume_profile.py
 │   │   ├── microstructure/
+│   │   │   │   │   ├── bos_choch.py
+│   │   │   │   │   ├── breaker_blocks.py
 │   │   │   │   │   ├── cpr.py
+│   │   │   │   │   ├── fvg.py
+│   │   │   │   │   ├── liquidity.py
+│   │   │   │   │   ├── mitigation_blocks.py
+│   │   │   │   │   ├── order_blocks.py
 │   │   │   │   │   ├── phases.py
+│   │   │   │   │   ├── premium_discount.py
 │   │   │   │   │   ├── risk.py
 │   │   │   │   │   ├── state_objects.py
 │   │   │   │   │   ├── structure.py
 │   │   │   │   │   ├── volume.py
-│   │   │   │   │   └── vwap.py
+│   │   │   │   │   ├── vwap.py
+│   │   │   │   │   └── wyckoff.py
 │   │   ├── patterns/
 │   │   │   │   │   ├── __init__.py
 │   │   │   │   │   ├── composite.py
 │   │   │   │   │   ├── core.py
+│   │   │   │   │   ├── false_breakout.py
 │   │   │   │   │   └── runner.py
 │   │   ├── signals/
 │   │   │   │   │   ├── fusion/
@@ -329,6 +355,7 @@ queen/
 │   │   │   │   │   │   │   │   │   ├── __init__.py
 │   │   │   │   │   │   │   │   │   └── indicator_template.py
 │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── breakout_validator.py
 │   │   │   │   │   ├── pattern_fusion.py
 │   │   │   │   │   ├── pre_breakout.py
 │   │   │   │   │   ├── registry.py
@@ -347,6 +374,7 @@ queen/
 │   │   ├── trend_strength.py
 │   │   ├── trend_strength_daily.py
 │   │   ├── trend_strength_intraday.py
+│   │   ├── volume_confirmation.py
 │   │   ├── volume_strength.py
 │   │   └── volume_strength_intraday.py
 ├── tests/
@@ -365,6 +393,7 @@ queen/
 │   │   ├── smoke_breadth.py
 │   │   ├── smoke_breadth_combo.py
 │   │   ├── smoke_breadth_momentum.py
+│   │   ├── smoke_breakout_modules.py
 │   │   ├── smoke_chaikin.py
 │   │   ├── smoke_cmv_latency.py
 │   │   ├── smoke_cognitive_orchestrator.py
@@ -430,11 +459,59 @@ queen/
 │   │   ├── smoke_tactical_inputs.py
 │   │   ├── smoke_technicals_registry.py
 │   │   ├── smoke_template_indicator.py
+│   │   ├── smoke_test_sim.py
 │   │   ├── smoke_utils_patterns.py
 │   │   ├── smoke_volatility_fusion.py
 │   │   ├── smoke_weights.py
 │   │   ├── test_indicator_kwargs.py
 │   │   └── test_patterns_core.py
+├── upstox_websocket/
+│   │   ├── database/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   └── models.py
+│   │   ├── services/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── card_generator.py
+│   │   │   │   │   ├── dashboard_router.py
+│   │   │   │   │   ├── signal_pipeline.py
+│   │   │   │   │   └── upstox_websocket.py
+│   │   ├── static/
+│   │   │   │   │   ├── css/
+│   │   │   │   │   │   │   │   │   └── queen.css
+│   │   │   │   │   └── js/
+│   │   │   │   │       │   │       └── queen.js
+│   │   ├── templates/
+│   │   │   │   │   ├── cards/
+│   │   │   │   │   │   │   │   │   ├── partials/
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── confidence.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── context_box.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── fvg_zones.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── rr_box.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── signal_score.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   ├── trade_levels.html
+│   │   │   │   │   │   │   │   │   │   │   │   │   │   └── wyckoff_phase.html
+│   │   │   │   │   │   │   │   │   ├── card_base.html
+│   │   │   │   │   │   │   │   │   ├── card_btst.html
+│   │   │   │   │   │   │   │   │   ├── card_intraday.html
+│   │   │   │   │   │   │   │   │   ├── card_investment.html
+│   │   │   │   │   │   │   │   │   ├── card_positional.html
+│   │   │   │   │   │   │   │   │   ├── card_scalp.html
+│   │   │   │   │   │   │   │   │   └── card_swing.html
+│   │   │   │   │   ├── components/
+│   │   │   │   │   │   │   │   │   ├── footer.html
+│   │   │   │   │   │   │   │   │   ├── header.html
+│   │   │   │   │   │   │   │   │   ├── signals_grid.html
+│   │   │   │   │   │   │   │   │   ├── stats_bar.html
+│   │   │   │   │   │   │   │   │   ├── sub_filters.html
+│   │   │   │   │   │   │   │   │   └── tabs_nav.html
+│   │   │   │   │   ├── base.html
+│   │   │   │   │   ├── dashboard.html
+│   │   │   │   │   └── README.md
+│   │   ├── main_upstox.py
+│   │   ├── queen_cockpit_v3.html
+│   │   ├── README.md
+│   │   ├── upstox_auth.py
+│   │   └── upstox_requirements.txt
 ├── .gitignore
 ├── __init__.py
 ├── intraday_cockpit.py

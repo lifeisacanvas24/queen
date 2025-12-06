@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Queen Cockpit - Trading Dashboard{% endblock %}
+
+{% block content %}
+    {# SCALP TAB #}
+    <div class="tab-content {% if active_tab == 'scalp' %}active{% endif %}" id="scalp">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': scalp_signals | length, 'active': True},
+            {'value': 'scalp-long', 'label': 'Long', 'count': scalp_signals | selectattr('direction', 'eq', 'long') | list | length, 'active': False},
+            {'value': 'scalp-short', 'label': 'Short', 'count': scalp_signals | selectattr('direction', 'eq', 'short') | list | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in scalp_signals %}
+                {% include 'cards/card_scalp.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-bolt"></i>
+                    <h3>No Scalp Signals</h3>
+                    <p>No scalping opportunities detected at this time.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# INTRADAY TAB #}
+    <div class="tab-content {% if active_tab == 'intraday' %}active{% endif %}" id="intraday">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': intraday_signals | length, 'active': True},
+            {'value': 'intraday-long', 'label': 'Long', 'count': intraday_signals | selectattr('direction', 'eq', 'long') | list | length, 'active': False},
+            {'value': 'intraday-short', 'label': 'Short', 'count': intraday_signals | selectattr('direction', 'eq', 'short') | list | length, 'active': False},
+            {'value': 'intraday-breakout', 'label': 'Breakout', 'count': intraday_signals | selectattr('type', 'eq', 'breakout') | list | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in intraday_signals %}
+                {% include 'cards/card_intraday.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-sun"></i>
+                    <h3>No Intraday Signals</h3>
+                    <p>No intraday trading opportunities available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# BTST TAB #}
+    <div class="tab-content {% if active_tab == 'btst' %}active{% endif %}" id="btst">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': btst_signals | length, 'active': True},
+            {'value': 'btst-long', 'label': 'BTST Long', 'count': btst_signals | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in btst_signals %}
+                {% include 'cards/card_btst.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-moon"></i>
+                    <h3>No BTST Signals</h3>
+                    <p>No overnight trade setups detected.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# SWING TAB #}
+    <div class="tab-content {% if active_tab == 'swing' %}active{% endif %}" id="swing">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': swing_signals | length, 'active': True},
+            {'value': 'swing-fresh', 'label': 'Fresh', 'count': swing_signals | selectattr('status', 'eq', 'fresh') | list | length, 'active': False},
+            {'value': 'swing-active', 'label': 'Active', 'count': swing_signals | selectattr('status', 'eq', 'active') | list | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in swing_signals %}
+                {% include 'cards/card_swing.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-wave-square"></i>
+                    <h3>No Swing Signals</h3>
+                    <p>No swing trading setups available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# POSITIONAL TAB #}
+    <div class="tab-content {% if active_tab == 'positional' %}active{% endif %}" id="positional">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': positional_signals | length, 'active': True},
+            {'value': 'positional-fresh', 'label': 'Fresh', 'count': positional_signals | selectattr('status', 'eq', 'fresh') | list | length, 'active': False},
+            {'value': 'positional-hold', 'label': 'Hold', 'count': positional_signals | selectattr('action', 'eq', 'HOLD') | list | length, 'active': False},
+            {'value': 'positional-reduce', 'label': 'Reduce', 'count': positional_signals | selectattr('action', 'eq', 'REDUCE') | list | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in positional_signals %}
+                {% include 'cards/card_positional.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>No Positional Signals</h3>
+                    <p>No positional trades available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# INVESTMENT TAB #}
+    <div class="tab-content {% if active_tab == 'investment' %}active{% endif %}" id="investment">
+        {% set filters = [
+            {'value': 'all', 'label': 'All', 'count': investment_signals | length, 'active': True},
+            {'value': 'invest-accumulate', 'label': 'Accumulate', 'count': investment_signals | selectattr('action', 'eq', 'ACCUMULATE') | list | length, 'active': False},
+            {'value': 'invest-core', 'label': 'Core Hold', 'count': investment_signals | selectattr('action', 'eq', 'CORE') | list | length, 'active': False}
+        ] %}
+        {% include 'components/sub_filters.html' %}
+        <div class="signals-grid">
+            {% for signal in investment_signals %}
+                {% include 'cards/card_investment.html' %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-landmark"></i>
+                    <h3>No Investment Signals</h3>
+                    <p>No investment opportunities detected.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# PORTFOLIO TAB #}
+    <div class="tab-content {% if active_tab == 'portfolio' %}active{% endif %}" id="portfolio">
+        {% if portfolio_connected %}
+            <div class="signals-grid">
+                {% for holding in portfolio_holdings %}
+                    {% include 'cards/card_positional.html' with context %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-wallet"></i>
+                <h3>Portfolio View</h3>
+                <p>Connect your broker account to see live portfolio tracking with P&L, positions, and personalized signals.</p>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

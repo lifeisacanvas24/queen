@@ -27,7 +27,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import polars as pl
-
+# Add this import at the top of fundamentals_cli.py with other imports
+from bs4 import BeautifulSoup as BS
 # ============================================================
 # PROJECT INTEGRATION (CENTRALIZED IMPORTS)
 # ============================================================
@@ -230,7 +231,51 @@ def _filter_existing_columns(df: pl.DataFrame, columns: List[str]) -> List[str]:
     """Filter column list to only those that exist in DataFrame."""
     return [col for col in columns if col in df.columns]
 
+def fix_pe_in_existing_data(processed_dir: Path):
+    """Fix PE ratio in existing JSON files."""
+    import json
+    from pathlib import Path
 
+    for json_file in processed_dir.glob("*.json"):
+        if json_file.name.startswith("_"):
+            continue
+
+        try:
+            with open(json_file, "r") as f:
+                data = json.load(f)
+
+            # Skip if PE already exists
+            if data.get("pe_ratio"):
+                continue
+
+            # Try to calculate PE from price and EPS
+            if data.get("current_price") and data.get("eps_ttm"):
+                try:
+                    price = float(data["current_price"])
+                    eps = float(data["eps_ttm"])
+                    if eps > 0:
+                        data["pe_ratio"] = round(price / eps, 2)
+
+                        # Save back to file
+                        with open(json_file, "w") as f:
+                            json.dump(data, f, indent=2)
+
+                        print(f"Fixed PE for {json_file.stem}: {data['pe_ratio']}")
+                except (ValueError, TypeError):
+                    pass
+        except Exception as e:
+            print(f"Error fixing {json_file}: {e}")
+
+def cmd_fix_pe(args):
+    """Fix PE ratio in existing data."""
+    processed_dir = _get_processed_dir(args)
+
+    if not processed_dir.exists():
+        log.error(f"Processed directory not found: {processed_dir}")
+        return 1
+
+    fix_pe_in_existing_data(processed_dir)
+    return 0
 # ============================================================
 # COMMAND: show
 # ============================================================
@@ -757,7 +802,86 @@ def cmd_list(args):
 
     return 0
 
+def cmd_inspect(args):
+    """Inspect raw HTML for a symbol."""
+    symbol = args.symbol.upper()
 
+    # Try to load from existing raw HTML file
+    raw_file = PATHS["FUNDAMENTALS_RAW"] / f"{symbol}.html"
+
+    if raw_file.exists():
+        print(f"Loading existing HTML from {raw_file}")
+        html_content = raw_file.read_text(encoding="utf-8")
+    else:
+        print(f"No existing HTML file found for {symbol} at {raw_file}")
+        return
+
+    # Parse with BeautifulSoup
+    soup = BS(html_content, "lxml")
+
+    # Find top ratios
+    top_ratios_ul = soup.find("ul", id="top-ratios")
+    if top_ratios_ul:
+        print("\nTop Ratios:")
+        for i, li in enumerate(top_ratios_ul.find_all("li")):
+            text = li.get_text(separator=" | ", strip=True)
+            print(f"  {i+1}. {text}")
+
+            # Extract label and value separately
+            name_span = li.find("span", class_="name")
+            number_span = li.find("span", class_="number")
+
+            if name_span:
+                label = name_span.get_text(strip=True)
+                print(f"    Label: '{label}'")
+            else:
+                print(f"    No label span found")
+
+            if number_span:
+                value = number_span.get_text(strip=True)
+                print(f"    Value: '{value}'")
+            else:
+                print(f"    No number span found")
+    else:
+        print("\nNo top-ratios found")
+
+    # Also show the raw HTML structure for top ratios
+    print("\nRaw HTML structure for top-ratios:")
+    top_ratios_section = soup.find("ul", id="top-ratios")
+    if top_ratios_section:
+        html_str = str(top_ratios_section)
+        # Limit output to first 1000 characters to avoid flooding console
+        if len(html_str) > 1000:
+            html_str = html_str[:1000] + "..."
+        print(html_str)
+
+def cmd_debug(args):
+    """Debug fundamentals data for specific symbols."""
+    symbols = args.symbols if args.symbols else []
+
+    # Load data
+    df = load_all(PATHS["FUNDAMENTALS_PROCESSED"])
+
+    # Add time-series features
+    df = add_timeseries_features(df)
+
+    # Run scoring pipeline
+    df = score_and_filter(df)
+
+    # Filter to requested symbols
+    if symbols:
+        df = df.filter(pl.col("Symbol").is_in(symbols))
+
+    # Show key metrics
+    key_cols = [
+        "Symbol", "Sector", "roce_pct", "roe_pct", "debt_to_equity",
+        "pe_ratio", "eps_ttm", "sales_cagr_3y", "profit_cagr_3y",
+        "promoter_pledge_pct", "gross_npa_pct", "net_npa_pct",
+        "Intrinsic_Score", "PowerScore", "Fundamental_Pass", "Fundamental_Fail_Reasons"
+    ]
+
+    available_cols = [c for c in key_cols if c in df.columns]
+    print(df.select(available_cols))
 # ============================================================
 # MAIN CLI
 # ============================================================
@@ -824,7 +948,8 @@ Examples:
     export_parser = subparsers.add_parser("export", help="Export to CSV")
     export_parser.add_argument("--output", "-o", default="fundamentals_export.csv", help="Output file")
     export_parser.add_argument("--scored", action="store_true", help="Include scores")
-
+    # In fundamentals_cli.py, add to the subparsers:
+    fix_parser = subparsers.add_parser("fix-pe", help="Fix PE ratio in existing data")
     # pipeline command
     pipeline_parser = subparsers.add_parser("pipeline", help="Run full pipeline")
     pipeline_parser.add_argument("--symbols", "-s", nargs="+", required=True, help="Symbols to process")
@@ -833,7 +958,13 @@ Examples:
     # list command
     list_parser = subparsers.add_parser("list", help="List available symbols")
 
+    debug_parser = subparsers.add_parser("debug", help="Debug fundamentals data")
+    debug_parser.add_argument("symbols", nargs="*", help="Symbols to debug")
+    inspect_parser = subparsers.add_parser("inspect", help="Inspect raw HTML for a symbol")
+    inspect_parser.add_argument("symbol", help="Symbol to inspect")
     args = parser.parse_args()
+
+
 
     if not args.command:
         parser.print_help()
@@ -853,6 +984,11 @@ Examples:
     handler = commands.get(args.command)
     if handler:
         return handler(args)
+    elif args.command == "debug":
+           cmd_debug(args)
+    elif args.command == "inspect":
+        cmd_inspect(args)
+
     else:
         parser.print_help()
         return 1

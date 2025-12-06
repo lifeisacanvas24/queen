@@ -1,0 +1,15 @@
+{# Signals Grid Component - Container for signal cards #}
+{# Usage: {% include 'components/signals_grid.html' %} #}
+{# Expects: signals = list of signal objects, card_template = template name #}
+
+<div class="signals-grid">
+    {% for signal in signals %}
+        {% include card_template with context %}
+    {% else %}
+        <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>No Signals</h3>
+            <p>No trading signals available for this timeframe. Check back during market hours.</p>
+        </div>
+    {% endfor %}
+</div>

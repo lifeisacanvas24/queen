@@ -1,0 +1,15 @@
+{# Context Box Partial #}
+<div class="info-box context">
+    <div class="box-title">
+        <i class="fas {{ signal.context_icon | default('fa-info-circle') }}"></i>
+        {{ signal.context_title | default('Context') }}
+    </div>
+    <div class="context-items">
+        {% for ctx in signal.context %}
+        <span class="ctx-item {{ ctx.sentiment }}">
+            {% if ctx.icon %}<i class="fas {{ ctx.icon }}"></i>{% endif %}
+            {{ ctx.text }}
+        </span>
+        {% endfor %}
+    </div>
+</div>

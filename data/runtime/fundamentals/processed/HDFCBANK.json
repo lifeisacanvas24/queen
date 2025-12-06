@@ -4,13 +4,13 @@
   "sector": "Financial Services",
   "industry": "Private Sector Bank",
   "broad_sector": "Financial Services",
-  "market_cap": 1538632.0,
-  "current_price": 1000.0,
+  "market_cap": 1547942.0,
+  "current_price": 1006.0,
   "week_52_high": 1020.0,
   "week_52_low": 812.0,
-  "pe_ratio": 21.6,
+  "pe_ratio": 21.7,
   "book_value": 337.0,
-  "dividend_yield": 1.1,
+  "dividend_yield": 1.11,
   "roce_pct": 7.35,
   "roe_pct": 14.3,
   "face_value": 1.0,
@@ -21,7 +21,7 @@
     "Company's median sales growth is 16.0% of last 10 years"
   ],
   "cons": [
-    "Stock is trading at 2.97 times its book value",
+    "Stock is trading at 2.96 times its book value",
     "Company has low interest coverage ratio.",
     "Contingent liabilities of Rs.27,18,097 Cr.",
     "Company might be capitalizing the interest cost"
@@ -659,8 +659,8 @@
     "profit_cagr_ttm": 8.0,
     "price_cagr_10y": 14.0,
     "price_cagr_5y": 8.0,
-    "price_cagr_3y": 8.0,
-    "price_cagr_1y": 10.0,
+    "price_cagr_3y": 7.0,
+    "price_cagr_1y": 7.0,
     "roe_10y": 16.0,
     "roe_5y": 16.0,
     "roe_3y": 16.0,
@@ -765,8 +765,8 @@
   "profit_cagr_ttm": 8.0,
   "price_cagr_10y": 14.0,
   "price_cagr_5y": 8.0,
-  "price_cagr_3y": 8.0,
-  "price_cagr_1y": 10.0,
+  "price_cagr_3y": 7.0,
+  "price_cagr_1y": 7.0,
   "roe_10y": 16.0,
   "roe_5y": 16.0,
   "roe_3y": 16.0,
@@ -775,5 +775,5 @@
   "q_net_profit_latest": 18641.0,
   "q_eps_latest": 12.13,
   "pl_net_profit_ttm": 71148.0,
-  "_extracted_at": "2025-12-03T17:08:50.256796"
+  "_extracted_at": "2025-12-05T12:52:23.075191"
 }

@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queen Cockpit</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=SF+Pro+Text:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Apple-inspired color palette */
+            --bg-primary: #000000;
+            --bg-secondary: #1c1c1e;
+            --bg-tertiary: #2c2c2e;
+            --bg-card: #1c1c1e;
+            --bg-elevated: rgba(44, 44, 46, 0.8);
+            
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --text-tertiary: rgba(255, 255, 255, 0.4);
+            
+            --accent-green: #30d158;
+            --accent-red: #ff453a;
+            --accent-blue: #0a84ff;
+            --accent-orange: #ff9f0a;
+            --accent-purple: #bf5af2;
+            --accent-cyan: #64d2ff;
+            --accent-yellow: #ffd60a;
+            
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-medium: rgba(255, 255, 255, 0.12);
+            
+            --shadow-card: 0 2px 20px rgba(0, 0, 0, 0.4);
+            --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            
+            --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            --font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-text);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 0 24px;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        .time-display {
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+        }
+
+        /* Custom Select */
+        .custom-select {
+            position: relative;
+        }
+
+        .custom-select select {
+            appearance: none;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 8px 32px 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .custom-select select:hover {
+            border-color: var(--border-medium);
+            background: var(--bg-elevated);
+        }
+
+        .custom-select select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2);
+        }
+
+        .custom-select::after {
+            content: '';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid var(--text-secondary);
+            pointer-events: none;
+        }
+
+        /* Tabs */
+        .tabs-container {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .tabs-wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-tab.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .tab-count {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .nav-tab.active .tab-count {
+            background: rgba(10, 132, 255, 0.2);
+            color: var(--accent-blue);
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Sub filters */
+        .sub-filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-chip:hover {
+            background: var(--bg-elevated);
+            border-color: var(--border-medium);
+            color: var(--text-primary);
+        }
+
+        .filter-chip.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+
+        .filter-chip .count {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        /* Signal Cards Grid */
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+        }
+
+        /* Signal Card - Apple Style */
+        .signal-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .signal-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-elevated);
+            border-color: var(--border-medium);
+        }
+
+        /* Card Header - Minimal Action Bar */
+        .card-action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .action-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .action-badge.buy {
+            background: rgba(48, 209, 88, 0.15);
+            color: var(--accent-green);
+        }
+
+        .action-badge.sell {
+            background: rgba(255, 69, 58, 0.15);
+            color: var(--accent-red);
+        }
+
+        .action-badge.hold {
+            background: rgba(255, 214, 10, 0.15);
+            color: var(--accent-yellow);
+        }
+
+        .action-badge.watch {
+            background: rgba(255, 159, 10, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .action-badge.breakout {
+            background: rgba(100, 210, 255, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .timeframe-badge {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Card Body */
+        .card-body {
+            padding: 16px;
+        }
+
+        /* Symbol Row */
+        .symbol-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .symbol-info {
+            flex: 1;
+        }
+
+        .symbol-name {
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 2px;
+        }
+
+        .company-name {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .price-info {
+            text-align: right;
+        }
+
+        .current-price {
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .price-change {
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+
+        .price-change.up { color: var(--accent-green); }
+        .price-change.down { color: var(--accent-red); }
+
+        /* Signal Score - Prominent */
+        .signal-score {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .score-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .score-bar-container {
+            width: 120px;
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .score-bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .score-bar.high { background: var(--accent-green); }
+        .score-bar.medium { background: var(--accent-orange); }
+        .score-bar.low { background: var(--accent-red); }
+
+        .score-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .score-value.high { color: var(--accent-green); }
+        .score-value.medium { color: var(--accent-orange); }
+        .score-value.low { color: var(--accent-red); }
+
+        /* Signal Tags - Minimal */
+        .signal-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .signal-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .signal-tag.bullish {
+            background: rgba(48, 209, 88, 0.1);
+            color: var(--accent-green);
+            border-color: rgba(48, 209, 88, 0.2);
+        }
+
+        .signal-tag.bearish {
+            background: rgba(255, 69, 58, 0.1);
+            color: var(--accent-red);
+            border-color: rgba(255, 69, 58, 0.2);
+        }
+
+        .signal-tag.neutral {
+            background: rgba(255, 214, 10, 0.1);
+            color: var(--accent-yellow);
+            border-color: rgba(255, 214, 10, 0.2);
+        }
+
+        .signal-tag.special {
+            background: rgba(191, 90, 242, 0.1);
+            color: var(--accent-purple);
+            border-color: rgba(191, 90, 242, 0.2);
+        }
+
+        /* Wyckoff Phase Indicator */
+        .phase-indicator {
+            margin-bottom: 16px;
+        }
+
+        .phase-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .phase-title {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .phase-name {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .phase-name.accumulation { color: var(--accent-green); }
+        .phase-name.markup { color: var(--accent-cyan); }
+        .phase-name.distribution { color: var(--accent-orange); }
+        .phase-name.markdown { color: var(--accent-red); }
+
+        .phase-bar {
+            display: flex;
+            height: 3px;
+            border-radius: 2px;
+            overflow: hidden;
+            background: var(--bg-tertiary);
+        }
+
+        .phase-segment {
+            transition: all 0.3s ease;
+        }
+
+        .phase-segment.acc { background: var(--accent-green); }
+        .phase-segment.mkp { background: var(--accent-cyan); }
+        .phase-segment.dst { background: var(--accent-orange); }
+        .phase-segment.mkd { background: var(--accent-red); }
+
+        .phase-segment.inactive {
+            opacity: 0.2;
+        }
+
+        /* Trade Levels - Compact */
+        .trade-levels {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .level-box {
+            padding: 10px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        .level-label {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }
+
+        .level-value {
+            font-size: 14px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .level-value.entry { color: var(--accent-blue); }
+        .level-value.target { color: var(--accent-green); }
+        .level-value.stop { color: var(--accent-red); }
+
+        /* Key Indicators Row */
+        .indicators-row {
+            display: flex;
+            gap: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .indicator-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .indicator-label {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+        }
+
+        .indicator-value {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .indicator-value.positive { color: var(--accent-green); }
+        .indicator-value.negative { color: var(--accent-red); }
+        .indicator-value.neutral { color: var(--text-secondary); }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-tertiary);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        /* Portfolio Holdings Section */
+        .portfolio-section {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .portfolio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .portfolio-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .portfolio-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .portfolio-change {
+            font-size: 13px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .signals-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-controls {
+                gap: 8px;
+            }
+
+            .trade-levels {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-crown"></i>
+                </div>
+                <span>Queen</span>
+            </div>
+
+            <div class="header-controls">
+                <!-- Portfolio Dropdown -->
+                <div class="control-group">
+                    <div class="custom-select">
+                        <select id="portfolioSelect">
+                            <option value="all">All Stocks</option>
+                            <option value="holdings">My Holdings</option>
+                            <option value="watchlist">Watchlist</option>
+                            <option value="nifty50">Nifty 50</option>
+                            <option value="banknifty">Bank Nifty</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Timeframe -->
+                <div class="control-group">
+                    <div class="custom-select">
+                        <select id="timeframeSelect">
+                            <option value="5m">5 min</option>
+                            <option value="15m" selected>15 min</option>
+                            <option value="1h">1 hour</option>
+                            <option value="4h">4 hour</option>
+                            <option value="1d">Daily</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Live</span>
+                    <span class="time-display" id="currentTime">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="tabs-container">
+        <div class="tabs-wrapper">
+            <div class="nav-tabs">
+                <a class="nav-tab active" data-tab="scalp">
+                    <i class="fas fa-bolt"></i>
+                    Scalp
+                    <span class="tab-count">3</span>
+                </a>
+                <a class="nav-tab" data-tab="intraday">
+                    <i class="fas fa-sun"></i>
+                    Intraday
+                    <span class="tab-count">5</span>
+                </a>
+                <a class="nav-tab" data-tab="btst">
+                    <i class="fas fa-moon"></i>
+                    BTST
+                    <span class="tab-count">2</span>
+                </a>
+                <a class="nav-tab" data-tab="swing">
+                    <i class="fas fa-wave-square"></i>
+                    Swing
+                    <span class="tab-count">4</span>
+                </a>
+                <a class="nav-tab" data-tab="positional">
+                    <i class="fas fa-chart-line"></i>
+                    Positional
+                    <span class="tab-count">2</span>
+                </a>
+                <a class="nav-tab" data-tab="investment">
+                    <i class="fas fa-landmark"></i>
+                    Investment
+                    <span class="tab-count">3</span>
+                </a>
+                <a class="nav-tab" data-tab="portfolio">
+                    <i class="fas fa-wallet"></i>
+                    Portfolio
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Scalp Tab -->
+        <div class="tab-content active" id="scalp">
+            <div class="sub-filters">
+                <button class="filter-chip active" data-filter="all">All <span class="count">3</span></button>
+                <button class="filter-chip" data-filter="long">Long <span class="count">2</span></button>
+                <button class="filter-chip" data-filter="short">Short <span class="count">1</span></button>
+            </div>
+
+            <div class="signals-grid">
+                <!-- Signal Card 1 - Long -->
+                <div class="signal-card" data-category="long">
+                    <div class="card-action-bar">
+                        <span class="action-badge buy">
+                            <i class="fas fa-arrow-trend-up"></i>
+                            SCALP LONG
+                        </span>
+                        <span class="timeframe-badge">5M</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="symbol-section">
+                            <div class="symbol-info">
+                                <div class="symbol-name">RELIANCE</div>
+                                <div class="company-name">Reliance Industries Ltd</div>
+                            </div>
+                            <div class="price-info">
+                                <div class="current-price">₹2,847.50</div>
+                                <div class="price-change up">
+                                    <i class="fas fa-caret-up"></i>
+                                    +1.25%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="signal-score">
+                            <span class="score-label">Signal Strength</span>
+                            <div class="score-display">
+                                <div class="score-bar-container">
+                                    <div class="score-bar high" style="width: 85%"></div>
+                                </div>
+                                <span class="score-value high">8.5</span>
+                            </div>
+                        </div>
+
+                        <div class="signal-tags">
+                            <span class="signal-tag bullish">
+                                <i class="fas fa-check-circle"></i>
+                                FVG Support
+                            </span>
+                            <span class="signal-tag bullish">RVOL 2.3x</span>
+                            <span class="signal-tag special">Spring</span>
+                        </div>
+
+                        <div class="phase-indicator">
+                            <div class="phase-label">
+                                <span class="phase-title">Wyckoff Phase</span>
+                                <span class="phase-name accumulation">Accumulation</span>
+                            </div>
+                            <div class="phase-bar">
+                                <div class="phase-segment acc" style="width: 25%"></div>
+                                <div class="phase-segment mkp inactive" style="width: 25%"></div>
+                                <div class="phase-segment dst inactive" style="width: 25%"></div>
+                                <div class="phase-segment mkd inactive" style="width: 25%"></div>
+                            </div>
+                        </div>
+
+                        <div class="trade-levels">
+                            <div class="level-box">
+                                <div class="level-label">Entry</div>
+                                <div class="level-value entry">₹2,845</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Target</div>
+                                <div class="level-value target">₹2,875</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Stop</div>
+                                <div class="level-value stop">₹2,830</div>
+                            </div>
+                        </div>
+
+                        <div class="indicators-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">VWAP</span>
+                                <span class="indicator-value positive">+0.8σ</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">Delta</span>
+                                <span class="indicator-value positive">Bullish</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">R:R</span>
+                                <span class="indicator-value neutral">1:2</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Card 2 - Long -->
+                <div class="signal-card" data-category="long">
+                    <div class="card-action-bar">
+                        <span class="action-badge breakout">
+                            <i class="fas fa-arrow-up-right-from-square"></i>
+                            BREAKOUT
+                        </span>
+                        <span class="timeframe-badge">5M</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="symbol-section">
+                            <div class="symbol-info">
+                                <div class="symbol-name">HDFCBANK</div>
+                                <div class="company-name">HDFC Bank Ltd</div>
+                            </div>
+                            <div class="price-info">
+                                <div class="current-price">₹1,678.90</div>
+                                <div class="price-change up">
+                                    <i class="fas fa-caret-up"></i>
+                                    +0.85%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="signal-score">
+                            <span class="score-label">Signal Strength</span>
+                            <div class="score-display">
+                                <div class="score-bar-container">
+                                    <div class="score-bar high" style="width: 90%"></div>
+                                </div>
+                                <span class="score-value high">9.0</span>
+                            </div>
+                        </div>
+
+                        <div class="signal-tags">
+                            <span class="signal-tag bullish">Order Block</span>
+                            <span class="signal-tag bullish">BOS Confirmed</span>
+                            <span class="signal-tag neutral">Discount Zone</span>
+                        </div>
+
+                        <div class="phase-indicator">
+                            <div class="phase-label">
+                                <span class="phase-title">Wyckoff Phase</span>
+                                <span class="phase-name markup">Markup</span>
+                            </div>
+                            <div class="phase-bar">
+                                <div class="phase-segment acc inactive" style="width: 25%"></div>
+                                <div class="phase-segment mkp" style="width: 25%"></div>
+                                <div class="phase-segment dst inactive" style="width: 25%"></div>
+                                <div class="phase-segment mkd inactive" style="width: 25%"></div>
+                            </div>
+                        </div>
+
+                        <div class="trade-levels">
+                            <div class="level-box">
+                                <div class="level-label">Entry</div>
+                                <div class="level-value entry">₹1,675</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Target</div>
+                                <div class="level-value target">₹1,720</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Stop</div>
+                                <div class="level-value stop">₹1,658</div>
+                            </div>
+                        </div>
+
+                        <div class="indicators-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">VWAP</span>
+                                <span class="indicator-value positive">+1.2σ</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">Delta</span>
+                                <span class="indicator-value positive">Strong</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">R:R</span>
+                                <span class="indicator-value neutral">1:2.6</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Card 3 - Short -->
+                <div class="signal-card" data-category="short">
+                    <div class="card-action-bar">
+                        <span class="action-badge sell">
+                            <i class="fas fa-arrow-trend-down"></i>
+                            SCALP SHORT
+                        </span>
+                        <span class="timeframe-badge">5M</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="symbol-section">
+                            <div class="symbol-info">
+                                <div class="symbol-name">INFY</div>
+                                <div class="company-name">Infosys Ltd</div>
+                            </div>
+                            <div class="price-info">
+                                <div class="current-price">₹1,892.40</div>
+                                <div class="price-change down">
+                                    <i class="fas fa-caret-down"></i>
+                                    -0.65%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="signal-score">
+                            <span class="score-label">Signal Strength</span>
+                            <div class="score-display">
+                                <div class="score-bar-container">
+                                    <div class="score-bar medium" style="width: 72%"></div>
+                                </div>
+                                <span class="score-value medium">7.2</span>
+                            </div>
+                        </div>
+
+                        <div class="signal-tags">
+                            <span class="signal-tag bearish">Upthrust</span>
+                            <span class="signal-tag bearish">Premium Zone</span>
+                            <span class="signal-tag neutral">CHoCH</span>
+                        </div>
+
+                        <div class="phase-indicator">
+                            <div class="phase-label">
+                                <span class="phase-title">Wyckoff Phase</span>
+                                <span class="phase-name distribution">Distribution</span>
+                            </div>
+                            <div class="phase-bar">
+                                <div class="phase-segment acc inactive" style="width: 25%"></div>
+                                <div class="phase-segment mkp inactive" style="width: 25%"></div>
+                                <div class="phase-segment dst" style="width: 25%"></div>
+                                <div class="phase-segment mkd inactive" style="width: 25%"></div>
+                            </div>
+                        </div>
+
+                        <div class="trade-levels">
+                            <div class="level-box">
+                                <div class="level-label">Entry</div>
+                                <div class="level-value entry">₹1,895</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Target</div>
+                                <div class="level-value target">₹1,865</div>
+                            </div>
+                            <div class="level-box">
+                                <div class="level-label">Stop</div>
+                                <div class="level-value stop">₹1,908</div>
+                            </div>
+                        </div>
+
+                        <div class="indicators-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">VWAP</span>
+                                <span class="indicator-value negative">+2.1σ</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">Delta</span>
+                                <span class="indicator-value negative">Bearish</span>
+                            </div>
+                            <div class="indicator-item">
+                                <span class="indicator-label">R:R</span>
+                                <span class="indicator-value neutral">1:2.3</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other Tabs (Placeholder) -->
+        <div class="tab-content" id="intraday">
+            <div class="sub-filters">
+                <button class="filter-chip active" data-filter="all">All <span class="count">5</span></button>
+                <button class="filter-chip" data-filter="long">Long</button>
+                <button class="filter-chip" data-filter="short">Short</button>
+            </div>
+            <div class="signals-grid">
+                <!-- Intraday signals here -->
+            </div>
+        </div>
+
+        <div class="tab-content" id="btst">
+            <div class="empty-state">
+                <i class="fas fa-moon"></i>
+                <h3>No BTST Signals</h3>
+                <p>Check back after market hours for overnight opportunities</p>
+            </div>
+        </div>
+
+        <div class="tab-content" id="swing">
+            <div class="sub-filters">
+                <button class="filter-chip active" data-filter="all">All</button>
+                <button class="filter-chip" data-filter="fresh">Fresh</button>
+                <button class="filter-chip" data-filter="active">Active</button>
+            </div>
+            <div class="signals-grid">
+                <!-- Swing signals here -->
+            </div>
+        </div>
+
+        <div class="tab-content" id="positional">
+            <div class="signals-grid">
+                <!-- Positional signals here -->
+            </div>
+        </div>
+
+        <div class="tab-content" id="investment">
+            <div class="signals-grid">
+                <!-- Investment signals here -->
+            </div>
+        </div>
+
+        <div class="tab-content" id="portfolio">
+            <div class="portfolio-section">
+                <div class="portfolio-header">
+                    <span class="portfolio-title">Portfolio Value</span>
+                    <div>
+                        <div class="portfolio-value">₹12,45,890</div>
+                        <div class="portfolio-change" style="color: var(--accent-green);">+₹24,500 (+2.01%)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="signals-grid">
+                <!-- Holdings here -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // Tab switching
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Remove active from all tabs
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Hide all tab contents
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Show selected tab content
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Sub-filter clicking
+        document.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                const parent = this.closest('.tab-content');
+                
+                // Remove active from siblings
+                parent.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Filter cards
+                const filter = this.getAttribute('data-filter');
+                const cards = parent.querySelectorAll('.signal-card');
+                
+                cards.forEach(card => {
+                    if (filter === 'all' || card.getAttribute('data-category') === filter) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

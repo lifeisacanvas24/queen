@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================
-# queen/cli/scan_signals.py — v1.6
+# queen/cli/scan_signals.py — v1.8
 # ------------------------------------------------------------
 # Bulk signal scanner + Parquet inspector (with filters)
 #
@@ -17,6 +17,14 @@
 #   • Inspect-mode "replay toys":
 #       - --phase-filter (time_bucket filter, e.g. LATE_SESSION)
 #       - --min-score (score >= threshold)
+# v1.7:
+#   • Simulator supports explicit short vocabulary:
+#       - SELL / ADD_SHORT / EXIT_SHORT
+#     via auto_side="both" in ReplayConfig.
+# v1.8:
+#   • CLI exposes simulator controls:
+#       - --pos-mode  (flat | live | auto)
+#       - --auto-side (long | short | both)
 # ============================================================
 from __future__ import annotations
 
@@ -31,6 +39,7 @@ from queen.cli.replay_actionable import ReplayConfig, replay_actionable
 from queen.helpers.logger import log
 
 # ----------------- helpers -----------------
+
 
 def _drop_empty_struct_columns(df: pl.DataFrame) -> pl.DataFrame:
     """Remove columns whose dtype is a Struct with *no child fields*.
@@ -53,6 +62,7 @@ def _drop_empty_struct_columns(df: pl.DataFrame) -> pl.DataFrame:
             f"[ScanSignals] Dropped empty struct columns before Parquet write → {drop_cols}"
         )
     return df
+
 
 def _default_out_path(
     date_from: Optional[str],
@@ -90,25 +100,31 @@ def _build_rows(
     for r in rows_raw:
         row = dict(r)
 
+        # Ensure symbol
         row.setdefault("symbol", symbol.upper())
 
+        # Normalize timestamp to string for Parquet
         ts = row.get("timestamp")
         if ts is not None and not isinstance(ts, str):
             row["timestamp"] = str(ts)
 
+        # Ensure decision / bias keys exist
         row.setdefault("decision", None)
         row.setdefault("bias", None)
 
+        # Attach human interval label
         if interval_label is not None:
             row.setdefault("interval", interval_label)
 
         # ❗ CLEAN FIX: remove ONLY empty dicts — no hacks, no logic changes
-        row = {k: v for k, v in row.items()
-               if not (isinstance(v, dict) and not v)}
+        row = {
+            k: v for k, v in row.items() if not (isinstance(v, dict) and not v)
+        }
 
         out.append(row)
 
     return out
+
 
 def _print_decision_summary(df: pl.DataFrame) -> None:
     if df.is_empty():
@@ -120,11 +136,7 @@ def _print_decision_summary(df: pl.DataFrame) -> None:
     if "symbol" in df.columns:
         df = df.with_columns(pl.col("symbol").cast(pl.Utf8, strict=False))
 
-    summary = (
-        df.group_by("symbol", "decision")
-        .len()
-        .sort(["symbol", "decision"])
-    )
+    summary = df.group_by("symbol", "decision").len().sort(["symbol", "decision"])
 
     print("\n=== Signal Summary (symbol × decision × len) ===")
     print(summary)
@@ -148,11 +160,7 @@ def _print_playbook_summary(df: pl.DataFrame) -> None:
         f = f.with_columns(pl.col("action_tag").cast(pl.Utf8, strict=False))
 
     group_keys = ["symbol", "playbook"] + (["action_tag"] if has_action_tag else [])
-    summary = (
-        f.group_by(group_keys)
-        .len()
-        .sort(group_keys)
-    )
+    summary = f.group_by(group_keys).len().sort(group_keys)
 
     title_suffix = " × action_tag" if has_action_tag else ""
     print(f"\n=== Playbook Summary (symbol × playbook{title_suffix} × len) ===")
@@ -168,7 +176,10 @@ async def _scan_symbols(
     interval_min: int,
     book: str,
     warmup: int,
+    pos_mode: str,
+    auto_side: str,
 ) -> pl.DataFrame:
+    """Run replay_actionable over all symbols and flatten to a Polars DF."""
     all_rows: List[Dict[str, Any]] = []
     interval_label = f"{interval_min}m"
 
@@ -181,13 +192,14 @@ async def _scan_symbols(
             book=book,
             warmup=warmup,
             final_only=False,
-            pos_mode="auto",      # 🔥 enable synthetic long-only sim
-            auto_side="long",     # (future-proof; v1 uses long-only)
+            pos_mode=pos_mode,
+            auto_side=auto_side,
         )
 
         log.info(
             f"[ScanSignals] Scanning {sym} {date_from}→{date_to} "
-            f"@ {interval_min}m (book={book}, warmup={warmup})"
+            f"@ {interval_min}m (book={book}, warmup={warmup}, "
+            f"pos_mode={pos_mode}, auto_side={auto_side})"
         )
 
         try:
@@ -211,6 +223,8 @@ async def _scan_symbols(
 
 
 # ----------------- CLI -----------------
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scan signals over a date range and/or inspect a scan parquet."
@@ -306,6 +320,34 @@ def main() -> None:
         help="Optional explicit parquet output path for scan mode.",
     )
 
+    # 🔥 Simulator controls
+    parser.add_argument(
+        "--pos-mode",
+        type=str,
+        choices=["flat", "live", "auto"],
+        default="auto",
+        help=(
+            "Simulator position mode for replay_actionable: "
+            "'flat' (no internal sim), "
+            "'live' (future: hydrate from positions_map), "
+            "'auto' (synthetic sim using decisions). "
+            "Default: auto."
+        ),
+    )
+    parser.add_argument(
+        "--auto-side",
+        type=str,
+        choices=["long", "short", "both"],
+        default="both",
+        help=(
+            "Which side the simulator is allowed to use in auto mode: "
+            "'long' (ignore short vocab), "
+            "'short' (ignore long vocab), "
+            "'both' (allow BUY/SELL/ADD/ADD_SHORT/EXIT/EXIT_SHORT). "
+            "Default: both."
+        ),
+    )
+
     args = parser.parse_args()
 
     # 1) Inspect mode
@@ -356,37 +398,36 @@ def main() -> None:
                 f = f.sort(["symbol"])
 
             wanted = [
-                    "timestamp",
-                    "symbol",
-                    "interval",
-                    "time_bucket",
-                    "decision",
-                    "bias",
-                    "trade_status",
-                    "score",
-                    "cmp",
-                    "trend_bias",
-                    "trend_score",
-                    "vwap_zone",
-                    "cpr_ctx",
-                    "tv_override",
-                    "tv_reason",
-                    "playbook",
-                    "action_tag",
-                    "action_reason",
-                    "risk_mode",
-                    "notes",
-                    "drivers",
-
-                    # 🔥 Auto-position v1 (synthetic long-only sim)
-                    "sim_side",
-                    "sim_qty",
-                    "sim_avg",
-                    "sim_pnl",
-                    "sim_pnl_pct",
-                    "sim_realized_pnl",
-                    "sim_total_pnl",
-                ]
+                "timestamp",
+                "symbol",
+                "interval",
+                "time_bucket",
+                "decision",
+                "bias",
+                "trade_status",
+                "score",
+                "cmp",
+                "trend_bias",
+                "trend_score",
+                "vwap_zone",
+                "cpr_ctx",
+                "tv_override",
+                "tv_reason",
+                "playbook",
+                "action_tag",
+                "action_reason",
+                "risk_mode",
+                "notes",
+                "drivers",
+                # 🔥 Auto-position v1 (synthetic long+short sim)
+                "sim_side",
+                "sim_qty",
+                "sim_avg",
+                "sim_pnl",
+                "sim_pnl_pct",
+                "sim_realized_pnl",
+                "sim_total_pnl",
+            ]
             cols = [c for c in wanted if c in f.columns]
             f = f.select(cols).head(args.max_rows)
 
@@ -408,6 +449,8 @@ def main() -> None:
     interval_min: int = int(args.interval)
     book: str = args.book
     warmup: int = int(args.warmup)
+    pos_mode: str = args.pos_mode
+    auto_side: str = args.auto_side
 
     async def _run():
         df = await _scan_symbols(
@@ -417,6 +460,8 @@ def main() -> None:
             interval_min=interval_min,
             book=book,
             warmup=warmup,
+            pos_mode=pos_mode,
+            auto_side=auto_side,
         )
 
         if df.is_empty():

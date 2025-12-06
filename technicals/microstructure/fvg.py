@@ -1,158 +1,103 @@
-"""Fair Value Gap (FVG) Detection Module
+# queen/technicals/microstructure/fvg.py
+"""
+Fair Value Gap (FVG) Detection Module
 =====================================
+Identifies institutional imbalances where price moved too fast,
+leaving gaps that often act as magnets for future price action.
 
-Smart Money Concepts - Identifies institutional imbalances in price action.
-
-A Fair Value Gap occurs when price moves so aggressively that it leaves
-a gap between candle wicks, indicating institutional order flow.
-
-Types:
-- Bullish FVG: Gap up (current low > previous-previous high)
-- Bearish FVG: Gap down (current high < previous-previous low)
+FVG Types:
+- Bullish FVG: Gap between candle[i-2].high and candle[i].low (price moved up fast)
+- Bearish FVG: Gap between candle[i-2].low and candle[i].high (price moved down fast)
 
 Usage:
-    from queen.technicals.microstructure.fvg import detect_fvg, find_fvg_zones
+    from queen.technicals.microstructure.fvg import detect_fvg, summarize_fvg
 
-    # Get all FVG zones
     result = detect_fvg(df, lookback=50)
+    summary = summarize_fvg(df, current_price=2850.0)
 
-    # Get nearest FVG zones for trading
-    zones = find_fvg_zones(df, current_price=1850.0)
+Settings Integration:
+    All thresholds configurable via settings/breakout_settings.py
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Literal, Optional
-
+from typing import Optional, List, Literal
 import polars as pl
 
-# Import settings if available, otherwise use defaults
+# ---------------------------------------------------------------------------
+# Try to use existing helpers, fallback to local implementation
+# ---------------------------------------------------------------------------
 try:
-    from queen.settings import fvg as FVG_SETTINGS
+    from queen.helpers.ta_math import atr_wilder
+    _USE_EXISTING_ATR = True
 except ImportError:
-    FVG_SETTINGS = None
+    _USE_EXISTING_ATR = False
+
+# ---------------------------------------------------------------------------
+# Settings (import from settings when available, fallback to defaults)
+# ---------------------------------------------------------------------------
+try:
+    from queen.settings.breakout_settings import FVG_SETTINGS
+except ImportError:
+    # Fallback defaults - move to settings/breakout_settings.py
+    FVG_SETTINGS = {
+        "min_gap_atr_ratio": 0.3,      # Minimum gap size as % of ATR
+        "max_age_bars": 50,             # How far back to look for unfilled FVGs
+        "fill_tolerance_pct": 0.1,      # Gap considered filled if 90% filled
+        "significance_atr_ratio": 0.5,  # Large FVG threshold
+        "lookback_default": 50,         # Default lookback period
+    }
 
 
-# =============================================================================
-# Configuration (centralized in settings/fvg.py)
-# =============================================================================
-
-def _get_config(key: str, default):
-    """Get config from settings or use default"""
-    if FVG_SETTINGS and hasattr(FVG_SETTINGS, key):
-        return getattr(FVG_SETTINGS, key)
-    return default
-
-
-# Default configuration
-MIN_GAP_ATR_MULT = _get_config("MIN_GAP_ATR_MULT", 0.1)  # Min gap size as ATR multiple
-MAX_AGE_BARS = _get_config("MAX_AGE_BARS", 100)  # Max bars to look back
-FILL_THRESHOLD_PCT = _get_config("FILL_THRESHOLD_PCT", 0.5)  # 50% fill = partially filled
-MITIGATION_THRESHOLD_PCT = _get_config("MITIGATION_THRESHOLD_PCT", 1.0)  # 100% = fully mitigated
-
-
-# =============================================================================
+# ---------------------------------------------------------------------------
 # Data Classes
-# =============================================================================
-
+# ---------------------------------------------------------------------------
 @dataclass
 class FVGZone:
     """Represents a single Fair Value Gap zone"""
-
     type: Literal["bullish", "bearish"]
-    top: float  # Upper boundary of gap
-    bottom: float  # Lower boundary of gap
-    midpoint: float  # Center of gap
-    size: float  # Gap size in price
-    size_pct: float  # Gap size as percentage
-    bar_index: int  # When the FVG was created
-    timestamp: Optional[str]  # Timestamp of FVG creation
-    filled_pct: float  # How much of gap has been filled (0-100)
-    is_mitigated: bool  # Fully filled/invalidated
-    strength: Literal["strong", "moderate", "weak"]  # Based on gap size
-
-    @property
-    def is_valid(self) -> bool:
-        """FVG is valid if not fully mitigated"""
-        return not self.is_mitigated
+    top: float                          # Upper boundary of gap
+    bottom: float                       # Lower boundary of gap
+    midpoint: float                     # Middle of gap (often tested)
+    size: float                         # Gap size in price
+    size_atr_ratio: float              # Gap size relative to ATR
+    bar_index: int                      # When the FVG was created
+    timestamp: Optional[str] = None     # Timestamp of creation
+    filled: bool = False                # Has price filled this gap?
+    fill_percentage: float = 0.0        # How much of gap was filled (0-100)
 
     def contains_price(self, price: float) -> bool:
-        """Check if price is within the FVG zone"""
+        """Check if a price is within this FVG zone"""
         return self.bottom <= price <= self.top
 
     def distance_from(self, price: float) -> float:
-        """Calculate distance from price to nearest edge of FVG"""
+        """Distance from price to nearest edge of zone"""
         if price < self.bottom:
             return self.bottom - price
-        if price > self.top:
+        elif price > self.top:
             return price - self.top
-        return 0.0  # Price is inside FVG
+        return 0.0  # Price is inside zone
 
 
 @dataclass
 class FVGResult:
-    """Result of FVG detection"""
-
-    bullish_fvgs: List[FVGZone]
-    bearish_fvgs: List[FVGZone]
-    nearest_bullish: Optional[FVGZone]  # Nearest unfilled bullish FVG below price
-    nearest_bearish: Optional[FVGZone]  # Nearest unfilled bearish FVG above price
-    total_bullish_zones: int
-    total_bearish_zones: int
-    fvg_bias: Literal["bullish", "bearish", "neutral"]  # Overall FVG bias
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "bullish_fvgs": [
-                {
-                    "top": z.top,
-                    "bottom": z.bottom,
-                    "midpoint": z.midpoint,
-                    "size": z.size,
-                    "size_pct": z.size_pct,
-                    "filled_pct": z.filled_pct,
-                    "strength": z.strength,
-                    "is_valid": z.is_valid,
-                }
-                for z in self.bullish_fvgs if z.is_valid
-            ],
-            "bearish_fvgs": [
-                {
-                    "top": z.top,
-                    "bottom": z.bottom,
-                    "midpoint": z.midpoint,
-                    "size": z.size,
-                    "size_pct": z.size_pct,
-                    "filled_pct": z.filled_pct,
-                    "strength": z.strength,
-                    "is_valid": z.is_valid,
-                }
-                for z in self.bearish_fvgs if z.is_valid
-            ],
-            "nearest_support": {
-                "top": self.nearest_bullish.top,
-                "bottom": self.nearest_bullish.bottom,
-                "strength": self.nearest_bullish.strength,
-            } if self.nearest_bullish else None,
-            "nearest_resistance": {
-                "top": self.nearest_bearish.top,
-                "bottom": self.nearest_bearish.bottom,
-                "strength": self.nearest_bearish.strength,
-            } if self.nearest_bearish else None,
-            "fvg_bias": self.fvg_bias,
-            "total_bullish": self.total_bullish_zones,
-            "total_bearish": self.total_bearish_zones,
-        }
+    """Complete FVG analysis result"""
+    bullish_zones: List[FVGZone]        # Unfilled bullish FVGs (support)
+    bearish_zones: List[FVGZone]        # Unfilled bearish FVGs (resistance)
+    nearest_above: Optional[FVGZone]    # Nearest FVG above current price
+    nearest_below: Optional[FVGZone]    # Nearest FVG below current price
+    in_fvg: bool                        # Is current price inside an FVG?
+    current_fvg: Optional[FVGZone]      # The FVG price is currently in
+    total_unfilled: int                 # Total unfilled FVG count
+    bias: Literal["bullish", "bearish", "neutral"]  # Overall FVG bias
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
+# ---------------------------------------------------------------------------
+# Core Detection Functions
+# ---------------------------------------------------------------------------
 def _ensure_sorted(df: pl.DataFrame, ts_col: str = "timestamp") -> pl.DataFrame:
-    """Ensure DataFrame is sorted by timestamp"""
+    """Ensure DataFrame is sorted by timestamp ascending"""
     if ts_col in df.columns:
         return df.sort(ts_col)
     return df
@@ -160,399 +105,409 @@ def _ensure_sorted(df: pl.DataFrame, ts_col: str = "timestamp") -> pl.DataFrame:
 
 def _calculate_atr(df: pl.DataFrame, period: int = 14) -> pl.Series:
     """Calculate ATR for gap size normalization"""
-    high = df["high"]
-    low = df["low"]
-    close = df["close"]
+    # Try to use existing helper
+    if _USE_EXISTING_ATR:
+        try:
+            high = df["high"].to_numpy()
+            low = df["low"].to_numpy()
+            close = df["close"].to_numpy()
+            atr_arr = atr_wilder(high, low, close, period)
+            return pl.Series("atr", atr_arr)
+        except Exception:
+            pass  # Fall through to local implementation
 
-    # True Range calculation
-    prev_close = close.shift(1)
-    tr1 = high - low
-    tr2 = (high - prev_close).abs()
-    tr3 = (low - prev_close).abs()
+    # Local Polars implementation
+    df_with_atr = df.with_columns([
+        (pl.col("high") - pl.col("low")).alias("_tr1"),
+        (pl.col("high") - pl.col("close").shift(1)).abs().alias("_tr2"),
+        (pl.col("low") - pl.col("close").shift(1)).abs().alias("_tr3"),
+    ])
 
-    tr = pl.max_horizontal(tr1, tr2, tr3)
+    df_with_atr = df_with_atr.with_columns(
+        pl.max_horizontal("_tr1", "_tr2", "_tr3").alias("_tr")
+    )
 
-    # ATR as rolling mean
-    return tr.rolling_mean(window_size=period)
+    df_with_atr = df_with_atr.with_columns(
+        pl.col("_tr").rolling_mean(window_size=period).alias("_atr")
+    )
 
-
-def _classify_strength(size_pct: float, atr_mult: float) -> Literal["strong", "moderate", "weak"]:
-    """Classify FVG strength based on size"""
-    if atr_mult >= 1.5 or size_pct >= 1.0:
-        return "strong"
-    if atr_mult >= 0.75 or size_pct >= 0.5:
-        return "moderate"
-    return "weak"
+    return df_with_atr["_atr"]
 
 
-def _calculate_fill_percentage(
-    fvg_type: str,
-    fvg_top: float,
-    fvg_bottom: float,
+def _detect_single_fvg(
+    i: int,
+    high: List[float],
+    low: List[float],
+    atr_val: float,
+    timestamps: Optional[List] = None,
+    min_gap_ratio: float = 0.3,
+) -> Optional[FVGZone]:
+    """
+    Detect FVG at bar index i using 3-candle pattern:
+    - Bullish FVG: candle[i-2].high < candle[i].low (gap up)
+    - Bearish FVG: candle[i-2].low > candle[i].high (gap down)
+    """
+    if i < 2:
+        return None
+
+    if atr_val is None or atr_val <= 0:
+        return None
+
+    candle_minus_2_high = high[i - 2]
+    candle_minus_2_low = low[i - 2]
+    candle_i_high = high[i]
+    candle_i_low = low[i]
+
+    # Check for Bullish FVG (gap up)
+    if candle_i_low > candle_minus_2_high:
+        gap_size = candle_i_low - candle_minus_2_high
+        gap_ratio = gap_size / atr_val
+
+        if gap_ratio >= min_gap_ratio:
+            return FVGZone(
+                type="bullish",
+                top=candle_i_low,
+                bottom=candle_minus_2_high,
+                midpoint=(candle_i_low + candle_minus_2_high) / 2,
+                size=gap_size,
+                size_atr_ratio=gap_ratio,
+                bar_index=i,
+                timestamp=str(timestamps[i]) if timestamps else None,
+                filled=False,
+                fill_percentage=0.0,
+            )
+
+    # Check for Bearish FVG (gap down)
+    if candle_i_high < candle_minus_2_low:
+        gap_size = candle_minus_2_low - candle_i_high
+        gap_ratio = gap_size / atr_val
+
+        if gap_ratio >= min_gap_ratio:
+            return FVGZone(
+                type="bearish",
+                top=candle_minus_2_low,
+                bottom=candle_i_high,
+                midpoint=(candle_minus_2_low + candle_i_high) / 2,
+                size=gap_size,
+                size_atr_ratio=gap_ratio,
+                bar_index=i,
+                timestamp=str(timestamps[i]) if timestamps else None,
+                filled=False,
+                fill_percentage=0.0,
+            )
+
+    return None
+
+
+def _check_fvg_fill(
+    zone: FVGZone,
     subsequent_highs: List[float],
     subsequent_lows: List[float],
-) -> float:
-    """Calculate how much of an FVG has been filled by subsequent price action"""
-    fvg_size = fvg_top - fvg_bottom
-    if fvg_size <= 0:
-        return 100.0
+    fill_tolerance: float = 0.1,
+) -> FVGZone:
+    """
+    Check if an FVG has been filled by subsequent price action.
+    Updates the zone's filled status and fill_percentage.
+    """
+    if not subsequent_highs or not subsequent_lows:
+        return zone
 
-    if fvg_type == "bullish":
-        # Bullish FVG gets filled from above (price dropping into it)
-        min_low = min(subsequent_lows) if subsequent_lows else fvg_top
-        if min_low >= fvg_top:
-            return 0.0  # Not touched
-        if min_low <= fvg_bottom:
-            return 100.0  # Fully filled
-        filled = fvg_top - min_low
-        return (filled / fvg_size) * 100
-    # Bearish FVG gets filled from below (price rising into it)
-    max_high = max(subsequent_highs) if subsequent_highs else fvg_bottom
-    if max_high <= fvg_bottom:
-        return 0.0  # Not touched
-    if max_high >= fvg_top:
-        return 100.0  # Fully filled
-    filled = max_high - fvg_bottom
-    return (filled / fvg_size) * 100
+    max_high = max(subsequent_highs)
+    min_low = min(subsequent_lows)
 
+    gap_size = zone.top - zone.bottom
 
-# =============================================================================
-# Main Detection Functions
-# =============================================================================
+    if zone.type == "bullish":
+        # Bullish FVG filled when price drops into the gap
+        if min_low <= zone.top:
+            filled_amount = zone.top - max(min_low, zone.bottom)
+            fill_pct = min(100.0, (filled_amount / gap_size) * 100)
+            zone.fill_percentage = fill_pct
+            zone.filled = fill_pct >= (100.0 - fill_tolerance * 100)
+    else:
+        # Bearish FVG filled when price rises into the gap
+        if max_high >= zone.bottom:
+            filled_amount = min(max_high, zone.top) - zone.bottom
+            fill_pct = min(100.0, (filled_amount / gap_size) * 100)
+            zone.fill_percentage = fill_pct
+            zone.filled = fill_pct >= (100.0 - fill_tolerance * 100)
+
+    return zone
+
 
 def detect_fvg(
     df: pl.DataFrame,
     *,
-    lookback: int = 50,
-    min_gap_atr_mult: float = MIN_GAP_ATR_MULT,
+    lookback: int = None,
+    min_gap_atr_ratio: float = None,
+    fill_tolerance_pct: float = None,
     high_col: str = "high",
     low_col: str = "low",
     close_col: str = "close",
     timestamp_col: str = "timestamp",
 ) -> FVGResult:
-    """Detect Fair Value Gaps in OHLCV data.
+    """
+    Detect Fair Value Gaps in price data.
 
     Parameters
     ----------
     df : pl.DataFrame
-        OHLCV DataFrame with at least high, low, close columns
-    lookback : int
-        Number of bars to analyze (default 50)
-    min_gap_atr_mult : float
-        Minimum gap size as multiple of ATR (default 0.1)
+        OHLCV data with at minimum high, low, close columns
+    lookback : int, optional
+        Number of bars to look back for FVGs. Default from settings.
+    min_gap_atr_ratio : float, optional
+        Minimum gap size as ratio of ATR. Default from settings.
+    fill_tolerance_pct : float, optional
+        Tolerance for considering gap "filled". Default from settings.
 
     Returns
     -------
     FVGResult
-        Contains all detected FVGs and analysis
+        Complete analysis including all unfilled zones and nearest zones
 
     Example
     -------
-    >>> result = detect_fvg(df, lookback=100)
-    >>> print(f"Found {result.total_bullish_zones} bullish FVGs")
-    >>> if result.nearest_bullish:
-    ...     print(f"Support zone: {result.nearest_bullish.bottom}-{result.nearest_bullish.top}")
-
+    >>> result = detect_fvg(df, lookback=50)
+    >>> print(f"Found {result.total_unfilled} unfilled FVGs")
+    >>> if result.nearest_below:
+    ...     print(f"Support FVG at {result.nearest_below.bottom}-{result.nearest_below.top}")
     """
+    # Apply settings defaults
+    lookback = lookback or FVG_SETTINGS["lookback_default"]
+    min_gap_atr_ratio = min_gap_atr_ratio or FVG_SETTINGS["min_gap_atr_ratio"]
+    fill_tolerance_pct = fill_tolerance_pct or FVG_SETTINGS["fill_tolerance_pct"]
+
+    # Ensure sorted
     df = _ensure_sorted(df, timestamp_col)
 
-    # Need at least 3 bars for FVG detection
-    if len(df) < 3:
+    # Get data as lists for faster iteration
+    n = len(df)
+    if n < 3:
         return FVGResult(
-            bullish_fvgs=[],
-            bearish_fvgs=[],
-            nearest_bullish=None,
-            nearest_bearish=None,
-            total_bullish_zones=0,
-            total_bearish_zones=0,
-            fvg_bias="neutral",
+            bullish_zones=[],
+            bearish_zones=[],
+            nearest_above=None,
+            nearest_below=None,
+            in_fvg=False,
+            current_fvg=None,
+            total_unfilled=0,
+            bias="neutral",
         )
 
-    # Calculate ATR for normalization
-    atr_series = _calculate_atr(df, period=14)
+    high = df[high_col].to_list()
+    low = df[low_col].to_list()
+    close = df[close_col].to_list()
+    timestamps = df[timestamp_col].to_list() if timestamp_col in df.columns else None
 
-    # Extract arrays for faster processing
-    highs = df[high_col].to_list()
-    lows = df[low_col].to_list()
-    closes = df[close_col].to_list()
+    # Calculate ATR
+    atr_series = _calculate_atr(df)
+    atr = atr_series.to_list()
 
-    timestamps = None
-    if timestamp_col in df.columns:
-        timestamps = df[timestamp_col].to_list()
+    # Get current price
+    current_price = close[-1]
 
-    # Determine analysis range
-    start_idx = max(2, len(df) - lookback)
-    end_idx = len(df)
+    # Detect FVGs within lookback period
+    start_idx = max(2, n - lookback)
+    all_zones: List[FVGZone] = []
 
-    bullish_fvgs: List[FVGZone] = []
-    bearish_fvgs: List[FVGZone] = []
+    for i in range(start_idx, n):
+        atr_val = atr[i] if atr[i] is not None else atr[i - 1] if i > 0 else None
+        zone = _detect_single_fvg(
+            i, high, low, atr_val, timestamps, min_gap_atr_ratio
+        )
+        if zone:
+            # Check if filled by subsequent price action
+            subsequent_highs = high[i + 1:] if i + 1 < n else []
+            subsequent_lows = low[i + 1:] if i + 1 < n else []
+            zone = _check_fvg_fill(zone, subsequent_highs, subsequent_lows, fill_tolerance_pct)
+            all_zones.append(zone)
 
-    current_price = closes[-1] if closes else 0
+    # Separate unfilled zones by type
+    bullish_zones = [z for z in all_zones if z.type == "bullish" and not z.filled]
+    bearish_zones = [z for z in all_zones if z.type == "bearish" and not z.filled]
 
-    # Scan for FVGs
-    for i in range(start_idx, end_idx):
-        # Need candles at i-2, i-1, i
-        prev2_high = highs[i - 2]
-        prev2_low = lows[i - 2]
-        # prev1 is the gap candle (i-1) - we don't use it for boundaries
-        curr_high = highs[i]
-        curr_low = lows[i]
+    # Find nearest zones to current price
+    nearest_above = None
+    nearest_below = None
+    current_fvg = None
 
-        atr = atr_series[i] if i < len(atr_series) else None
-        if atr is None or atr <= 0:
-            atr = (curr_high - curr_low) * 2  # Fallback
+    for zone in bullish_zones + bearish_zones:
+        if zone.contains_price(current_price):
+            current_fvg = zone
+        elif zone.bottom > current_price:
+            if nearest_above is None or zone.bottom < nearest_above.bottom:
+                nearest_above = zone
+        elif zone.top < current_price:
+            if nearest_below is None or zone.top > nearest_below.top:
+                nearest_below = zone
 
-        # Bullish FVG: Current candle's low > 2-bars-ago candle's high
-        # This means price gapped UP leaving an unfilled zone
-        if curr_low > prev2_high:
-            gap_size = curr_low - prev2_high
-            gap_pct = (gap_size / prev2_high) * 100 if prev2_high > 0 else 0
-            atr_mult = gap_size / atr if atr > 0 else 0
+    # Determine bias based on FVG distribution
+    bullish_count = len(bullish_zones)
+    bearish_count = len(bearish_zones)
 
-            if atr_mult >= min_gap_atr_mult:
-                # Calculate how much has been filled by subsequent bars
-                subsequent_lows = lows[i + 1:] if i + 1 < len(lows) else []
-                subsequent_highs = highs[i + 1:] if i + 1 < len(highs) else []
-
-                filled_pct = _calculate_fill_percentage(
-                    "bullish", curr_low, prev2_high, subsequent_highs, subsequent_lows
-                )
-
-                fvg = FVGZone(
-                    type="bullish",
-                    top=curr_low,
-                    bottom=prev2_high,
-                    midpoint=(curr_low + prev2_high) / 2,
-                    size=gap_size,
-                    size_pct=gap_pct,
-                    bar_index=i,
-                    timestamp=str(timestamps[i]) if timestamps else None,
-                    filled_pct=filled_pct,
-                    is_mitigated=filled_pct >= MITIGATION_THRESHOLD_PCT * 100,
-                    strength=_classify_strength(gap_pct, atr_mult),
-                )
-                bullish_fvgs.append(fvg)
-
-        # Bearish FVG: Current candle's high < 2-bars-ago candle's low
-        # This means price gapped DOWN leaving an unfilled zone
-        if curr_high < prev2_low:
-            gap_size = prev2_low - curr_high
-            gap_pct = (gap_size / prev2_low) * 100 if prev2_low > 0 else 0
-            atr_mult = gap_size / atr if atr > 0 else 0
-
-            if atr_mult >= min_gap_atr_mult:
-                subsequent_lows = lows[i + 1:] if i + 1 < len(lows) else []
-                subsequent_highs = highs[i + 1:] if i + 1 < len(highs) else []
-
-                filled_pct = _calculate_fill_percentage(
-                    "bearish", prev2_low, curr_high, subsequent_highs, subsequent_lows
-                )
-
-                fvg = FVGZone(
-                    type="bearish",
-                    top=prev2_low,
-                    bottom=curr_high,
-                    midpoint=(prev2_low + curr_high) / 2,
-                    size=gap_size,
-                    size_pct=gap_pct,
-                    bar_index=i,
-                    timestamp=str(timestamps[i]) if timestamps else None,
-                    filled_pct=filled_pct,
-                    is_mitigated=filled_pct >= MITIGATION_THRESHOLD_PCT * 100,
-                    strength=_classify_strength(gap_pct, atr_mult),
-                )
-                bearish_fvgs.append(fvg)
-
-    # Find nearest valid FVGs to current price
-    valid_bullish = [f for f in bullish_fvgs if f.is_valid]
-    valid_bearish = [f for f in bearish_fvgs if f.is_valid]
-
-    # Nearest bullish FVG below current price (support)
-    bullish_below = [f for f in valid_bullish if f.top <= current_price]
-    nearest_bullish = max(bullish_below, key=lambda f: f.top) if bullish_below else None
-
-    # Nearest bearish FVG above current price (resistance)
-    bearish_above = [f for f in valid_bearish if f.bottom >= current_price]
-    nearest_bearish = min(bearish_above, key=lambda f: f.bottom) if bearish_above else None
-
-    # Determine overall FVG bias
-    bullish_count = len(valid_bullish)
-    bearish_count = len(valid_bearish)
-
-    if bullish_count > bearish_count * 1.5:
-        fvg_bias = "bullish"
-    elif bearish_count > bullish_count * 1.5:
-        fvg_bias = "bearish"
+    if bullish_count > bearish_count + 2:
+        bias = "bullish"
+    elif bearish_count > bullish_count + 2:
+        bias = "bearish"
     else:
-        fvg_bias = "neutral"
+        bias = "neutral"
 
     return FVGResult(
-        bullish_fvgs=bullish_fvgs,
-        bearish_fvgs=bearish_fvgs,
-        nearest_bullish=nearest_bullish,
-        nearest_bearish=nearest_bearish,
-        total_bullish_zones=len(valid_bullish),
-        total_bearish_zones=len(valid_bearish),
-        fvg_bias=fvg_bias,
+        bullish_zones=bullish_zones,
+        bearish_zones=bearish_zones,
+        nearest_above=nearest_above,
+        nearest_below=nearest_below,
+        in_fvg=current_fvg is not None,
+        current_fvg=current_fvg,
+        total_unfilled=len(bullish_zones) + len(bearish_zones),
+        bias=bias,
     )
 
 
-def find_fvg_zones(
+def summarize_fvg(
     df: pl.DataFrame,
-    current_price: float,
-    *,
-    lookback: int = 50,
-    max_zones: int = 3,
+    current_price: Optional[float] = None,
+    **kwargs,
 ) -> dict:
-    """Find FVG zones near current price for trading decisions.
-
-    Returns a simplified dict suitable for signal cards:
-    {
-        "fvg_above": {"start": 1850, "end": 1865, "strength": "moderate"},
-        "fvg_below": {"start": 1820, "end": 1835, "strength": "strong"},
-        "fvg_bias": "bullish"
-    }
     """
-    result = detect_fvg(df, lookback=lookback)
-
-    output = {
-        "fvg_above": None,
-        "fvg_below": None,
-        "fvg_bias": result.fvg_bias,
-        "bullish_zones": result.total_bullish_zones,
-        "bearish_zones": result.total_bearish_zones,
-    }
-
-    if result.nearest_bearish:
-        output["fvg_above"] = {
-            "start": round(result.nearest_bearish.bottom, 2),
-            "end": round(result.nearest_bearish.top, 2),
-            "strength": result.nearest_bearish.strength,
-            "filled_pct": round(result.nearest_bearish.filled_pct, 1),
-        }
-
-    if result.nearest_bullish:
-        output["fvg_below"] = {
-            "start": round(result.nearest_bullish.bottom, 2),
-            "end": round(result.nearest_bullish.top, 2),
-            "strength": result.nearest_bullish.strength,
-            "filled_pct": round(result.nearest_bullish.filled_pct, 1),
-        }
-
-    return output
-
-
-def summarize_fvg(df: pl.DataFrame, lookback: int = 50) -> dict:
-    """Generate a summary suitable for indicator display.
+    Generate a summary dict suitable for signal cards and API responses.
 
     Returns
     -------
     dict with keys:
-        - fvg_bias: "bullish" | "bearish" | "neutral"
-        - bullish_zones: int
-        - bearish_zones: int
-        - nearest_support: float | None
-        - nearest_resistance: float | None
-        - signal: "BULLISH" | "BEARISH" | "NEUTRAL"
-        - strength: 0-100
-
+        - fvg_above: dict or None (nearest resistance FVG)
+        - fvg_below: dict or None (nearest support FVG)
+        - in_fvg: bool
+        - fvg_bias: str
+        - total_unfilled: int
+        - bullish_count: int
+        - bearish_count: int
     """
-    result = detect_fvg(df, lookback=lookback)
+    result = detect_fvg(df, **kwargs)
 
-    # Calculate strength based on zone count and proximity
-    current_price = df["close"].to_list()[-1] if len(df) > 0 else 0
+    if current_price is None:
+        current_price = df["close"].to_list()[-1]
 
-    strength = 50  # Base
-    if result.total_bullish_zones > result.total_bearish_zones:
-        strength += min(25, result.total_bullish_zones * 5)
-    elif result.total_bearish_zones > result.total_bullish_zones:
-        strength -= min(25, result.total_bearish_zones * 5)
-
-    # Adjust for proximity to zones
-    if result.nearest_bullish and current_price > 0:
-        dist_pct = (current_price - result.nearest_bullish.top) / current_price * 100
-        if dist_pct < 1:  # Very close to support
-            strength += 10
-
-    if result.nearest_bearish and current_price > 0:
-        dist_pct = (result.nearest_bearish.bottom - current_price) / current_price * 100
-        if dist_pct < 1:  # Very close to resistance
-            strength -= 10
-
-    strength = max(0, min(100, strength))
-
-    signal = "NEUTRAL"
-    if result.fvg_bias == "bullish":
-        signal = "BULLISH"
-    elif result.fvg_bias == "bearish":
-        signal = "BEARISH"
+    def zone_to_dict(zone: Optional[FVGZone]) -> Optional[dict]:
+        if zone is None:
+            return None
+        return {
+            "type": zone.type,
+            "top": round(zone.top, 2),
+            "bottom": round(zone.bottom, 2),
+            "midpoint": round(zone.midpoint, 2),
+            "size": round(zone.size, 2),
+            "size_atr_ratio": round(zone.size_atr_ratio, 2),
+            "distance": round(zone.distance_from(current_price), 2),
+        }
 
     return {
-        "name": "FVG",
-        "fvg_bias": result.fvg_bias,
-        "bullish_zones": result.total_bullish_zones,
-        "bearish_zones": result.total_bearish_zones,
-        "nearest_support": result.nearest_bullish.midpoint if result.nearest_bullish else None,
-        "nearest_resistance": result.nearest_bearish.midpoint if result.nearest_bearish else None,
-        "signal": signal,
-        "strength": strength,
-        "description": f"{result.total_bullish_zones} bullish, {result.total_bearish_zones} bearish FVGs",
+        "fvg_above": zone_to_dict(result.nearest_above),
+        "fvg_below": zone_to_dict(result.nearest_below),
+        "in_fvg": result.in_fvg,
+        "current_fvg": zone_to_dict(result.current_fvg) if result.current_fvg else None,
+        "fvg_bias": result.bias,
+        "total_unfilled": result.total_unfilled,
+        "bullish_count": len(result.bullish_zones),
+        "bearish_count": len(result.bearish_zones),
     }
 
 
-# =============================================================================
-# Exports for Registry
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Polars DataFrame Extension (adds FVG columns)
+# ---------------------------------------------------------------------------
+def attach_fvg_signals(
+    df: pl.DataFrame,
+    lookback: int = 50,
+) -> pl.DataFrame:
+    """
+    Attach FVG-related columns to DataFrame for use in signal generation.
 
+    Adds columns:
+        - fvg_bullish_nearby: bool (bullish FVG within 1% of price)
+        - fvg_bearish_nearby: bool (bearish FVG within 1% of price)
+        - fvg_in_zone: bool (price is inside an FVG)
+        - fvg_bias: str ("bullish", "bearish", "neutral")
+    """
+    result = detect_fvg(df, lookback=lookback)
+    n = len(df)
+
+    # Current price for distance calculations
+    close = df["close"].to_list()
+    current_price = close[-1]
+
+    # Create column values (simplified - just for last bar context)
+    fvg_bullish_nearby = result.nearest_below is not None and \
+        result.nearest_below.distance_from(current_price) / current_price < 0.01
+
+    fvg_bearish_nearby = result.nearest_above is not None and \
+        result.nearest_above.distance_from(current_price) / current_price < 0.01
+
+    # Add columns
+    return df.with_columns([
+        pl.lit(fvg_bullish_nearby).alias("fvg_bullish_nearby"),
+        pl.lit(fvg_bearish_nearby).alias("fvg_bearish_nearby"),
+        pl.lit(result.in_fvg).alias("fvg_in_zone"),
+        pl.lit(result.bias).alias("fvg_bias"),
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Registry Export (for auto-discovery)
+# ---------------------------------------------------------------------------
 EXPORTS = {
     "fvg": detect_fvg,
-    "fvg_zones": find_fvg_zones,
     "fvg_summary": summarize_fvg,
+    "fvg_attach": attach_fvg_signals,
 }
 
+NAME = "fvg"
 
-# =============================================================================
-# CLI for Testing
-# =============================================================================
 
+# ---------------------------------------------------------------------------
+# CLI Test
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import numpy as np
 
-    # Create test data with an FVG
-    n = 100
+    # Create sample data with FVGs
     np.random.seed(42)
+    n = 100
 
-    # Generate base price series
-    returns = np.random.randn(n) * 0.01
-    prices = 100 * np.cumprod(1 + returns)
+    # Simulate price with some gaps
+    base_price = 100.0
+    prices = [base_price]
+    for i in range(1, n):
+        # Occasionally create gaps
+        if i % 20 == 0:
+            gap = np.random.uniform(1, 3) * (1 if np.random.random() > 0.5 else -1)
+        else:
+            gap = 0
+        change = np.random.uniform(-0.5, 0.5) + gap
+        prices.append(prices[-1] + change)
 
-    # Inject a bullish FVG around bar 50
-    prices[50] = prices[49] * 1.02  # Gap up
-    prices[51] = prices[50] * 1.01
-
-    # Inject a bearish FVG around bar 70
-    prices[70] = prices[69] * 0.98  # Gap down
-    prices[71] = prices[70] * 0.99
-
+    # Create OHLCV
     df = pl.DataFrame({
         "timestamp": list(range(n)),
-        "open": prices * (1 + np.random.randn(n) * 0.001),
-        "high": prices * (1 + np.abs(np.random.randn(n) * 0.005)),
-        "low": prices * (1 - np.abs(np.random.randn(n) * 0.005)),
-        "close": prices,
-        "volume": np.random.randint(1000, 10000, n),
+        "open": prices,
+        "high": [p + np.random.uniform(0.5, 1.5) for p in prices],
+        "low": [p - np.random.uniform(0.5, 1.5) for p in prices],
+        "close": [p + np.random.uniform(-0.3, 0.3) for p in prices],
+        "volume": [np.random.randint(1000, 10000) for _ in range(n)],
     })
 
-    result = detect_fvg(df, lookback=100)
-    print(f"Bullish FVGs: {result.total_bullish_zones}")
-    print(f"Bearish FVGs: {result.total_bearish_zones}")
-    print(f"FVG Bias: {result.fvg_bias}")
+    # Test detection
+    result = detect_fvg(df, lookback=50)
+    print(f"Total FVGs found: {result.total_unfilled}")
+    print(f"Bullish FVGs: {len(result.bullish_zones)}")
+    print(f"Bearish FVGs: {len(result.bearish_zones)}")
+    print(f"Bias: {result.bias}")
 
-    if result.nearest_bullish:
-        print(f"Nearest Support: {result.nearest_bullish.bottom:.2f} - {result.nearest_bullish.top:.2f}")
+    if result.nearest_below:
+        print(f"Nearest support FVG: {result.nearest_below.bottom:.2f} - {result.nearest_below.top:.2f}")
 
-    if result.nearest_bearish:
-        print(f"Nearest Resistance: {result.nearest_bearish.bottom:.2f} - {result.nearest_bearish.top:.2f}")
+    if result.nearest_above:
+        print(f"Nearest resistance FVG: {result.nearest_above.bottom:.2f} - {result.nearest_above.top:.2f}")
 
     # Test summary
     summary = summarize_fvg(df)

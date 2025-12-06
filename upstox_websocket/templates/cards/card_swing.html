@@ -1,0 +1,92 @@
+{# Swing Card Template - 2-5 Day trades #}
+{# Includes Weekly Technicals + Position Building #}
+
+{% extends 'cards/card_base.html' %}
+
+{% block card_content %}
+    {# Signal Score #}
+    {% include 'cards/partials/signal_score.html' %}
+    
+    {# R:R Box #}
+    {% include 'cards/partials/rr_box.html' %}
+    
+    {# Wyckoff Phase #}
+    {% if signal.wyckoff_phase %}
+    {% include 'cards/partials/wyckoff_phase.html' %}
+    {% endif %}
+    
+    {# Weekly Technicals - Key for Swing #}
+    {% if signal.technicals %}
+    <div class="info-box tech">
+        <div class="box-title"><i class="fas fa-chart-area"></i>Weekly Technicals</div>
+        <div class="grid-4">
+            <div class="grid-item">
+                <div class="grid-label">RSI</div>
+                <div class="grid-value">{{ signal.technicals.rsi.value }}</div>
+                <div class="grid-status {{ signal.technicals.rsi.status }}">{{ signal.technicals.rsi.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">MACD</div>
+                <div class="grid-value">{{ signal.technicals.macd.value }}</div>
+                <div class="grid-status {{ signal.technicals.macd.status }}">{{ signal.technicals.macd.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">EMA</div>
+                <div class="grid-value">{{ signal.technicals.ema.value }}</div>
+                <div class="grid-status {{ signal.technicals.ema.status }}">{{ signal.technicals.ema.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">RS</div>
+                <div class="grid-value">{{ signal.technicals.rs.value }}</div>
+                <div class="grid-status {{ signal.technicals.rs.status }}">{{ signal.technicals.rs.label }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Swing Context #}
+    {% if signal.context %}
+    <div class="info-box context">
+        <div class="box-title"><i class="fas fa-info-circle"></i>Swing Context</div>
+        <div class="context-items">
+            {% for ctx in signal.context %}
+            <span class="ctx-item {{ ctx.sentiment }}">
+                {% if ctx.icon %}<i class="fas {{ ctx.icon }}"></i>{% endif %}
+                {{ ctx.text }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Trade Details with Tranches #}
+    <div class="trade-details">
+        <div class="detail-row">
+            <span class="detail-label">Entry Zone</span>
+            <span class="detail-value entry">₹{{ signal.entry_zone }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Target 1</span>
+            <span class="detail-value target">₹{{ signal.target1 }} ({{ signal.target1_pct }})</span>
+        </div>
+        {% if signal.target2 %}
+        <div class="detail-row">
+            <span class="detail-label">Target 2</span>
+            <span class="detail-value target">₹{{ signal.target2 }} ({{ signal.target2_pct }})</span>
+        </div>
+        {% endif %}
+        <div class="detail-row">
+            <span class="detail-label">Stop Loss</span>
+            <span class="detail-value stop">₹{{ signal.stop_loss }} ({{ signal.stop_pct }})</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Position Build</span>
+            <span class="detail-value special">{{ signal.position_build | default('2 Tranches (50% each)') }}</span>
+        </div>
+    </div>
+    
+    {# Confidence #}
+    {% if signal.confidence %}
+    {% include 'cards/partials/confidence.html' %}
+    {% endif %}
+{% endblock %}

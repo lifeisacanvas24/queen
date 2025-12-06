@@ -1,0 +1,34 @@
+{# Tabs Navigation Component #}
+<nav class="tabs-container">
+    <div class="tabs-content">
+        <div class="nav-tabs">
+            <a class="nav-tab {% if active_tab == 'scalp' %}active{% endif %}" data-tab="scalp">
+                <i class="fas fa-bolt"></i>Scalp
+                <span class="tab-count">{{ tab_counts.scalp | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'intraday' %}active{% endif %}" data-tab="intraday">
+                <i class="fas fa-sun"></i>Intraday
+                <span class="tab-count">{{ tab_counts.intraday | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'btst' %}active{% endif %}" data-tab="btst">
+                <i class="fas fa-moon"></i>BTST
+                <span class="tab-count">{{ tab_counts.btst | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'swing' %}active{% endif %}" data-tab="swing">
+                <i class="fas fa-wave-square"></i>Swing
+                <span class="tab-count">{{ tab_counts.swing | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'positional' %}active{% endif %}" data-tab="positional">
+                <i class="fas fa-chart-line"></i>Positional
+                <span class="tab-count">{{ tab_counts.positional | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'investment' %}active{% endif %}" data-tab="investment">
+                <i class="fas fa-landmark"></i>Investment
+                <span class="tab-count">{{ tab_counts.investment | default(0) }}</span>
+            </a>
+            <a class="nav-tab {% if active_tab == 'portfolio' %}active{% endif %}" data-tab="portfolio">
+                <i class="fas fa-wallet"></i>Portfolio
+            </a>
+        </div>
+    </div>
+</nav>

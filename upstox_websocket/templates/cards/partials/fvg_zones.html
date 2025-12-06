@@ -1,0 +1,20 @@
+{# FVG Zones Partial #}
+<div class="info-box fvg">
+    <div class="box-title"><i class="fas fa-arrows-up-down"></i>FVG Zones</div>
+    <div class="fvg-zones">
+        {% if signal.fvg_zones.above %}
+        <div class="fvg-zone above">
+            <div class="zone-label"><i class="fas fa-arrow-up"></i>Above</div>
+            <div class="zone-value">₹{{ signal.fvg_zones.above.range }}</div>
+            <div class="zone-type">{{ signal.fvg_zones.above.type | default('Target Zone') }}</div>
+        </div>
+        {% endif %}
+        {% if signal.fvg_zones.below %}
+        <div class="fvg-zone below">
+            <div class="zone-label"><i class="fas fa-arrow-down"></i>Below</div>
+            <div class="zone-value">₹{{ signal.fvg_zones.below.range }}</div>
+            <div class="zone-type">{{ signal.fvg_zones.below.type | default('Support Zone') }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>

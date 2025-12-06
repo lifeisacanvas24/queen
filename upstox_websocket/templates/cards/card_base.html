@@ -1,0 +1,42 @@
+{# Base Card Template - Common structure for all cards #}
+{# Expects: signal object with common fields #}
+
+<div class="signal-card {% if signal.is_urgent %}urgent{% endif %}" data-category="{{ signal.category }}" data-symbol="{{ signal.symbol }}">
+    {# Card Header - Action Badge + Timeframe #}
+    <div class="card-action">
+        <span class="action-badge {{ signal.action_class }}">
+            <i class="fas {{ signal.action_icon }}"></i>{{ signal.action_label }}
+        </span>
+        <span class="timeframe-label">{{ signal.timeframe_label }}</span>
+    </div>
+    
+    <div class="card-body">
+        {# Symbol Row - Always present #}
+        <div class="symbol-row">
+            <div>
+                <div class="symbol-name">{{ signal.symbol }}</div>
+                <div class="company-name">{{ signal.company_name }}</div>
+            </div>
+            <div class="price-info">
+                <div class="current-price">₹{{ signal.current_price | format_price }}</div>
+                <div class="price-change {{ 'up' if signal.price_change >= 0 else 'down' }}">
+                    <i class="fas fa-caret-{{ 'up' if signal.price_change >= 0 else 'down' }}"></i>
+                    {{ '%+.2f' | format(signal.price_change) }}%
+                </div>
+            </div>
+        </div>
+        
+        {# Tags Row - Always present #}
+        <div class="tags-row">
+            {% for tag in signal.tags %}
+            <span class="tag tag-{{ tag.type }}">
+                {% if tag.icon %}<i class="fas {{ tag.icon }}"></i>{% endif %}
+                {{ tag.label }}
+            </span>
+            {% endfor %}
+        </div>
+        
+        {# Card-specific content block #}
+        {% block card_content %}{% endblock %}
+    </div>
+</div>

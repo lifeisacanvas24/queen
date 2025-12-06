@@ -1,0 +1,128 @@
+{# BTST Card Template - Buy Today Sell Tomorrow #}
+{# Includes F&O Sentiment + Global Cues + Gap Probability #}
+
+{% extends 'cards/card_base.html' %}
+
+{% block card_content %}
+    {# Signal Score #}
+    {% include 'cards/partials/signal_score.html' %}
+    
+    {# R:R Box #}
+    {% include 'cards/partials/rr_box.html' %}
+    
+    {# Technicals Box #}
+    {% if signal.technicals %}
+    <div class="info-box tech">
+        <div class="box-title"><i class="fas fa-chart-area"></i>Technicals</div>
+        <div class="grid-4">
+            <div class="grid-item">
+                <div class="grid-label">RSI</div>
+                <div class="grid-value">{{ signal.technicals.rsi.value }}</div>
+                <div class="grid-status {{ signal.technicals.rsi.status }}">{{ signal.technicals.rsi.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">MACD</div>
+                <div class="grid-value">{{ signal.technicals.macd.value }}</div>
+                <div class="grid-status {{ signal.technicals.macd.status }}">{{ signal.technicals.macd.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">EMA</div>
+                <div class="grid-value">{{ signal.technicals.ema.value }}</div>
+                <div class="grid-status {{ signal.technicals.ema.status }}">{{ signal.technicals.ema.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">ATR</div>
+                <div class="grid-value">{{ signal.technicals.atr.value }}</div>
+                <div class="grid-status {{ signal.technicals.atr.status }}">{{ signal.technicals.atr.label }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# F&O Sentiment - Critical for BTST #}
+    {% if signal.fo_sentiment %}
+    <div class="info-box fo">
+        <div class="box-title"><i class="fas fa-layer-group"></i>F&O Sentiment (Key for BTST)</div>
+        <div class="grid-4">
+            <div class="grid-item">
+                <div class="grid-label">PCR</div>
+                <div class="grid-value">{{ signal.fo_sentiment.pcr.value }}</div>
+                <div class="signal-badge {{ signal.fo_sentiment.pcr.signal }}">{{ signal.fo_sentiment.pcr.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">OI</div>
+                <div class="grid-value">{{ signal.fo_sentiment.oi.value }}</div>
+                <div class="signal-badge {{ signal.fo_sentiment.oi.signal }}">{{ signal.fo_sentiment.oi.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">Max Pain</div>
+                <div class="grid-value">₹{{ signal.fo_sentiment.max_pain.value }}</div>
+                <div class="signal-badge {{ signal.fo_sentiment.max_pain.signal }}">{{ signal.fo_sentiment.max_pain.label }}</div>
+            </div>
+            <div class="grid-item">
+                <div class="grid-label">IV</div>
+                <div class="grid-value">{{ signal.fo_sentiment.iv.value }}%</div>
+                <div class="signal-badge {{ signal.fo_sentiment.iv.signal }}">{{ signal.fo_sentiment.iv.label }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Global Cues - Key for BTST #}
+    {% if signal.global_cues %}
+    <div class="info-box context">
+        <div class="box-title"><i class="fas fa-globe"></i>Global Cues</div>
+        <div class="context-items">
+            <span class="ctx-item {{ signal.global_cues.sgx.sentiment }}">
+                <i class="fas fa-globe"></i>SGX Nifty: {{ signal.global_cues.sgx.value }}
+            </span>
+            <span class="ctx-item {{ signal.global_cues.us.sentiment }}">
+                <i class="fas fa-flag-usa"></i>US Futures: {{ signal.global_cues.us.value }}
+            </span>
+            <span class="ctx-item {{ signal.global_cues.fii.sentiment }}">
+                <i class="fas fa-building-columns"></i>FII: {{ signal.global_cues.fii.value }}
+            </span>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Gap Up Probability #}
+    {% if signal.gap_probability %}
+    <div class="indicators-row">
+        <div class="indicator-box">
+            <div class="ind-header">
+                <span class="ind-label">Gap Up Probability</span>
+                <span class="ind-value">{{ signal.gap_probability }}%</span>
+            </div>
+            <div class="ind-bar">
+                <div class="ind-fill {{ 'strong' if signal.gap_probability >= 70 else 'neutral' if signal.gap_probability >= 50 else 'weak' }}" style="width: {{ signal.gap_probability }}%"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Trade Details with BTST Timing #}
+    <div class="trade-details">
+        <div class="detail-row">
+            <span class="detail-label">Buy Before</span>
+            <span class="detail-value warning">{{ signal.buy_before | default('3:20 PM') }} @ ₹{{ signal.entry_range }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Target (Tomorrow)</span>
+            <span class="detail-value target">₹{{ signal.target }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Stop Loss</span>
+            <span class="detail-value stop">₹{{ signal.stop_loss }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Sell Time</span>
+            <span class="detail-value special">{{ signal.sell_time | default('Tomorrow 9:30-10:00 AM') }}</span>
+        </div>
+    </div>
+    
+    {# Confidence #}
+    {% if signal.confidence %}
+    {% include 'cards/partials/confidence.html' %}
+    {% endif %}
+{% endblock %}

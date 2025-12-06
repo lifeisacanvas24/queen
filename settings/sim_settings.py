@@ -1,27 +1,91 @@
-# queen/settings/sim_settings.py
-"""Simulation configuration for Queen of Quant.
+#!/usr/bin/env python3
+# ============================================================
+# queen/settings/sim_settings.py — v1.0
+# ------------------------------------------------------------
+# Centralised simulator semantics for LONG / SHORT positions
+# and decision vocabulary.
+#
+# This is *side-agnostic* config used by:
+#   • queen/services/actionable_row.py
+#   • queen/cli/replay_actionable.py
+#   • queen/cli/scan_signals.py (indirectly via replay_actionable)
+#
+# Semantics (agreed with Kavya):
+#   • AVOID → entry filter, NEVER exits positions
+#   • HOLD  → maintain position (no open/close/add)
+#   • LONG:  BUY / ADD / EXIT
+#   • SHORT: SELL / ADD_SHORT / EXIT_SHORT
+#   • EOD:   force EXIT / EXIT_SHORT if configured
+# ============================================================
 
-Centralized simulation knobs.
-Change values here to tune simulator behaviour globally.
-"""
+from __future__ import annotations
 
-# Notional exposure to aim for per synthetic 'unit'.
-NOTIONAL_PER_UNIT_DEFAULT: float = 3_000.0
+from dataclasses import dataclass
+from datetime import time
+from enum import Enum
+from typing import Dict
 
-# Maximum number of unit-chunks the sim will pyramid into:
-# e.g. MAX_PYRAMID_UNITS = 3.0 → max position = 3 * unit_size
-MAX_PYRAMID_UNITS: float = 3.0
 
-# Trailing stop percent (e.g. 0.04 → 4% trailing stop below sim_peak).
-TRAIL_PCT: float = 0.04
+class PositionSide(str, Enum):
+    FLAT = "FLAT"
+    LONG = "LONG"
+    SHORT = "SHORT"
 
-# ADD-only-when-green behaviour
-ADD_ONLY_WHEN_GREEN: bool = True
 
-# Minimum unrealised PnL percent required to allow ADD (e.g. 1.0 = +1%)
-# If 0.0 then any positive (+eps) unreal will allow an ADD.
-ADD_MIN_UNREAL_PCT: float = 0.0
+class Decision(str, Enum):
+    BUY = "BUY"
+    ADD = "ADD"
+    EXIT = "EXIT"
+    SELL = "SELL"
+    ADD_SHORT = "ADD_SHORT"
+    EXIT_SHORT = "EXIT_SHORT"
+    HOLD = "HOLD"
+    AVOID = "AVOID"
 
-# Minimum / maximum units per symbol (for sizing)
-SIM_MIN_UNITS: float = 1.0
-SIM_MAX_UNITS: float = 50.0
+
+@dataclass(frozen=True)
+class SimConfig:
+    """Top-level simulator configuration.
+
+    Note:
+        This does *not* know about capital, symbol weights, etc.
+        It only encodes structural behaviour:
+          • EOD rules
+          • Whether overnight positions are allowed
+
+    """
+
+    # EOD cut-off (exchange local time)
+    eod_cutoff: time = time(hour=15, minute=20)
+
+    # Overnight rules
+    allow_overnight_longs: bool = True
+    allow_overnight_shorts: bool = False
+
+
+# Default global config used by simulator.
+DEFAULT_SIM_CONFIG = SimConfig()
+
+
+# ---------------------------------------------------------------------
+# Decision semantics (static, side-agnostic)
+# ---------------------------------------------------------------------
+
+# These semantics are applied *after* we know the current PositionSide.
+# The simulator in actionable_row.py uses this table plus side-specific
+# logic (e.g. EXIT_SHORT only valid on SHORT).
+
+
+
+DECISION_RULES: Dict[str, Dict[str, bool]] = {
+    Decision.BUY.value: {"opens_new_trade": True, "adds_to_position": True, "closes_existing": False},
+    Decision.ADD.value: {"opens_new_trade": False, "adds_to_position": True, "closes_existing": False},
+    Decision.EXIT.value: {"opens_new_trade": False, "adds_to_position": False, "closes_existing": True},
+    Decision.SELL.value: {"opens_new_trade": True, "adds_to_position": True, "closes_existing": False},
+    Decision.ADD_SHORT.value: {"opens_new_trade": False, "adds_to_position": True, "closes_existing": False},
+    Decision.EXIT_SHORT.value: {"opens_new_trade": False, "adds_to_position": False, "closes_existing": True},
+    Decision.HOLD.value: {"opens_new_trade": False, "adds_to_position": False, "closes_existing": False},
+    Decision.AVOID.value: {"opens_new_trade": False, "adds_to_position": False, "closes_existing": False},
+}
+
+__all__ = ["PositionSide", "Decision", "SimConfig", "DEFAULT_SIM_CONFIG", "DECISION_RULES"]

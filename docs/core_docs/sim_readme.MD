@@ -1,101 +1,428 @@
-# Simulation (sim) — Dev Notes (compact)
+# Queen Sim v2 — Developer Notes
 
-This note documents the synthetic auto-position simulator's new fields, knobs, and how to interpret outputs produced by `build_actionable_row` and `sim_stats`.
-
-## Where the code lives
-
-- `queen/services/actionable_row.py` — actionable row builder + integrated simulator (`_step_auto_long_sim`)
-- `queen/settings/sim_settings.py` — global sim knobs
-- `queen/cli/sim_stats.py` — stats + per-trade breakdown + skipped_adds_outside_trades
-- `queen/cli/signal_summary.py` — optional summary by `sim_effective_decision`
-- `queen/cli/debug_decisions.py` — sample stream printing with new sim fields
-
-## New/important sim columns (per-row)
-
-- `sim_side` : "FLAT" | "LONG" — synthetic position side after processing the row.
-- `sim_qty` : float — synthetic quantity (units).
-- `sim_avg` : float | None — synthetic average entry price.
-- `sim_unit_size` : float — the single unit size computed by `_compute_unit_size`.
-- `sim_pnl` : unrealized P&L for the row (float).
-- `sim_pnl_pct` : unrealized P&L percent (float).
-- `sim_realized_pnl` : cumulative realized P&L (float).
-- `sim_total_pnl` : realized + unreal P&L (float).
-- `sim_peak` : float | None — highest `cmp` seen while `LONG` (used for trailing).
-- `sim_trail_stop` : float | None — current trailing-stop price (sim_peak \* (1 - TRAIL_PCT)).
-- `sim_forced_eod` : bool — `True` if exit was forced by `eod_force`.
-- `sim_exit_reason` : str | None — e.g., "TRAILING_STOP", "EOD_FORCED", "HARD_EXIT".
-- `sim_trade_id` : int | None — trade identifier assigned on entry; useful to group bars belonging to the same trade.
-- `sim_effective_decision` : str | None — simulator's decision (e.g., "BUY", "ADD", "EXIT", "NO_ACTION"). **Important:** this preserves the incoming `decision` and shows what the sim actually did.
-- `sim_ignored_signal` : bool — `True` if the sim intentionally ignored the incoming signal (e.g., ADD skipped).
-- `sim_skipped_add` : int — per-row count (0 or 1) indicating that an ADD was skipped on that row (useful for aggregation).
-- `sim_skip_reason` : str | None — reason for ignoring (e.g., "ADD_SKIPPED_NOT_IN_PROFIT").
-
-## Important knobs (in `queen/settings/sim_settings.py`)
-
-- `NOTIONAL_PER_UNIT_DEFAULT` (float) — target rupee exposure per synthetic unit.
-- `MAX_PYRAMID_UNITS` (float) — max number of units to pyramid into (max position = unit_size \* MAX_PYRAMID_UNITS).
-- `TRAIL_PCT` (float) — trailing stop percent (e.g., `0.04` → 4%).
-- `ADD_ONLY_WHEN_GREEN` (bool) — if `True` ignore ADDs unless unreal > 0 (and meets ADD_MIN_UNREAL_PCT).
-- `ADD_MIN_UNREAL_PCT` (float) — minimum unreal% required for ADD (e.g., `1.0` requires +1%).
-- `SIM_MIN_UNITS`, `SIM_MAX_UNITS` — sizing bounds.
-
-## What `sim_stats.py` prints now
-
-1. Per-symbol summary: trades, win_rate, realized_pnl, max_drawdown, skipped_adds_total.
-2. Per-trade summary (grouped by `sim_trade_id`) with `pnl_delta`, `skipped_adds`, and `rows`.
-3. `skipped_adds` breakdown by symbol:
-   - `skipped_adds_total` : sum across all rows
-   - `skipped_adds_in_trades` : total skipped adds that were part of a trade (grouped by trade_id)
-   - `skipped_adds_outside_trades` : difference (outside-trade skipped adds)
-4. Signal summary grouped by `sim_effective_decision` (if column exists).
-5. A sample debug table for quick inspection.
-
-## How to test (short checklist)
-
-1. **Smoke test** (local script)
-   - Run `python tools/smoke_test_sim.py` to validate sim behaviour on a tiny synthetic stream.
-   - Expect entries to assign `sim_trade_id` and `sim_effective_decision` values.
-
-2. **Replay a single symbol**
-   - Run debug decisions:
-     ```
-     python -m queen.cli.debug_decisions --symbol SMLMAH --interval 15 --warmup 1
-     ```
-   - Verify `sim_effective_decision`, `sim_ignored_signal`, `sim_trade_id`, `sim_trail_stop` are printed.
-
-3. **Run scan parquet stats**
-   - Run:
-     ```
-     python -m queen.cli.sim_stats --parquet path/to/scan_signals.parquet --symbol-filter SMLMAH
-     ```
-   - Inspect:
-     - `skipped_adds_total` vs `skipped_adds_in_trades` and `skipped_adds_outside_trades`.
-     - Per-trade `skipped_adds`.
-     - `sim_effective_decision` summary.
-
-4. **Edge cases**
-   - Rows missing `cmp` or `entry`: verify sim doesn't crash (it will use available fallback).
-   - Multiple ADDs while in a losing position: ensure they're recorded as `sim_skipped_add` and `sim_ignored_signal=True`.
-
-## FAQ / notes
-
-- `sim_effective_decision` is safe to use for generating a "sim-aware" signal summary; original `decision` remains unchanged for audit.
-- `skipped_adds_outside_trades` helps discover signals that were ignored before a trade opened or after it closed.
-- If you want stricter behaviour (fail loudly when keys are missing), say so and we can remove defensive handling in the sim. Current code opts to be robust to slightly malformed input rows.
+This note explains the new **simulation fields**, **CLI stats**, and **knobs** so you can read outputs without guessing.
 
 ---
 
-## Next suggested single-step changes (so we finish this round)
+## 1. Row-Level Simulation Columns
 
-- Set `ADD_MIN_UNREAL_PCT` to `1.0` in `queen/settings/sim_settings.py` if you want to require +1% unreal before ADD allowed.
-- Or set `ADD_ONLY_WHEN_GREEN = False` to allow averaging down (if you prefer).
-- If you want me to produce the `git apply` patch for the `sim_stats.py` change + README, I can paste that next.
+Produced by `queen/services/actionable_row.py` when `pos_mode="auto"` and `auto_side="long"`.
+
+### Core position state
+
+- `sim_side`  
+  `"FLAT"` or `"LONG"` — simulator’s current side.
+
+- `sim_qty`  
+  Position quantity (in “units”, sized via `NOTIONAL_PER_UNIT_DEFAULT`).
+
+- `sim_avg`  
+  Average price of the open position (None when flat).
+
+- `sim_pnl`  
+  **Unrealised** PnL for the bar: `(cmp - sim_avg) * sim_qty`.
+
+- `sim_pnl_pct`  
+  Unrealised PnL in %: `(cmp - sim_avg) / sim_avg * 100`.
+
+- `sim_realized_pnl`  
+  Cumulative **realised** PnL over all closed trades so far.
+
+- `sim_total_pnl`  
+  `sim_pnl + sim_realized_pnl` — total PnL including open trade.
+
+- `sim_unit_size`  
+  Price-based unit size for this symbol:
+  ~ `NOTIONAL_PER_UNIT_DEFAULT / cmp`, clamped to `[1, max_units]`.
+
+### Peak / trailing
+
+- `sim_peak`  
+  Highest simulated price seen since the current trade opened.
+
+- `sim_trail_stop`  
+  Dynamic trailing stop: `sim_peak * (1 - TRAIL_PCT)`.
+
+- `sim_exit_reason`
+  - `"TRAILING_STOP"` — exit by trail.
+  - `"HARD_EXIT"` — explicit EXIT / AVOID / trade_status EXIT.
+  - `"EOD_FORCED"` — forced exit because `eod_force=True`.
+
+- `sim_forced_eod`  
+  `True` iff the exit happened due to EOD force.
+
+### Signal vs simulator
+
+- `decision` (existing)  
+  Raw signal coming from fusion (`BUY`, `ADD`, `EXIT`, `NO_ACTION`, …).
+
+- `sim_effective_decision`  
+  What the **simulator actually did** after applying its rules:
+  - `"BUY"` / `"ADD"` — position open / pyramid.
+  - `"EXIT"` — position closed (trail / hard / EOD).
+  - `"NO_ACTION"` — simulator ignored the signal.
+
+- `sim_ignored_signal` (`bool`)  
+  `True` when the **incoming signal was ignored** by sim rules  
+  (currently only ADD filters: not green enough / below `ADD_MIN_UNREAL_PCT`).
+
+- `sim_skipped_add` (`int`)  
+  `1` if an ADD was skipped due to rules on this bar, else `0`.
+
+- `sim_skip_reason` (`str | None`)  
+  Human reason for skip. e.g. `"ADD_SKIPPED_BY_RULE"`.
+
+### Trade identity
+
+- `sim_trade_id` (`int | None`)
+  - Assigned on **entry bar** for each trade (`1, 2, 3, …`).
+  - Present on **all bars during a trade** (including exit bar).
+  - `None` on bars outside trades.
+  - Used by `sim_stats.py` to compute per-trade PnL and skipped_adds.
 
 ---
 
-If you want, I can now:
+## 2. CLI Stats (`queen/cli/sim_stats.py`)
 
-- (A) Paste a `git apply` patch containing only the updated `sim_stats.py` and `SIM_README.md`, or
-- (B) Also remove all defensive fallbacks from the simulator file(s) so they fail loudly (you said you don't want fallback/backward-compatibility).
+Run:
 
-Tell me which and I’ll paste the patch. (If you prefer, I can just paste the patch for the two files now.)
+```bash
+python -m queen.cli.sim_stats --parquet path/to/scan_signals.parquet
+# Optional:
+#   --symbol-filter SMLMAH GRSE ...
+```
+
+python -m queen.cli.scan_signals \
+ --symbols SMLMAH \
+ --interval 15 \
+ --book all \
+ --out-parquet /tmp/smlmah_15m.parquet
+
+python -m queen.cli.sim_stats \
+ --parquet /tmp/smlmah_15m.parquet \
+ --symbol-filter SMLMAH
+
+python -m queen.cli.debug_decisions \
+ --symbol SMLMAH \
+ --interval 15 \
+ --book all \
+ --warmup 1
+
+Nice, this is a perfect place to “lock in” the sim tooling before we move on 🧠⚙️
+
+I’ll do both: 1. End-to-end debug_decisions.py updated to show all key sim columns. 2. A sim sanity checklist you can reuse for any symbol / parquet run.
+
+No fallbacks, no hidden behaviour.
+
+⸻
+
+1️⃣ Full queen/cli/debug_decisions.py
+
+Replace your existing queen/cli/debug_decisions.py completely with this:
+
+#!/usr/bin/env python3
+
+# ============================================================
+
+# queen/cli/debug_decisions.py — v1.0 (Sim-aware)
+
+# ------------------------------------------------------------
+
+# Bar-by-bar debug view:
+
+# • raw decision / action_tag / playbook
+
+# • sim_effective_decision / sim_ignored_signal
+
+# • sim position state, PnL, trail, trade_id
+
+#
+
+# Example:
+
+# python -m queen.cli.debug_decisions --symbol SMLMAH --interval 15
+
+# ============================================================
+
+from **future** import annotations
+
+import argparse
+import asyncio
+from typing import Any, Dict
+
+import polars as pl
+
+from queen.cli.replay_actionable import ReplayConfig, replay_actionable
+from queen.helpers.logger import log
+
+def main() -> None:
+parser = argparse.ArgumentParser(
+description="Debug decision/action_tag + simulator stream for a symbol."
+)
+parser.add_argument("--symbol", required=True, help="Symbol, e.g. FORCEMOT")
+parser.add_argument(
+"--interval",
+type=int,
+default=15,
+help="Intraday interval in minutes (default: 15).",
+)
+parser.add_argument(
+"--book",
+type=str,
+default="all",
+help="Book name (default: all).",
+)
+parser.add_argument(
+"--warmup",
+type=int,
+default=1,
+help="Warmup bars before emitting rows (default: 1).",
+)
+parser.add_argument(
+"--date-from",
+type=str,
+default=None,
+help="Optional start date (YYYY-MM-DD).",
+)
+parser.add_argument(
+"--date-to",
+type=str,
+default=None,
+help="Optional end date (YYYY-MM-DD).",
+)
+args = parser.parse_args()
+
+    sym = args.symbol.upper()
+    cfg = ReplayConfig(
+        symbol=sym,
+        date_from=args.date_from,
+        date_to=args.date_to,
+        interval_min=args.interval,
+        book=args.book,
+        warmup=args.warmup,
+        final_only=False,
+        pos_mode="auto",
+        auto_side="long",
+    )
+
+    log.info(
+        f"[DebugDecisions] Replaying {sym} @ {args.interval}m "
+        f"(book={args.book}, warmup={args.warmup}, "
+        f"from={args.date_from}, to={args.date_to})"
+    )
+
+    payload: Dict[str, Any] = asyncio.run(replay_actionable(cfg))
+    rows = payload.get("rows") or []
+    if not rows:
+        print("[DebugDecisions] No rows returned.")
+        return
+
+    df = pl.DataFrame(rows)
+
+    if "timestamp" in df.columns:
+        df = df.sort("timestamp")
+
+    # Columns we *want* to see if present.
+    wanted = [
+        # Time & signal
+        "timestamp",
+        "decision",
+        "sim_effective_decision",
+        "sim_ignored_signal",
+        "action_tag",
+        "playbook",
+        "time_bucket",
+        # Context / trend
+        "trend_bias",
+        "trend_score",
+        "vwap_zone",
+        # Prices
+        "cmp",
+        "entry",
+        # Sim position state
+        "sim_side",
+        "sim_qty",
+        "sim_avg",
+        "sim_pnl",
+        "sim_pnl_pct",
+        "sim_realized_pnl",
+        "sim_total_pnl",
+        "sim_unit_size",
+        # Trade identity
+        "sim_trade_id",
+        # Add rules & diagnostics
+        "sim_skipped_add",
+        "sim_skip_reason",
+        "sim_trail_stop",
+        "sim_peak",
+        # Exit diagnostics
+        "sim_exit_reason",
+        "sim_forced_eod",
+    ]
+
+    cols = [c for c in wanted if c in df.columns]
+    df = df.select(cols)
+
+    print("\n=== Decision Stream Debug ===")
+    print(df)
+    print("================================\n")
+
+if **name** == "**main**":
+main()
+
+What’s new compared to your earlier version:
+• Imports asyncio at top and uses it directly (no try/except fallback).
+• Shows:
+• sim_effective_decision
+• sim_ignored_signal
+• sim_trade_id
+• sim_trail_stop
+• sim_peak
+• sim_skipped_add
+• sim_skip_reason
+• sim_pnl_pct
+• sim_unit_size
+• sim_exit_reason
+• sim_forced_eod
+
+So a single run gives you full story per bar.
+
+⸻
+
+2️⃣ Sim sanity checklist (reusable)
+
+Here’s a small checklist you can keep (copy it into a SIM_CHECKLIST.md if you want). Use it whenever you:
+• tweak knobs in sim_settings.py, or
+• refactor sim logic, or
+• want to validate behaviour for a given symbol.
+
+I’ll assume:
+• You run scan_signals to generate a parquet.
+• Then you run sim_stats.py and debug_decisions.py on that parquet / symbol.
+
+⸻
+
+✅ Step 1 — Generate a fresh scan
+
+Pick a symbol and interval you know is “interesting” (like SMLMAH 15m):
+
+# Example
+
+python -m queen.cli.scan_signals \
+ --symbols SMLMAH LTIM LTTS \
+ --interval 15 \
+ --book all \
+ --out /tmp/smlmah_15m.parquet
+
+⸻
+
+✅ Step 2 — High-level stats sanity
+
+Run the sim stats CLI on the parquet:
+
+python -m queen.cli.sim_stats --parquet queen/data/runtime/dev/scan_signals_live_intraday_15m.parquet --symbol-filter SMLMAH LTIM LTTS
+
+Verify: 1. Trades / PnL:
+• trades > 0 (for a busy symbol).
+• realized_pnl matches value you see in debug_decisions on the last row’s sim_realized_pnl. 2. Drawdown:
+• max_drawdown is ≤ 0 (drawdown is negative or zero).
+• If max_drawdown is 0 but you see equity going up and down in rows → something’s off. 3. Skipped adds / ignored signals:
+• skipped_adds ≈ number of bars where decision = ADD but sim rules blocked it.
+• skipped_adds_in_trades should be:
+• > 0 if you have many skipped ADDs while in positions.
+• skipped_adds_outside_trades:
+• usually small; if huge, check why you are getting ADDs when flat. 4. Ignored signals:
+• ignored_signals should roughly match “number of ADDs that didn’t pass rules”.
+• Compare with sim_summary (by sim_effective_decision):
+• If many raw ADD but very few effective ADD, you expect a lot of NO_ACTION in sim summary.
+
+⸻
+
+✅ Step 3 — Per-trade breakdown sanity
+
+In sim_stats.py output, look at:
+
+--- Trades for SMLMAH (count=1) ---
+T1: pnl=-569.20 skipped_adds=48 (rows=50)
+
+Check: 1. Trade count:
+• count here must equal trades in the symbol table. 2. Trade PnL:
+• pnl for each Tn should sum up to final realized_pnl in the per-symbol table
+(sum of all trades’ pnl). 3. Skipped adds per trade:
+• If skipped_adds is huge (like 48), that means:
+• Most ADD signals during that trade were blocked by rules.
+• Tweak ADD_MIN_UNREAL_PCT and/or ADD_ONLY_WHEN_GREEN and rerun to see the number drop or rise.
+
+⸻
+
+✅ Step 4 — Bar-by-bar sanity with debug_decisions.py
+
+Run:
+
+python -m queen.cli.debug_decisions \
+ --symbol SMLMAH LTIM LTTS \
+ --interval 15 \
+ --book all \
+ --warmup 1
+
+Now visually check: 1. Entry bar:
+• First row where sim_side becomes "LONG":
+• sim_effective_decision should be "BUY".
+• sim_trade_id should become 1.
+• sim_unit_size > 0.
+• sim_avg ≈ entry on that bar. 2. During trade:
+• sim_side == "LONG".
+• sim_trade_id == 1 (same id for all bars until exit).
+• For every bar:
+• sim_total_pnl = sim_realized_pnl + sim_pnl
+(or close, if you check manually). 3. ADD behaviour:
+• Find rows where decision == "ADD":
+• If ADD passes rules:
+• sim_effective_decision == "ADD".
+• sim_ignored_signal == False.
+• sim_skipped_add == 0.
+• sim_qty should increase vs previous bar.
+• If ADD is blocked:
+• sim_effective_decision == "NO_ACTION".
+• sim_ignored_signal == True.
+• sim_skipped_add == 1.
+• sim_skip_reason == "ADD_SKIPPED_BY_RULE".
+• sim_qty does not change. 4. Trailing stop:
+• If exit happens via trailing stop:
+• On the exit bar:
+• sim_exit_reason == "TRAILING_STOP".
+• sim_forced_eod == False.
+• sim_side goes "LONG" → "FLAT".
+• sim_trade_id becomes None (or 0) on subsequent bars. 5. Hard / EOD exit:
+• If exit is due to decision == EXIT / AVOID or eod_force=True:
+• sim_exit_reason should be "HARD_EXIT" or "EOD_FORCED" respectively.
+• sim_forced_eod should match (True only for EOD forced).
+
+⸻
+
+✅ Step 5 — Knob tuning loop
+
+When you change knobs in sim_settings.py, follow this loop: 1. Change one or two knobs, e.g.:
+
+NOTIONAL_PER_UNIT_DEFAULT = 5_000.0
+MAX_PYRAMID_UNITS = 3.0
+ADD_MIN_UNREAL_PCT = 2.0
+
+    2.	Run:
+
+python -m queen.cli.scan_signals ... # regenerate parquet
+python -m queen.cli.sim_stats --parquet ... --symbol-filter SMLMAH
+python -m queen.cli.debug_decisions --symbol SMLMAH --interval 15
+
+    3.	Re-check:
+    •	trades, win_rate, max_drawdown.
+    •	skipped_adds, skipped_adds_in_trades.
+    •	Sim behaviour on entry/exit/ADD with debug_decisions.py.
+
+Do that for 1–3 different symbols (e.g. one trend, one choppy, one flat), and if all looks logical, the sim is in a very good place.
+
+⸻
+
+If you want, next we can:
+• Capture this checklist + a couple of example outputs into a SIM_PLAYBOOK.md,
+• Or move on to the next roadmap item (e.g. risk modes, multi-side sim, or better dashboards).

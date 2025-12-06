@@ -1,404 +1,590 @@
-# queen/services/actionable_row.py
 #!/usr/bin/env python3
-"""Unified actionable-row engine with integrated synthetic simulator (long-only).
-Features:
- - price-based unit sizing (_compute_unit_size)
- - capped pyramiding (MAX_PYRAMID_UNITS)
- - ADD-only-when-green (ADD_ONLY_WHEN_GREEN + ADD_MIN_UNREAL_PCT)
- - trailing stop protection (TRAIL_PCT)
- - trade_id generation and per-row sim fields:
-     sim_trade_id, sim_effective_decision, sim_ignored_signal,
-     sim_skipped_add (per-row), sim_skip_reason, sim_trail_stop, sim_peak
-"""
+# ============================================================
+# queen/services/actionable_row.py — v1.5
+# ------------------------------------------------------------
+# Single entrypoint for building an actionable row + synthetic
+# simulator state used by:
+#   • monitor/actionable (via API layer)
+#   • cli/replay_actionable.py
+#   • cli/scan_signals.py
+#   • cli/debug_decisions.py
+#
+# Core ideas:
+#   • Engine decides: decision, bias, score, drivers, etc.
+#   • This module:
+#         - Normalizes decisions (BUY, ADD, EXIT, SELL, ADD_SHORT,
+#           EXIT_SHORT, HOLD, AVOID)
+#         - Applies agreed sim semantics for pos_mode="auto"
+#         - Attaches sim_* fields:
+#              sim_side, sim_qty, sim_avg,
+#              sim_pnl, sim_pnl_pct,
+#              sim_realized_pnl, sim_total_pnl
+#         - Applies ladder/heat guardrails in R-space (v1.5)
+#!/usr/bin/env python3
+# ============================================================
+# queen/services/actionable_row.py — v1.2 (excerpt)
+# ------------------------------------------------------------
+# Wires:
+#   • TradeState  → R metrics (open_R, peak_R, max_dd_R)
+#   • LadderContext → ladder_guardrails.apply_ladder_guardrails
+# ============================================================
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
 
-import polars as pl  # used by other parts; keep import for consistency
+from queen.services.trade_state import TradeState, update_trade_state
+from queen.services.ladder_guardrails import LadderContext, apply_ladder_guardrails
+
+
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Literal, Optional, Tuple
+
+import polars as pl
 
 from queen.helpers.logger import log
-from queen.services.cockpit_row import build_cockpit_row
-
-# optional: apply strategy overlays (playbook / tv / action_tag / risk_mode)
-try:
-    from queen.strategies.fusion import apply_strategies as _apply_strategies
-except Exception:  # pragma: no cover
-    _apply_strategies = None
-
-# sim tunables (centralized)
-from queen.settings.sim_settings import (
-    ADD_MIN_UNREAL_PCT,
-    ADD_ONLY_WHEN_GREEN,
-    MAX_PYRAMID_UNITS,
-    NOTIONAL_PER_UNIT_DEFAULT,
-    SIM_MAX_UNITS,
-    SIM_MIN_UNITS,
-    TRAIL_PCT,
+from queen.services.ladder_guardrails import LadderContext, apply_ladder_guardrails
+from queen.services.scoring import (
+    action_for as _scoring_action_for,
+    compute_indicators_plus_bible,
 )
+from queen.services.trade_state import TradeState, update_trade_state
+from queen.settings.sim_settings import PositionSide
+
+SimSide = Literal["FLAT", "LONG", "SHORT"]
 
 
-def _to_float(val: Any) -> Optional[float]:
-    try:
-        if val is None:
-            return None
-        return float(val)
-    except Exception:
-        return None
+# ----------------- sim state -----------------
 
 
-def _init_sim_state(sim_state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Normalise / seed simulation state that persists between bars."""
-    base = {
-        "side": "FLAT",              # current synthetic side
-        "qty": 0.0,
-        "avg": None,
-        "realized_pnl": 0.0,
-        "unit_size": 1.0,
-        "sim_peak": None,
-        # trade id management
-        "next_trade_id": 1,         # integer trade id generator
-        "current_trade_id": None,   # active trade id while LONG
-    }
-    if not sim_state:
-        return base
-    out = dict(base)
-    out.update({k: v for k, v in sim_state.items() if k in base})
-    out["side"] = (out.get("side") or "FLAT").upper()
-    out["qty"] = float(out.get("qty") or 0.0)
-    try:
-        out["unit_size"] = float(out.get("unit_size") or 1.0)
-    except Exception:
-        out["unit_size"] = 1.0
-    if out.get("sim_peak") is not None:
-        try:
-            out["sim_peak"] = float(out["sim_peak"])
-        except Exception:
-            out["sim_peak"] = None
-    try:
-        out["next_trade_id"] = int(out.get("next_trade_id") or 1)
-    except Exception:
-        out["next_trade_id"] = 1
-    # current_trade_id may be None or int
-    if out.get("current_trade_id") is not None:
-        try:
-            out["current_trade_id"] = int(out["current_trade_id"])
-        except Exception:
-            out["current_trade_id"] = None
-    return out
+@dataclass
+class SimState:
+    side: SimSide = "FLAT"
+    qty: float = 0.0
+    avg: float = 0.0
+    realized_pnl: float = 0.0
 
 
-def _compute_unit_size(
-    row: Dict[str, Any],
+def _state_from_dict(d: Optional[Dict[str, Any]]) -> SimState:
+    if not d:
+        return SimState()
+    return SimState(
+        side=d.get("side", "FLAT"),
+        qty=float(d.get("qty", 0.0) or 0.0),
+        avg=float(d.get("avg", 0.0) or 0.0),
+        realized_pnl=float(d.get("realized_pnl", 0.0) or 0.0),
+    )
+
+
+# ----------------- per-symbol trade + ladder meta -----------------
+
+# R-space state: per (symbol, side)
+_TRADE_STATE: Dict[Tuple[str, str], TradeState] = {}
+# Keyed per synthetic trade, e.g. (symbol, interval, side, sim_trade_id)
+_TRADE_STATE_REGISTRY: Dict[Tuple[str, str, str, int], TradeState] = {}
+
+# Ladder meta: per (symbol, side): ladder_adds, last_add_price
+_LADDER_META: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+
+# ----------------- decision helpers -----------------
+
+
+_LONG_ENTRIES = {"BUY", "ADD"}
+_LONG_EXIT = "EXIT"
+
+_SHORT_ENTRIES = {"SELL", "ADD_SHORT"}
+_SHORT_EXIT = "EXIT_SHORT"
+
+_HOLD_TOKENS = {"HOLD"}
+_AVOID_TOKENS = {"AVOID"}
+
+
+def _normalize_dec(dec: Any) -> str:
+    if dec is None:
+        return ""
+    return str(dec).strip().upper()
+
+def _update_r_geometry_for_row(row) -> TradeState:
+    """
+    Update TradeState for this symbol/interval/side/trade_id using the
+    latest cmp/entry/sl and return the state.
+    """
+    symbol = row["symbol"]
+    interval = row["interval"]
+    side = row["sim_side"]          # "LONG" / "SHORT" (or PositionSide)
+    trade_id = int(row["sim_trade_id"])
+
+    key = (symbol, interval, str(side), trade_id)
+
+    state = _TRADE_STATE_REGISTRY.get(key)
+    if state is None:
+        state = TradeState(symbol=symbol, side=side)
+        _TRADE_STATE_REGISTRY[key] = state
+
+    # Geometry from row (you already have these in the Parquet)
+    cmp_ = float(row["cmp"])
+    entry_price = float(row["entry"])
+    sl_price = float(row["sl"])
+
+    state = update_trade_state(
+        state,
+        cmp_=cmp_,
+        entry_price=entry_price,
+        sl_price=sl_price,
+    )
+    _TRADE_STATE_REGISTRY[key] = state
+    return state
+
+def _is_long_entry(dec: str) -> bool:
+    return dec in _LONG_ENTRIES
+
+
+def _is_short_entry(dec: str) -> bool:
+    return dec in _SHORT_ENTRIES
+
+
+def _is_long_exit(dec: str) -> bool:
+    return dec == _LONG_EXIT
+
+
+def _is_short_exit(dec: str) -> bool:
+    return dec == _SHORT_EXIT
+
+
+def _is_hold(dec: str) -> bool:
+    return dec in _HOLD_TOKENS
+
+
+def _is_avoid(dec: str) -> bool:
+    return dec in _AVOID_TOKENS
+
+
+# ----------------- ENGINE ADAPTER (wired to scoring.py) -----------------
+
+
+def _engine_build_base_row(
     *,
-    notional_per_unit: float = NOTIONAL_PER_UNIT_DEFAULT,
-    min_units: float = SIM_MIN_UNITS,
-    max_units: float = SIM_MAX_UNITS,
-) -> float:
-    """Price-based synthetic unit sizing: aim for notional exposure per unit."""
-    cmp_px = _to_float(row.get("cmp") or row.get("entry"))
-    if cmp_px is None or cmp_px <= 0:
-        return float(min_units)
-    raw = notional_per_unit / cmp_px
-    try:
-        units = float(max(1, int(raw)))
-    except Exception:
-        units = raw
-    if units < min_units:
-        units = min_units
-    if units > max_units:
-        units = max_units
-    return float(units)
-
-
-def _step_auto_long_sim(
-    row: Dict[str, Any],
-    sim_state: Optional[Dict[str, Any]],
-    *,
-    eod_force: bool = False,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Auto-position long-only simulator with trade_id + diagnostics."""
-    # Ensure diagnostic keys exist
-    row.setdefault("sim_forced_eod", False)
-    row.setdefault("sim_exit_reason", None)
-    row.setdefault("sim_skipped_add", 0)
-    row.setdefault("sim_skip_reason", None)
-    row.setdefault("sim_ignored_signal", False)
-
-    state = _init_sim_state(sim_state)
-
-    side = state["side"]
-    qty = state["qty"]
-    avg = state["avg"]
-    realized = state["realized_pnl"]
-    unit_size = state.get("unit_size", 1.0)
-    sim_peak = state.get("sim_peak")
-    next_trade_id = state.get("next_trade_id", 1)
-    current_trade_id = state.get("current_trade_id")
-
-    decision_in = (row.get("decision") or "").upper()
-    trade_status = (row.get("trade_status") or "").upper()
-
-    cmp_px = _to_float(row.get("cmp"))
-    entry_px = _to_float(row.get("entry")) or cmp_px
-
-    # default effective decision mirrors incoming one; we'll set sim_effective_decision
-    sim_effective_decision = decision_in
-    sim_ignored_signal = False
-    sim_skipped_add = 0
-
-    # ---------- FLAT => open ----------
-    if side == "FLAT":
-        if decision_in in {"BUY", "ADD"} and entry_px is not None:
-            unit_size = _compute_unit_size(row)
-            side = "LONG"
-            qty = float(unit_size)
-            avg = entry_px
-            sim_peak = float(cmp_px if cmp_px is not None else entry_px)
-            # new trade id assigned on entry
-            current_trade_id = int(next_trade_id)
-            next_trade_id += 1
-            sim_effective_decision = "BUY"
-            row["sim_exit_reason"] = None
-
-    # ---------- LONG ----------
-    elif side == "LONG":
-        # update peak
-        try:
-            if cmp_px is not None:
-                if sim_peak is None or cmp_px > sim_peak:
-                    sim_peak = float(cmp_px)
-        except Exception:
-            pass
-
-        # compute current unreal (absolute and percent)
-        current_unreal = None
-        current_unreal_pct = None
-        try:
-            if avg is not None and cmp_px is not None and qty > 0:
-                current_unreal = (cmp_px - avg) * qty
-                current_unreal_pct = (cmp_px - avg) / avg * 100.0
-        except Exception:
-            current_unreal = None
-            current_unreal_pct = None
-
-        # trailing stop (highest priority)
-        if sim_peak is not None and cmp_px is not None:
-            try:
-                sim_trail_stop = sim_peak * (1.0 - float(TRAIL_PCT))
-                row["sim_trail_stop"] = sim_trail_stop
-                row["sim_peak"] = sim_peak
-                if cmp_px <= sim_trail_stop:
-                    # book realized pnl and flatten trade
-                    try:
-                        realized += (cmp_px - avg) * qty
-                    except Exception:
-                        pass
-                    row["sim_exit_reason"] = "TRAILING_STOP"
-                    row["sim_forced_eod"] = False
-                    sim_effective_decision = "EXIT"
-                    side = "FLAT"
-                    # stamp trade_id on exit row before clearing
-                    row["sim_trade_id"] = current_trade_id
-                    current_trade_id = None
-                    qty = 0.0
-                    avg = None
-                    sim_peak = None
-                    # done with this bar
-            except Exception:
-                pass
-        else:
-            row.setdefault("sim_trail_stop", None)
-            row.setdefault("sim_peak", sim_peak)
-
-        # Still LONG? consider ADD/BUY or hard exit
-        if side == "LONG":
-            if decision_in in {"BUY", "ADD"} and entry_px is not None:
-                # refresh unit size if invalid
-                if unit_size <= 0:
-                    unit_size = _compute_unit_size(row)
-
-                # ADD-only-when-green checks
-                allow_add = True
-                if decision_in == "ADD" and ADD_ONLY_WHEN_GREEN:
-                    # require positive unreal AND at least ADD_MIN_UNREAL_PCT (percentage)
-                    if current_unreal is None or current_unreal <= 0.0:
-                        allow_add = False
-                    else:
-                        if ADD_MIN_UNREAL_PCT and current_unreal_pct is not None:
-                            if current_unreal_pct < float(ADD_MIN_UNREAL_PCT):
-                                allow_add = False
-
-                if decision_in == "ADD" and not allow_add:
-                    # mark as ignored for sim
-                    sim_ignored_signal = True
-                    sim_skipped_add = 1
-                    sim_effective_decision = "NO_ACTION"
-                    row["sim_skip_reason"] = "ADD_SKIPPED_NOT_IN_PROFIT"
-                    # don't mutate incoming decision; create sim_effective_decision instead
-                else:
-                    # perform pyramid (cap by MAX_PYRAMID_UNITS * unit_size)
-                    prev_qty = qty
-                    desired_new_qty = qty + float(unit_size)
-                    max_qty_allowed = float(unit_size) * float(MAX_PYRAMID_UNITS)
-                    if prev_qty >= max_qty_allowed:
-                        new_qty = prev_qty
-                    else:
-                        new_qty = min(desired_new_qty, max_qty_allowed)
-                    added_qty = new_qty - prev_qty
-                    if new_qty > 0 and added_qty > 0:
-                        try:
-                            prev_avg = avg if (avg is not None) else entry_px
-                            avg = ((prev_avg * prev_qty) + (entry_px * added_qty)) / new_qty
-                        except Exception:
-                            avg = entry_px
-                        qty = new_qty
-                    sim_effective_decision = decision_in
-
-            # hard exits (explicit EXIT/AVOID or trade_status == 'EXIT')
-            hard_exit = (decision_in in {"EXIT", "AVOID"}) or (trade_status == "EXIT")
-            exit_signal = hard_exit or eod_force
-            if exit_signal and cmp_px is not None and avg is not None and qty > 0:
-                try:
-                    realized += (cmp_px - avg) * qty
-                except Exception:
-                    pass
-                if eod_force:
-                    row["sim_forced_eod"] = True
-                    row["sim_exit_reason"] = "EOD_FORCED"
-                else:
-                    row["sim_forced_eod"] = False
-                    row["sim_exit_reason"] = "HARD_EXIT"
-                sim_effective_decision = "EXIT"
-                # stamp trade id on exit
-                row["sim_trade_id"] = current_trade_id
-                current_trade_id = None
-                side = "FLAT"
-                qty = 0.0
-                avg = None
-                sim_peak = None
-
-    # write per-row sim fields (after processing)
-    row["sim_side"] = side
-    row["sim_qty"] = float(qty)
-    row["sim_avg"] = avg
-    # unrealised p&l
-    unreal = None
-    unreal_pct = None
-    if side == "LONG" and cmp_px is not None and avg is not None and qty > 0:
-        try:
-            unreal = (cmp_px - avg) * qty
-            unreal_pct = (cmp_px - avg) / avg * 100.0
-        except Exception:
-            pass
-    row["sim_pnl"] = unreal
-    row["sim_pnl_pct"] = unreal_pct
-    row["sim_realized_pnl"] = realized
-    try:
-        row["sim_total_pnl"] = (unreal or 0.0) + (realized or 0.0)
-    except Exception:
-        row["sim_total_pnl"] = unreal or realized
-
-    # sim_trade_id: if currently in trade, set it for the row (entry/holds)
-    if current_trade_id is not None:
-        row["sim_trade_id"] = int(current_trade_id)
-    else:
-        # if not set by exit logic, ensure key present (None)
-        row.setdefault("sim_trade_id", None)
-
-    # sim_effective_decision / ignored flag / skipped_add tally (per-row)
-    row["sim_effective_decision"] = sim_effective_decision or None
-    row["sim_ignored_signal"] = bool(sim_ignored_signal)
-    row["sim_skipped_add"] = int(sim_skipped_add or 0)
-
-    # expose unit size / peak / trail stop for observability
-    row["sim_unit_size"] = float(unit_size)
-    row["sim_peak"] = sim_peak
-    row.setdefault("sim_trail_stop", row.get("sim_trail_stop"))
-
-    # prepare next_state
-    next_state: Dict[str, Any] = {
-        "side": side,
-        "qty": float(qty),
-        "avg": avg,
-        "realized_pnl": realized,
-        "unit_size": float(unit_size),
-        "sim_peak": sim_peak,
-        "next_trade_id": int(next_trade_id),
-        "current_trade_id": int(current_trade_id) if current_trade_id is not None else None,
-    }
-    return row, next_state
-
-
-def build_actionable_row(
     symbol: str,
     df: pl.DataFrame,
-    *,
     interval: str,
     book: str,
-    pos_mode: str = "flat",
-    auto_side: str = "long",
-    positions_map: Dict[str, Any] | None = None,
-    cmp_anchor: float | None = None,
-    pos: Optional[Dict[str, Any]] = None,
-    sim_state: Dict[str, Any] | None = None,
+    cmp_anchor: Optional[float] = None,  # kept for forward-compat; not used yet
+) -> Dict[str, Any]:
+    """Adapter that calls your existing scoring pipeline:
+
+        1) compute_indicators_plus_bible(df, interval, symbol)  → indd
+        2) action_for(symbol, indd, book)                       → cockpit row
+
+    Returns a plain dict containing at least:
+        • decision  (BUY / ADD / EXIT / SELL / ADD_SHORT / EXIT_SHORT / HOLD / AVOID)
+        • cmp       (last price)
+        • any other fields you already expose today:
+              bias, score, drivers, cpr_ctx, tv_ctx, regime, etc.
+    """
+    indd = compute_indicators_plus_bible(
+        df,
+        interval=interval,
+        symbol=symbol,
+        pos=None,
+    )
+    if not isinstance(indd, dict):
+        raise TypeError(
+            f"[actionable_row] compute_indicators_plus_bible() returned "
+            f"unsupported type: {type(indd)!r}"
+        )
+
+    ctx = _scoring_action_for(
+        symbol=symbol,
+        indd=indd,
+        book=book,
+        use_uc_lc=True,
+    )
+
+    if isinstance(ctx, dict):
+        base = dict(ctx)
+    elif hasattr(ctx, "model_dump"):
+        base = ctx.model_dump()
+    elif hasattr(ctx, "__dict__"):
+        base = dict(ctx.__dict__)
+    else:
+        raise TypeError(
+            f"[actionable_row] action_for() returned unsupported type: {type(ctx)!r}"
+        )
+
+    log.debug(
+        f"[actionable_row] engine base row for {symbol} @{interval}: "
+        f"decision={base.get('decision')} cmp={base.get('cmp')}"
+    )
+    return base
+
+
+# ----------------- SIM CORE -----------------
+def _apply_guardrails_for_row(row, raw_decision: str) -> str:
+    """
+    Take the raw engine decision for this row and apply ladder/heat guardrails.
+    """
+    # 1) Update R metrics for this trade
+    ts = _update_r_geometry_for_row(row)
+
+    # 2) Build LadderContext from sim_* + TradeState
+    ctx = LadderContext(
+        side=str(row["sim_side"]),          # "LONG" / "SHORT"
+        sim_qty=float(row["sim_qty"]),      # current synthetic qty
+        ladder_adds=int(row["sim_adds"]),   # how many adds so far
+
+        open_R=float(ts.open_R),
+        peak_R=float(ts.peak_open_R),
+        max_dd_R=float(ts.max_dd_R),
+
+        entry_price=float(ts.entry_price) if ts.entry_price else None,
+        last_add_price=float(row["sim_last_add_price"]) if "sim_last_add_price" in row else None,
+        cmp=float(row["cmp"]),
+    )
+
+    # 3) Apply guardrails
+    adj_decision, reasons = apply_ladder_guardrails(raw_decision, ctx)
+
+    # Optional: store reasons into row for debug
+    row["guardrail_decision"] = adj_decision
+    row["guardrail_reasons"] = "; ".join(reasons) if reasons else ""
+
+    return adj_decision
+
+def _apply_sim_step(
+    decision: str,
+    cmp_val: float,
+    auto_side: str,
+    state: SimState,
+) -> SimState:
+    """Apply one decision to sim state under agreed semantics:
+
+        • AVOID = entry filter (never exits, never opens/adds)
+        • HOLD  = maintain position (never opens/exits/adds)
+        • LONG entries:  BUY / ADD
+        • LONG exit:     EXIT
+        • SHORT entries: SELL / ADD_SHORT
+        • SHORT exit:    EXIT_SHORT
+
+    auto_side:
+        "long"  → ignore short vocab for sim
+        "short" → ignore long vocab for sim
+        "both"  → accept both
+    """
+    dec = decision
+    side = state.side
+    qty = state.qty
+    avg = state.avg
+    realized = state.realized_pnl
+
+    # Guardrails for auto_side — ignore opposite-side vocab.
+    if auto_side == "long" and (dec in _SHORT_ENTRIES or dec == _SHORT_EXIT):
+        return state
+    if auto_side == "short" and (dec in _LONG_ENTRIES or dec == _LONG_EXIT):
+        return state
+
+    # 1) HOLD / AVOID → never change position
+    if _is_hold(dec) or _is_avoid(dec):
+        return state
+
+    # 2) LONG entries / exit
+    if _is_long_entry(dec):
+        if side in ("FLAT", "LONG"):
+            new_qty = qty + 1
+            new_avg = ((avg * qty) + cmp_val) / new_qty if new_qty > 0 else cmp_val
+            return SimState(side="LONG", qty=new_qty, avg=new_avg, realized_pnl=realized)
+        return state
+
+    if _is_long_exit(dec):
+        if side == "LONG" and qty > 0:
+            realized += (cmp_val - avg) * qty
+        return SimState(side="FLAT", qty=0.0, avg=0.0, realized_pnl=realized)
+
+    # 3) SHORT entries / exit
+    if _is_short_entry(dec):
+        if side in ("FLAT", "SHORT"):
+            new_qty = qty + 1
+            new_avg = ((avg * qty) + cmp_val) / new_qty if new_qty > 0 else cmp_val
+            return SimState(side="SHORT", qty=new_qty, avg=new_avg, realized_pnl=realized)
+        return state
+
+    if _is_short_exit(dec):
+        if side == "SHORT" and qty > 0:
+            realized += (avg - cmp_val) * qty
+        return SimState(side="FLAT", qty=0.0, avg=0.0, realized_pnl=realized)
+
+    # Any unknown decision → no change
+    return state
+
+
+def _compute_unrealized(
+    side: SimSide,
+    qty: float,
+    avg: float,
+    cmp_val: float,
+) -> float:
+    if side == "LONG" and qty > 0:
+        return (cmp_val - avg) * qty
+    if side == "SHORT" and qty > 0:
+        return (avg - cmp_val) * qty
+    return 0.0
+
+
+# ----------------- PUBLIC ENTRYPOINT -----------------
+def build_actionable_row(
+    *,
+    symbol: str,
+    df: pl.DataFrame,
+    interval: str,
+    book: str = "all",
+    pos_mode: str = "flat",          # "flat" | "live" | "auto"
+    auto_side: str = "both",         # "long" | "short" | "both"
+    positions_map: Optional[Dict[str, Any]] = None,
+    cmp_anchor: Optional[float] = None,
+    sim_state: Optional[Dict[str, Any]] = None,
     eod_force: bool = False,
-) -> Tuple[Dict[str, Any], Dict[str, Any] | None]:
-    """Build actionable row and optionally run the synthetic sim when pos_mode == 'auto'."""
-    if df is None or getattr(df, "is_empty", lambda: True)():
-        return {}, sim_state
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Main orchestrator used by:
+        • monitor/actionable
+        • cli/replay_actionable.py
+        • cli/scan_signals.py
+        • cli/debug_decisions.py
 
-    eff_pos = None
-    if pos_mode == "live" and positions_map:
-        eff_pos = positions_map.get(symbol)
+    Returns:
+        (row, new_sim_state_dict)
+    """
+    if df.is_empty():
+        return {}, sim_state or {}
 
-    try:
-        row = build_cockpit_row(
-            symbol,
-            df,
-            interval=interval,
-            book=book,
-            tactical=None,
-            pattern=None,
-            reversal=None,
-            volatility=None,
-            pos=eff_pos or pos,
-        ) or {}
-    except Exception as e:
-        log.exception(f"[build_actionable_row] cockpit_row failed → {symbol}: {e}")
-        return {}, sim_state
+    symbol_u = str(symbol).upper()
 
-    if not row:
-        return {}, sim_state
+    # 1) Engine decision (via scoring pipeline)
+    base = _engine_build_base_row(
+        symbol=symbol_u,
+        df=df,
+        interval=interval,
+        book=book,
+        cmp_anchor=cmp_anchor,
+    )
 
-    if cmp_anchor is not None:
+    # Ensure cmp is available
+    if "cmp" in base and base["cmp"] is not None:
+        cmp_val = float(base["cmp"])
+    else:
         try:
-            row["cmp"] = float(cmp_anchor)
+            cmp_val = float(df["close"].tail(1).item())
         except Exception:
-            pass
+            cmp_val = float(df.select("close").tail(1)[0, 0])
+        base["cmp"] = cmp_val
 
-    if _apply_strategies is not None:
+    decision = _normalize_dec(base.get("decision"))
+    cmp_val = float(base["cmp"])
+
+    # 2) Position mode handling
+    if pos_mode not in {"flat", "live", "auto"}:
+        log.warning(
+            f"[actionable_row] Unknown pos_mode={pos_mode!r}, defaulting to 'flat'"
+        )
+        pos_mode = "flat"
+
+    # Previous sim state for this symbol in this replay
+    state = _state_from_dict(sim_state)
+    prev_state = state
+
+    # 2a) EOD force only in auto-mode
+    if pos_mode == "auto" and eod_force:
+        if state.side == "LONG" and state.qty > 0:
+            decision = _LONG_EXIT
+        elif state.side == "SHORT" and state.qty > 0:
+            decision = _SHORT_EXIT
+
+    # 2b) R-space state before taking new action (only in auto-mode)
+    trade_state: Optional[TradeState] = None
+    ladder_meta: Dict[str, Any] = {"ladder_adds": 0, "last_add_price": None}
+
+    if pos_mode == "auto":
+        # Map sim side into PositionSide enum; guard against invalid values
         try:
-            row = _apply_strategies(
-                row,
-                interval=interval,
-                phase=row.get("time_bucket"),
-                risk=row.get("risk_mode"),
+            side_enum = PositionSide(prev_state.side)
+        except ValueError:
+            side_enum = PositionSide.FLAT
+
+        if side_enum != PositionSide.FLAT:
+            key = (symbol_u, side_enum.value)
+
+            trade_state = _TRADE_STATE.get(key) or TradeState(
+                symbol=symbol_u,
+                side=side_enum,
             )
-        except Exception as e:
-            log.exception(f"[build_actionable_row] strategy overlay failed → {symbol}: {e}")
 
-    row["held"] = bool(eff_pos)
+            entry_px = base.get("entry") or cmp_val
+            sl_px = base.get("sl") or cmp_val
 
-    next_sim_state = sim_state
-    if pos_mode == "auto" and auto_side == "long":
-        try:
-            row, next_sim_state = _step_auto_long_sim(
-                row,
-                sim_state,
-                eod_force=eod_force,
+            trade_state = update_trade_state(
+                trade_state,
+                cmp_=cmp_val,
+                entry_price=float(entry_px),
+                sl_price=float(sl_px),
             )
-        except Exception as e:
-            log.exception(f"[build_actionable_row] auto-sim failed → {symbol}: {e}")
+            _TRADE_STATE[key] = trade_state
 
-    return row, next_sim_state
+            ladder_meta = _LADDER_META.get(key) or {
+                "ladder_adds": 0,
+                "last_add_price": None,
+            }
+            _LADDER_META[key] = ladder_meta
+        else:
+            trade_state = None
+
+    # 2c) Apply ladder/heat guardrails (auto-mode only)
+    if pos_mode == "auto":
+        # Decide side for context:
+        if prev_state.side in ("LONG", "SHORT"):
+            ctx_side = prev_state.side
+        elif decision in _LONG_ENTRIES | {_LONG_EXIT}:
+            ctx_side = "LONG"
+        elif decision in _SHORT_ENTRIES | {_SHORT_EXIT}:
+            ctx_side = "SHORT"
+        else:
+            ctx_side = "LONG"  # safe default
+
+        ctx = LadderContext(
+            side=ctx_side,
+            sim_qty=float(prev_state.qty),
+            ladder_adds=int(ladder_meta.get("ladder_adds", 0)),
+            open_R=float(getattr(trade_state, "open_R", 0.0) or 0.0),
+            peak_R=float(getattr(trade_state, "peak_open_R", 0.0) or 0.0),
+            max_dd_R=float(getattr(trade_state, "max_dd_R", 0.0) or 0.0),
+            entry_price=(
+                getattr(trade_state, "entry_price", None) if trade_state else None
+            ),
+            last_add_price=ladder_meta.get("last_add_price", None),
+            cmp=cmp_val,
+        )
+
+        adjusted_decision, reasons = apply_ladder_guardrails(decision, ctx)
+
+        base["decision_raw"] = decision
+        base["sim_guardrails"] = reasons
+        decision_used = adjusted_decision
+    else:
+        base["decision_raw"] = decision
+        base["sim_guardrails"] = []
+        decision_used = decision
+
+    # 2d) Apply synthetic sim in auto-mode with final decision
+    if pos_mode == "auto":
+        state = _apply_sim_step(
+            decision_used,
+            cmp_val,
+            auto_side=auto_side,
+            state=prev_state,
+        )
+
+        # Update ladder meta based on executed action
+        prev_side = prev_state.side
+        new_side = state.side
+
+        # If we are flat now, clear R-space & ladder state
+        if new_side == "FLAT" or state.qty <= 0:
+            if prev_side in ("LONG", "SHORT"):
+                key_prev = (symbol_u, prev_side)
+                _TRADE_STATE.pop(key_prev, None)
+                _LADDER_META.pop(key_prev, None)
+        else:
+            # We have an open position
+            key_new = (symbol_u, new_side)
+            lm = _LADDER_META.get(key_new) or {
+                "ladder_adds": 0,
+                "last_add_price": None,
+            }
+
+            # Treat true ADDs as any size increase while already in trade
+            did_add_here = (
+                prev_side == new_side
+                and prev_state.qty > 0
+                and state.qty > prev_state.qty
+                and decision_used in ("ADD", "ADD_SHORT", "BUY", "SELL")
+            )
+            if did_add_here:
+                lm["ladder_adds"] = int(lm.get("ladder_adds", 0)) + 1
+                lm["last_add_price"] = cmp_val
+
+            _LADDER_META[key_new] = lm
+    else:
+        # pos_mode == "flat" / "live": no internal sim
+        state = prev_state
+
+    # 3) PnL math
+    unrealized = _compute_unrealized(state.side, state.qty, state.avg, cmp_val)
+    total_pnl = state.realized_pnl + unrealized
+    notional = abs(state.avg) * state.qty
+    pnl_pct = (total_pnl / notional * 100.0) if notional > 0 else 0.0
+
+    # 4) Attach sim fields; decision gets the risk-managed one in base
+    base["decision"] = decision_used
+
+    row = dict(base)
+    row["sim_side"] = state.side
+    row["sim_qty"] = state.qty
+    row["sim_avg"] = round(state.avg, 4) if state.avg else 0.0
+    row["sim_pnl"] = round(unrealized, 2)
+    row["sim_pnl_pct"] = round(pnl_pct, 2)
+    row["sim_realized_pnl"] = round(state.realized_pnl, 2)
+    row["sim_total_pnl"] = round(total_pnl, 2)
+
+    return row, asdict(state)
+
+# ----------------- DEBUG DEMO HELPER -----------------
+# Used only by queen/cli/debug_decisions.py
+# -----------------------------------------------------
+
+
+def simulate_rows_for_symbol(*args, **kwargs) -> List[Dict[str, Any]]:
+    """Small deterministic demo used by debug_decisions.py.
+
+    We intentionally accept *args/**kwargs so the helper stays compatible
+    even if the caller's signature changes (symbol, interval, etc.).
+    """
+    symbol = kwargs.get("symbol", "DEMO")
+    auto_side = kwargs.get("auto_side", "both")
+
+    script = [
+        ("2025-01-01T09:30:00", "BUY",        100.0),
+        ("2025-01-01T09:40:00", "HOLD",       102.0),
+        ("2025-01-01T09:50:00", "AVOID",      104.0),
+        ("2025-01-01T10:00:00", "ADD",        103.0),
+        ("2025-01-01T10:10:00", "EXIT",       106.0),
+        ("2025-01-01T10:20:00", "SELL",       105.0),
+        ("2025-01-01T10:30:00", "HOLD",       103.0),
+        ("2025-01-01T10:40:00", "AVOID",      102.0),
+        ("2025-01-01T10:50:00", "EXIT_SHORT", 104.0),
+    ]
+
+    rows: List[Dict[str, Any]] = []
+    state = SimState()
+
+    for ts, dec, cmp_val in script:
+        state = _apply_sim_step(dec, cmp_val, auto_side=auto_side, state=state)
+
+        unrealized = _compute_unrealized(state.side, state.qty, state.avg, cmp_val)
+        total_pnl = state.realized_pnl + unrealized
+        notional = abs(state.avg) * state.qty
+        pnl_pct = (total_pnl / notional * 100.0) if notional > 0 else 0.0
+
+        rows.append(
+            {
+                "timestamp": ts,
+                "symbol": symbol,
+                "decision": dec,
+                "cmp": cmp_val,
+                "sim_side": state.side,
+                "sim_qty": state.qty,
+                "sim_avg": round(state.avg, 2),
+                "sim_pnl": round(unrealized, 2),
+                "sim_pnl_pct": round(pnl_pct, 2),
+                "sim_realized_pnl": round(state.realized_pnl, 2),
+                "sim_total_pnl": round(total_pnl, 2),
+            }
+        )
+
+    return rows

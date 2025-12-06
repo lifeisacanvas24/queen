@@ -1,0 +1,10 @@
+{# Confidence Section Partial #}
+<div class="confidence-section">
+    <div class="confidence-header">
+        <span class="confidence-label">{{ signal.confidence_label | default('Setup Quality') }}</span>
+        <span class="confidence-value">{{ signal.confidence }}%</span>
+    </div>
+    <div class="confidence-bar">
+        <div class="confidence-fill {{ 'high' if signal.confidence >= 75 else 'medium' if signal.confidence >= 50 else 'low' }}" style="width: {{ signal.confidence }}%"></div>
+    </div>
+</div>

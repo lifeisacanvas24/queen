@@ -1,0 +1,47 @@
+{# Scalp Card Template - 5M fast trades #}
+{# Extends card_base with scalp-specific components #}
+
+{% extends 'cards/card_base.html' %}
+
+{% block card_content %}
+    {# Signal Score #}
+    {% include 'cards/partials/signal_score.html' %}
+    
+    {# R:R Box #}
+    {% include 'cards/partials/rr_box.html' %}
+    
+    {# Wyckoff Phase (if available) #}
+    {% if signal.wyckoff_phase %}
+    {% include 'cards/partials/wyckoff_phase.html' %}
+    {% endif %}
+    
+    {# FVG Zones (for breakouts) #}
+    {% if signal.fvg_zones %}
+    {% include 'cards/partials/fvg_zones.html' %}
+    {% endif %}
+    
+    {# Trade Levels #}
+    {% include 'cards/partials/trade_levels.html' %}
+    
+    {# Indicators Row (VWAP, Delta) #}
+    {% if signal.indicators %}
+    <div class="indicators-row">
+        {% for ind in signal.indicators %}
+        <div class="indicator-box">
+            <div class="ind-header">
+                <span class="ind-label">{{ ind.label }}</span>
+                <span class="ind-value">{{ ind.value }}</span>
+            </div>
+            <div class="ind-bar">
+                <div class="ind-fill {{ ind.strength }}" style="width: {{ ind.percent }}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {# Confidence (for breakouts) #}
+    {% if signal.confidence %}
+    {% include 'cards/partials/confidence.html' %}
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{# Header Component - Glass morphism sticky header #}
+<header class="header">
+    <div class="header-content">
+        <div class="logo">
+            <div class="logo-icon"><i class="fas fa-crown"></i></div>
+            <span>Queen</span>
+        </div>
+        <div class="header-controls">
+            <div class="select-wrapper">
+                <select id="portfolioSelect">
+                    <option value="all" {% if portfolio == 'all' %}selected{% endif %}>All Stocks</option>
+                    <option value="holdings" {% if portfolio == 'holdings' %}selected{% endif %}>My Holdings</option>
+                    <option value="watchlist" {% if portfolio == 'watchlist' %}selected{% endif %}>Watchlist</option>
+                    <option value="nifty50" {% if portfolio == 'nifty50' %}selected{% endif %}>Nifty 50</option>
+                    <option value="banknifty" {% if portfolio == 'banknifty' %}selected{% endif %}>Bank Nifty</option>
+                    <option value="fno" {% if portfolio == 'fno' %}selected{% endif %}>F&O Stocks</option>
+                </select>
+            </div>
+            <div class="select-wrapper">
+                <select id="timeframeSelect">
+                    <option value="5m" {% if timeframe == '5m' %}selected{% endif %}>5 min</option>
+                    <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15 min</option>
+                    <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1 hour</option>
+                    <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4 hour</option>
+                    <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>Daily</option>
+                </select>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot {% if is_market_open %}live{% else %}closed{% endif %}"></span>
+                <span>{{ 'Live' if is_market_open else 'Closed' }}</span>
+                <span id="currentTime">--:--:--</span>
+            </div>
+        </div>
+    </div>
+</header>

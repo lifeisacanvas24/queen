@@ -1,0 +1,21 @@
+{# Footer Component #}
+<footer class="footer">
+    <div class="footer-content">
+        <div class="footer-left">
+            <span class="footer-brand">Queen Cockpit</span>
+            <span class="footer-version">v3.0</span>
+        </div>
+        <div class="footer-center">
+            <span class="market-status">
+                {% if is_market_open %}
+                <i class="fas fa-circle live"></i> Market Open
+                {% else %}
+                <i class="fas fa-circle closed"></i> Market Closed
+                {% endif %}
+            </span>
+        </div>
+        <div class="footer-right">
+            <span class="last-update">Last Update: <span id="lastUpdateTime">{{ last_update | default('--:--') }}</span></span>
+        </div>
+    </div>
+</footer>

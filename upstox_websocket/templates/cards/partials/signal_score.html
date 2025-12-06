@@ -1,0 +1,10 @@
+{# Signal Score Partial #}
+<div class="signal-score">
+    <span class="score-label">{{ signal.score_label | default('Signal Strength') }}</span>
+    <div class="score-display">
+        <div class="score-bar">
+            <div class="score-fill {{ 'high' if signal.score >= 8 else 'medium' if signal.score >= 6 else 'low' }}" style="width: {{ signal.score * 10 }}%"></div>
+        </div>
+        <span class="score-value {{ 'high' if signal.score >= 8 else 'medium' if signal.score >= 6 else 'low' }}">{{ signal.score }}</span>
+    </div>
+</div>

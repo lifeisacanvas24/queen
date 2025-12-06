@@ -4,8 +4,8 @@
   "sector": "Oil, Gas & Consumable Fuels",
   "industry": "Refineries & Marketing",
   "broad_sector": "Energy",
-  "market_cap": 2082512.0,
-  "current_price": 1539.0,
+  "market_cap": 2081294.0,
+  "current_price": 1538.0,
   "week_52_high": 1581.0,
   "week_52_low": 1115.0,
   "pe_ratio": 53.3,
@@ -16,7 +16,7 @@
   "face_value": 10.0,
   "about": "Reliance was founded by Dhirubhai Ambani and is now promoted and managed by his elder son, Mukesh Dhirubhai Ambani. Ambani's family has about 50% shareholding in the conglomerate.",
   "cons": [
-    "Stock is trading at 3.73 times its book value",
+    "Stock is trading at 3.69 times its book value",
     "The company has delivered a poor sales growth of 8.93% over past five years.",
     "Company has a low return on equity of 8.13% over last 3 years.",
     "Earnings include an other income of Rs.25,696 Cr."
@@ -613,8 +613,8 @@
     "profit_cagr_3y": -4.0,
     "profit_cagr_ttm": 7.0,
     "price_cagr_10y": 22.0,
-    "price_cagr_5y": 12.0,
-    "price_cagr_3y": 7.0,
+    "price_cagr_5y": 11.0,
+    "price_cagr_3y": 8.0,
     "price_cagr_1y": 16.0,
     "roe_10y": 9.0,
     "roe_5y": 8.0,
@@ -720,8 +720,8 @@
   "profit_cagr_3y": -4.0,
   "profit_cagr_ttm": 7.0,
   "price_cagr_10y": 22.0,
-  "price_cagr_5y": 12.0,
-  "price_cagr_3y": 7.0,
+  "price_cagr_5y": 11.0,
+  "price_cagr_3y": 8.0,
   "price_cagr_1y": 16.0,
   "roe_10y": 9.0,
   "roe_5y": 8.0,
@@ -738,5 +738,5 @@
   "q_eps_latest": 6.75,
   "pl_sales_ttm": 500019.0,
   "pl_net_profit_ttm": 46971.0,
-  "_extracted_at": "2025-12-03T17:08:46.716421"
+  "_extracted_at": "2025-12-05T12:52:24.470083"
 }

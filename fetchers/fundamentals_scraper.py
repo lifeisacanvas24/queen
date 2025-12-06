@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ============================================================
-queen/fetchers/fundamentals_scraper.py — v7.0 (COMPLETE EXTRACTION)
+queen/fetchers/fundamentals_scraper.py — v7.3 (COMPLETE PE FIX)
 ============================================================
 Screener.in Fundamentals Scraper - Full Data Extraction
 
@@ -11,6 +11,8 @@ Features:
     - Automatic checkpointing and resume
     - Complete data extraction: Growth, Peers, Pledge, etc.
     - Integrated with queen.settings
+    - Fixed PE extraction logic
+    - Cohesive field mapping system
 
 Usage:
     python -m queen.fetchers.fundamentals_scraper --symbol TCS
@@ -57,21 +59,41 @@ _PROJECT_INTEGRATED = False
 _SETTINGS_PATHS = None
 _SETTINGS_FETCH = None
 _FUNDAMENTALS_MAP = None
+_GROWTH_FIELDS = None
+_PEER_FIELDS = None
+_FUNDAMENTALS_BASE_SCHEMA = None
+_FUNDAMENTALS_ADAPTER_COLUMNS = None
+_FUNDAMENTALS_METRIC_COLUMNS = None
 
 try:
     from queen.settings.settings import PATHS, FETCH, EXTERNAL_APIS
     from queen.settings.fundamentals_map import (
-        SCREENER_FIELDS as PROJECT_SCREENER_FIELDS,
+        SCREENER_FIELDS,
         FUNDAMENTALS_BASE_SCHEMA,
         FUNDAMENTALS_ADAPTER_COLUMNS,
         FUNDAMENTALS_METRIC_COLUMNS,
-        GROWTH_FIELDS as PROJECT_GROWTH_FIELDS,
-        PEER_FIELDS as PROJECT_PEER_FIELDS,
+        GROWTH_FIELDS,
+        PEER_FIELDS,
+        SCRAPER_OUTPUT_FIELDS,
+        CLI_DISPLAY_GROUPS,
+        CLI_SHAREHOLDING_FIELDS,
+        CLI_GROWTH_FIELDS,
+        FUNDAMENTALS_TACTICAL_FILTERS,
+        FUNDAMENTALS_IMPORTANCE_MAP,
+        INTRINSIC_BUCKETS,
+        POWERSCORE_WEIGHTS,
+        POWERSCORE_DIMENSION_METRICS,
+        SECTOR_METRIC_ADJUSTMENTS,
     )
     _PROJECT_INTEGRATED = True
     _SETTINGS_PATHS = PATHS
     _SETTINGS_FETCH = FETCH.get("FUNDAMENTALS", {})
-    _FUNDAMENTALS_MAP = PROJECT_SCREENER_FIELDS
+    _FUNDAMENTALS_MAP = SCREENER_FIELDS
+    _GROWTH_FIELDS = GROWTH_FIELDS
+    _PEER_FIELDS = PEER_FIELDS
+    _FUNDAMENTALS_BASE_SCHEMA = FUNDAMENTALS_BASE_SCHEMA
+    _FUNDAMENTALS_ADAPTER_COLUMNS = FUNDAMENTALS_ADAPTER_COLUMNS
+    _FUNDAMENTALS_METRIC_COLUMNS = FUNDAMENTALS_METRIC_COLUMNS
     print("[INFO] Loaded settings from queen.settings")
 except ImportError as e:
     print(f"[INFO] Running standalone (queen.settings not found: {e})")
@@ -144,102 +166,133 @@ class Config:
 # FIELD MAPPINGS (Used if not imported from project)
 # ============================================================
 
-SCREENER_FIELDS = {
-    "top_ratios": {
-        "marketcap": "market_cap",
-        "currentprice": "current_price",
-        "stockpe": "pe_ratio",
-        "pe": "pe_ratio",
-        "bookvalue": "book_value",
-        "dividendyield": "dividend_yield",
-        "roce": "roce_pct",
-        "roe": "roe_pct",
-        "debttoequity": "debt_to_equity",
-        "eps": "eps_ttm",
-        "epsttm": "eps_ttm",
-        "facevalue": "face_value",
-        "highlow": "price_high_low",
-        "grossnpa": "gross_npa_pct",
-        "netnpa": "net_npa_pct",
-        "casa": "casa_pct",
-        "car": "car_pct",
-        "capitaladequacyratio": "car_pct",
-    },
-    "ratios": {
-        "debtordays": "ratio_debtor_days",
-        "inventorydays": "ratio_inventory_days",
-        "dayspayable": "ratio_days_payable",
-        "cashconversioncycle": "ratio_cash_conversion_cycle",
-        "workingcapitaldays": "ratio_working_capital_days",
-        "roce": "ratio_roce_pct",
-        "roe": "ratio_roe_pct",
-        "interestcoverage": "interest_coverage",
-        "interestcoverageratio": "interest_coverage",
-    },
-    "shareholding": {
-        "promoters": "sh_promoters_pct",
-        "promoter": "sh_promoters_pct",
-        "fiis": "sh_fii_pct",
-        "fii": "sh_fii_pct",
-        "foreign": "sh_fii_pct",
-        "diis": "sh_dii_pct",
-        "dii": "sh_dii_pct",
-        "public": "sh_public_pct",
-        "government": "sh_govt_pct",
-        "govt": "sh_govt_pct",
-    },
-}
+# Only define fallbacks if not imported from project
+if not _PROJECT_INTEGRATED:
+    SCREENER_FIELDS = {
+        "top_ratios": {
+            "marketcap": "market_cap",
+            "currentprice": "current_price",
+            "stockpe": "pe_ratio",
+            "pe": "pe_ratio",
+            "p/e": "pe_ratio",
+            "price to earnings": "pe_ratio",
+            "bookvalue": "book_value",
+            "dividendyield": "dividend_yield",
+            "roce": "roce_pct",
+            "roe": "roe_pct",
+            "debttoequity": "debt_to_equity",
+            "eps": "eps_ttm",
+            "epsttm": "eps_ttm",
+            "facevalue": "face_value",
+            "highlow": "price_high_low",
+            "grossnpa": "gross_npa_pct",
+            "netnpa": "net_npa_pct",
+            "casa": "casa_pct",
+            "car": "car_pct",
+            "capitaladequacyratio": "car_pct",
+        },
+        "ratios": {
+            "debtordays": "ratio_debtor_days",
+            "inventorydays": "ratio_inventory_days",
+            "dayspayable": "ratio_days_payable",
+            "cashconversioncycle": "ratio_cash_conversion_cycle",
+            "workingcapitaldays": "ratio_working_capital_days",
+            "roce": "ratio_roce_pct",
+            "roe": "ratio_roe_pct",
+            "interestcoverage": "interest_coverage",
+            "interestcoverageratio": "interest_coverage",
+            "p/e": "ratio_pe",
+            "pe": "ratio_pe",
+            "price to earnings": "ratio_pe",
+        },
+        "shareholding": {
+            "promoters": "sh_promoters_pct",
+            "promoter": "sh_promoters_pct",
+            "fiis": "sh_fii_pct",
+            "fii": "sh_fii_pct",
+            "foreign": "sh_fii_pct",
+            "diis": "sh_dii_pct",
+            "dii": "sh_dii_pct",
+            "public": "sh_public_pct",
+            "government": "sh_govt_pct",
+            "govt": "sh_govt_pct",
+        },
+    }
 
-GROWTH_FIELDS = {
-    "compounded sales growth": {
-        "10 years": "sales_cagr_10y",
-        "5 years": "sales_cagr_5y",
-        "3 years": "sales_cagr_3y",
-        "ttm": "sales_cagr_ttm",
-    },
-    "compounded profit growth": {
-        "10 years": "profit_cagr_10y",
-        "5 years": "profit_cagr_5y",
-        "3 years": "profit_cagr_3y",
-        "ttm": "profit_cagr_ttm",
-    },
-    "stock price cagr": {
-        "10 years": "price_cagr_10y",
-        "5 years": "price_cagr_5y",
-        "3 years": "price_cagr_3y",
-        "1 year": "price_cagr_1y",
-    },
-    "return on equity": {
-        "10 years": "roe_10y",
-        "5 years": "roe_5y",
-        "3 years": "roe_3y",
-        "last year": "roe_last_year",
-    },
-    "return on capital employed": {
-        "10 years": "roce_10y",
-        "5 years": "roce_5y",
-        "3 years": "roce_3y",
-        "last year": "roce_last_year",
-    },
-}
+    GROWTH_FIELDS = {
+        "compounded sales growth": {
+            "10 years": "sales_cagr_10y",
+            "5 years": "sales_cagr_5y",
+            "3 years": "sales_cagr_3y",
+            "ttm": "sales_cagr_ttm",
+        },
+        "compounded profit growth": {
+            "10 years": "profit_cagr_10y",
+            "5 years": "profit_cagr_5y",
+            "3 years": "profit_cagr_3y",
+            "ttm": "profit_cagr_ttm",
+        },
+        "stock price cagr": {
+            "10 years": "price_cagr_10y",
+            "5 years": "price_cagr_5y",
+            "3 years": "price_cagr_3y",
+            "1 year": "price_cagr_1y",
+        },
+        "return on equity": {
+            "10 years": "roe_10y",
+            "5 years": "roe_5y",
+            "3 years": "roe_3y",
+            "last year": "roe_last_year",
+        },
+        "return on capital employed": {
+            "10 years": "roce_10y",
+            "5 years": "roce_5y",
+            "3 years": "roce_3y",
+            "last year": "roce_last_year",
+        },
+    }
 
-PEER_FIELDS = {
-    "name": "peer_name",
-    "s.no.": "_skip",
-    "cmp": "peer_cmp",
-    "p/e": "peer_pe",
-    "pe": "peer_pe",
-    "mar cap": "peer_market_cap",
-    "market cap": "peer_market_cap",
-    "div yld": "peer_div_yield",
-    "dividend yield": "peer_div_yield",
-    "np qtr": "peer_np_qtr",
-    "qtr profit": "peer_np_qtr",
-    "qtr sales": "peer_sales_qtr",
-    "sales qtr": "peer_sales_qtr",
-    "roce": "peer_roce",
-    "roce %": "peer_roce",
-}
+    PEER_FIELDS = {
+        "name": "peer_name",
+        "s.no.": "_skip",
+        "cmp": "peer_cmp",
+        "p/e": "peer_pe",
+        "pe": "peer_pe",
+        "price to earnings": "peer_pe",
+        "mar cap": "peer_market_cap",
+        "market cap": "peer_market_cap",
+        "div yld": "peer_div_yield",
+        "dividend yield": "peer_div_yield",
+        "np qtr": "peer_np_qtr",
+        "qtr profit": "peer_np_qtr",
+        "qtr sales": "peer_sales_qtr",
+        "sales qtr": "peer_sales_qtr",
+        "roce": "peer_roce",
+        "roce %": "peer_roce",
+    }
+
+    FUNDAMENTALS_IMPORTANCE_MAP = {
+        "roce_pct": 1.5,
+        "roe_pct": 1.5,
+        "debt_to_equity": -1.0,  # Negative weight - lower is better
+        "pe_ratio": 1.2,  # Added PE ratio with positive weight
+        "eps_ttm": 0.5,
+        "market_cap": 0.5,
+        "sales_cagr_5y": 1.0,
+        "profit_cagr_5y": 1.0,
+        "sh_promoters_pct": 0.5,
+        "sh_fii_pct": 0.5,
+        "promoter_pledge_pct": -0.5,  # Negative weight - lower is better
+        "book_value": 0.3,
+        "dividend_yield": 0.4,
+    }
+
+    INTRINSIC_BUCKETS = [
+        (85, "A"),   # Excellent
+        (70, "B"),   # Good
+        (50, "C"),   # Average
+        (0, "D"),    # Below Average
+    ]
 
 
 # ============================================================
@@ -510,6 +563,11 @@ def parse_percentage(value: str) -> Optional[float]:
 
 def normalize_key(key: str) -> str:
     """Normalize a key for matching."""
+    # Special handling for PE ratio
+    if "p/e" in key.lower() or "pe" in key.lower():
+        return "pe_ratio"
+
+    # General normalization
     return (key.lower().strip()
             .replace('%', '')
             .replace('/', '')
@@ -616,46 +674,70 @@ class DataExtractor:
         """Extract key ratios from the top section."""
         top_ratios_ul = self.soup.find("ul", id="top-ratios")
         if not top_ratios_ul:
+            log.warning(f"[{self.symbol}] No top-ratios ul found")
             return
+
+        log.debug(f"[{self.symbol}] Found top-ratios with {len(top_ratios_ul.find_all('li'))} items")
 
         for li in top_ratios_ul.find_all("li"):
             text = li.get_text(separator=" | ", strip=True)
+            log.debug(f"[{self.symbol}] Processing li: {text}")
 
             # High / Low special handling
             if "High" in text and "Low" in text:
-                numbers = re.findall(r'[\d,]+(?:\.\d+)?', text)
-                if len(numbers) >= 2:
-                    self.data["week_52_high"] = parse_number(numbers[0])
-                    self.data["week_52_low"] = parse_number(numbers[1])
+                number_spans = li.find_all("span", class_="number")
+                if len(number_spans) >= 2:
+                    self.data["week_52_high"] = parse_number(number_spans[0].get_text(strip=True))
+                    self.data["week_52_low"] = parse_number(number_spans[1].get_text(strip=True))
                 continue
 
             # Get label and value
             name_span = li.find("span", class_="name")
             if not name_span:
+                log.debug(f"[{self.symbol}] No name span found in: {text}")
                 continue
 
-            label = name_span.get_text(strip=True)
+            label = name_span.get_text(strip=True).strip()
+            log.debug(f"[{self.symbol}] Label: '{label}'")
 
             # Get the number span
             number_span = li.find("span", class_="number")
             if number_span:
                 value = parse_number(number_span.get_text(strip=True))
+                log.debug(f"[{self.symbol}] Value from number span: {value}")
             else:
                 # Fallback: extract from full text
                 li_text = li.get_text(strip=True)
                 numbers = re.findall(r'[\d,]+(?:\.\d+)?', li_text)
                 value = parse_number(numbers[-1]) if numbers else None
+                log.debug(f"[{self.symbol}] Value from text: {value}")
 
             if value is None:
+                log.debug(f"[{self.symbol}] No value found for: {label}")
                 continue
 
-            # Map to internal field
+            # Map to internal field using centralized field mappings
             norm_label = normalize_key(label)
             field_map = SCREENER_FIELDS.get("top_ratios", {})
 
             matched = False
             for key, internal_field in field_map.items():
-                if normalize_key(key) == norm_label or key in norm_label:
+                # Special handling for PE ratio
+                if internal_field == "pe_ratio":
+                    if ("pe" in norm_label and "ratio" in norm_label) or norm_label == "pe_ratio":
+                        self.data[internal_field] = value
+                        matched = True
+                        log.debug(f"[{self.symbol}] Extracted PE ratio: {value} from label: {label}")
+                        break
+                # Special handling for ROCE and ROE
+                elif internal_field in ["roce_pct", "roe_pct"]:
+                    if norm_label == internal_field.replace("_pct", ""):
+                        self.data[internal_field] = value
+                        matched = True
+                        log.debug(f"[{self.symbol}] Extracted {internal_field}: {value} from label: {label}")
+                        break
+                # Regular matching for other fields
+                elif normalize_key(key) == norm_label or key in norm_label:
                     self.data[internal_field] = value
                     matched = True
                     break
@@ -668,14 +750,17 @@ class DataExtractor:
                     self.data["current_price"] = value
                 elif norm_label == "stockpe" or norm_label == "pe":
                     self.data["pe_ratio"] = value
+                    log.debug(f"[{self.symbol}] Extracted PE ratio (fallback): {value} from label: {label}")
                 elif "book" in norm_label and "value" in norm_label:
                     self.data["book_value"] = value
                 elif "dividend" in norm_label and "yield" in norm_label:
                     self.data["dividend_yield"] = value
                 elif norm_label == "roce":
                     self.data["roce_pct"] = value
+                    log.debug(f"[{self.symbol}] Extracted ROCE (fallback): {value} from label: {label}")
                 elif norm_label == "roe":
                     self.data["roe_pct"] = value
+                    log.debug(f"[{self.symbol}] Extracted ROE (fallback): {value} from label: {label}")
                 elif "face" in norm_label and "value" in norm_label:
                     self.data["face_value"] = value
                 elif "eps" in norm_label:
@@ -783,8 +868,6 @@ class DataExtractor:
             if header_row:
                 headers = [th.get_text(strip=True) for th in header_row.find_all(["th", "td"])]
 
-        period_headers = headers[1:] if headers else []
-
         # Get data
         tbody = table.find("tbody")
         rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
@@ -809,7 +892,20 @@ class DataExtractor:
                 field_map = SCREENER_FIELDS.get("ratios", {})
 
                 for field_key, internal_key in field_map.items():
-                    if normalize_key(field_key) == norm_key:
+                    # Special handling for ROCE and ROE
+                    if internal_key in ["ratio_roce_pct", "ratio_roe_pct"]:
+                        if norm_key == internal_key.replace("ratio_", "").replace("_pct", ""):
+                            result[internal_key] = value
+                            # Also set the main fields if not already set
+                            if internal_key == "ratio_roce_pct" and "roce_pct" not in self.data:
+                                self.data["roce_pct"] = value
+                                log.debug(f"Extracted ROCE from ratios table: {value}")
+                            elif internal_key == "ratio_roe_pct" and "roe_pct" not in self.data:
+                                self.data["roe_pct"] = value
+                                log.debug(f"Extracted ROE from ratios table: {value}")
+                            break
+                    # Regular matching for other fields
+                    elif normalize_key(field_key) == norm_key:
                         result[internal_key] = value
                         break
 
@@ -835,7 +931,7 @@ class DataExtractor:
 
                 # Map category to our GROWTH_FIELDS keys
                 category = None
-                for cat_key in GROWTH_FIELDS.keys():
+                for cat_key in _GROWTH_FIELDS.keys():
                     if cat_key.lower() in category_text or category_text in cat_key.lower():
                         category = cat_key
                         break
@@ -870,8 +966,8 @@ class DataExtractor:
                             continue
 
                         # Map period to internal key
-                        if category in GROWTH_FIELDS:
-                            for period_key, internal_key in GROWTH_FIELDS[category].items():
+                        if category in _GROWTH_FIELDS:
+                            for period_key, internal_key in _GROWTH_FIELDS[category].items():
                                 # Flexible matching
                                 if period_key in period_text or period_text in period_key:
                                     result[internal_key] = parsed_value
@@ -979,7 +1075,7 @@ class DataExtractor:
 
     def _extract_pledge_data(self, section, result: Dict):
         """Extract promoter pledge data."""
-        # Look for pledge information in the shareholding section
+        # Look for pledge information in shareholding section
         section_text = section.get_text(separator=" ", strip=True).lower()
 
         # Pattern 1: "X% of promoter holding is pledged"
@@ -1055,13 +1151,19 @@ class DataExtractor:
             if not any(h in headers for h in ["name", "s.no.", "cmp", "p/e", "market cap", "mar cap"]):
                 continue
 
-            # Map headers to internal fields
+            # Map headers to internal fields using centralized PEER_FIELDS
             header_mapping = []
             for h in headers:
                 norm_h = normalize_key(h)
                 mapped = None
-                for field_key, internal_key in PEER_FIELDS.items():
-                    if normalize_key(field_key) == norm_h or field_key in h:
+                for field_key, internal_key in _PEER_FIELDS.items():
+                    # Special handling for PE ratio
+                    if internal_key == "peer_pe":
+                        if ("pe" in norm_h and "ratio" in norm_h) or norm_h == "pe_ratio":
+                            mapped = internal_key
+                            break
+                    # Regular matching for other fields
+                    elif normalize_key(field_key) == norm_h or field_key in h:
                         mapped = internal_key
                         break
                 header_mapping.append(mapped)
@@ -1143,7 +1245,62 @@ class DataExtractor:
                                         self.data["debt_to_equity"] = round(float(borrowings) / total_equity, 2)
                                 except (ValueError, TypeError):
                                     pass
-                            break
+                                break
+
+        # Calculate PE ratio if missing but we have price and EPS
+        if not self.data.get("pe_ratio") and self.data.get("current_price") and self.data.get("eps_ttm"):
+            try:
+                price = float(self.data["current_price"])
+                eps = float(self.data["eps_ttm"])
+                if eps > 0:
+                    self.data["pe_ratio"] = round(price / eps, 2)
+                    log.debug(f"Calculated PE ratio: {self.data['pe_ratio']} from price: {price} and EPS: {eps}")
+            except (ValueError, TypeError):
+                pass
+
+        # NEW: Calculate ROCE and ROE from P&L and Balance Sheet if missing
+        if not self.data.get("roce_pct") or not self.data.get("roe_pct"):
+            pl = self.data.get("profit_loss", {})
+            bs = self.data.get("balance_sheet", {})
+
+            # Get latest values
+            def get_latest_value(data_dict, key_pattern):
+                for key, value_dict in data_dict.items():
+                    if key_pattern.lower() in key.lower() and isinstance(value_dict, dict):
+                        periods = list(value_dict.keys())
+                        if periods:
+                            return value_dict.get(periods[-1])
+                return None
+
+            # Get latest EBIT (for ROCE)
+            ebit = get_latest_value(pl, ["Operating Profit", "EBIT", "PBT"])
+
+            # Get latest Net Profit (for ROE)
+            net_profit = get_latest_value(pl, ["Net Profit", "PAT"])
+
+            # Get latest Capital Employed (for ROCE)
+            capital_employed = get_latest_value(bs, ["Total Assets", "Capital Employed"])
+
+            # Get latest Equity (for ROE)
+            equity = get_latest_value(bs, ["Equity Capital", "Net Worth", "Shareholders' Funds"])
+
+            # Calculate ROCE if missing
+            if not self.data.get("roce_pct") and ebit and capital_employed:
+                try:
+                    roce = (float(ebit) / float(capital_employed)) * 100
+                    self.data["roce_pct"] = round(roce, 2)
+                    log.debug(f"Calculated ROCE: {self.data['roce_pct']}% from EBIT: {ebit} and Capital: {capital_employed}")
+                except (ValueError, TypeError):
+                    pass
+
+            # Calculate ROE if missing
+            if not self.data.get("roe_pct") and net_profit and equity:
+                try:
+                    roe = (float(net_profit) / float(equity)) * 100
+                    self.data["roe_pct"] = round(roe, 2)
+                    log.debug(f"Calculated ROE: {self.data['roe_pct']}% from Net Profit: {net_profit} and Equity: {equity}")
+                except (ValueError, TypeError):
+                    pass
 
     def _flatten_for_adapter(self):
         """Flatten nested data for easier consumption."""
@@ -1241,6 +1398,11 @@ class CheckpointManager:
     def mark_completed(self, symbol: str, result: Dict[str, Any]):
         with self._lock:
             self._completed.add(symbol)
+            # Ensure result has a Symbol field
+            if "symbol" not in result:
+                result["symbol"] = symbol
+            if "Symbol" not in result:
+                result["Symbol"] = symbol
             self._results[symbol] = result
 
     def save(self):
@@ -1260,7 +1422,6 @@ class CheckpointManager:
     def get_completed(self) -> Set[str]:
         with self._lock:
             return self._completed.copy()
-
 
 # ============================================================
 # THREADED SCRAPER
@@ -1378,474 +1539,343 @@ class ThreadedFundamentalsScraper:
 
         results = {}
 
-        with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="Scraper") as executor:
-            future_to_symbol = {
-                executor.submit(
-                    self._worker_scrape, symbol, checkpoint, stats, save
-                ): symbol
+        with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="scraper") as executor:
+            # Submit all tasks
+            futures = {
+                executor.submit(self._worker_scrape, symbol, checkpoint, stats, save): symbol
                 for symbol in remaining
             }
 
-            completed_since_checkpoint = 0
+            # Process as they complete
+            for future in as_completed(futures):
+                symbol, result = future.result()
+                results[symbol] = result
 
-            for future in as_completed(future_to_symbol):
-                symbol = future_to_symbol[future]
+                # Log progress
+                log.info(stats.get_progress())
 
-                try:
-                    sym, data = future.result()
-                    results[sym] = data
-                except Exception as e:
-                    log.error(f"{symbol}: Unexpected error - {e}")
-                    results[symbol] = {"symbol": symbol, "_error": str(e)}
-
-                completed_since_checkpoint += 1
-
-                if completed_since_checkpoint >= Config.BATCH_CHECKPOINT_INTERVAL:
+                # Save checkpoint periodically
+                if stats.completed % Config.BATCH_CHECKPOINT_INTERVAL == 0:
                     checkpoint.save()
-                    log.info(f"Checkpoint saved. {stats.get_progress()}")
-                    completed_since_checkpoint = 0
 
-                if stats.completed % 10 == 0:
-                    log.info(stats.get_progress())
-
+        # Final checkpoint save
         checkpoint.save()
 
+        # Merge with previously completed results
         all_results = checkpoint.get_results()
         all_results.update(results)
 
-        combined_path = Config.PROCESSED_DIR / "_all_symbols.json"
-        combined_path.write_text(
-            json.dumps(all_results, indent=2, ensure_ascii=False, default=str),
-            encoding="utf-8"
-        )
-
-        log.success(f"\n{'='*60}")
-        log.success(f"Scraping complete!")
-        log.success(f"  Total: {stats.total}")
-        log.success(f"  Success: {stats.success}")
-        log.success(f"  Failed: {stats.failed}")
-        log.success(f"  Skipped: {stats.skipped}")
-        log.success(f"  Time: {time.time() - stats.start_time:.1f}s")
-        log.success(f"  Output: {combined_path}")
-        log.success(f"{'='*60}\n")
+        log.success(f"Completed: {stats.success}, Failed: {stats.failed}, Skipped: {stats.skipped}")
 
         return all_results
 
     def scrape_sequential(
         self,
         symbols: List[str],
-        save: bool = True
+        save: bool = True,
+        checkpoint_file: Path = None
     ) -> Dict[str, Dict[str, Any]]:
-        """Scrape symbols sequentially."""
+        """Scrape multiple symbols sequentially (for small batches)."""
         symbols = [s.upper().strip() for s in symbols if s.strip()]
-        results = {}
+        checkpoint_file = checkpoint_file or Config.PROCESSED_DIR / "_checkpoint.json"
 
-        log.info(f"Sequential scrape: {len(symbols)} symbols")
+        checkpoint = CheckpointManager(checkpoint_file)
+        stats = ScrapeStats(total=len(symbols))
+
+        remaining = [s for s in symbols if not checkpoint.is_completed(s)]
+        already_done = len(symbols) - len(remaining)
+
+        if already_done > 0:
+            stats.completed = already_done
+            stats.success = already_done
+            stats.skipped = already_done
+
+        log.info(f"Sequential scrape: {len(remaining)} remaining of {len(symbols)} total")
+
+        if not remaining:
+            log.success("All symbols already processed!")
+            return checkpoint.get_results()
 
         self.session_mgr.warm_up()
 
-        for i, symbol in enumerate(symbols, 1):
-            log.info(f"[{i}/{len(symbols)}] {symbol}")
+        results = {}
+
+        for symbol in remaining:
+            symbol, result = self._worker_scrape(symbol, checkpoint, stats, save)
+            results[symbol] = result
+
+            # Save checkpoint after each symbol
+            checkpoint.save()
+
+        # Merge with previously completed results
+        all_results = checkpoint.get_results()
+        all_results.update(results)
+
+        log.success(f"Completed: {stats.success}, Failed: {stats.failed}, Skipped: {stats.skipped}")
+
+        return all_results
+
+def scrape_many(symbols: List[str], output_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """Scrape data for multiple symbols and save to output directory.
+
+    Args:
+        symbols: List of symbols to scrape
+        output_dir: Directory to save scraped data (defaults to Config.PROCESSED_DIR)
+
+    Returns:
+        Dictionary with scraping results and statistics
+    """
+    if output_dir is None:
+        output_dir = Config.PROCESSED_DIR
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize rate limiter and session manager
+    rate_limiter = RateLimiter(Config.RATE_LIMIT_RPM, Config.RATE_LIMIT_BURST)
+    session_manager = SessionManager(rate_limiter)
+
+    # Warm up session
+    if not session_manager.warm_up():
+        log.warning("Session warm-up failed, proceeding anyway")
+
+    # Initialize checkpoint manager
+    checkpoint_file = output_dir / ".checkpoint.json"
+    checkpoint = CheckpointManager(checkpoint_file)
+
+    # Initialize statistics
+    stats = ScrapeStats(total=len(symbols))
+
+    # Process symbols
+    results = {}
+
+    with ThreadPoolExecutor(max_workers=Config.MAX_WORKERS) as executor:
+        futures = {}
+
+        for symbol in symbols:
+            if checkpoint.is_completed(symbol):
+                stats.increment(success=True, skipped=True)
+                continue
+
+            future = executor.submit(scrape_symbol, symbol, session_manager)
+            futures[future] = symbol
+
+        for future in as_completed(futures):
+            symbol = futures[future]
 
             try:
-                data = self.scrape_symbol(symbol, save=save)
-                results[symbol] = data
+                data = future.result()
+                if data:
+                    # Save to file
+                    output_file = output_dir / f"{symbol}.json"
+                    output_file.write_text(json.dumps(data, indent=2, default=str))
+
+                    results[symbol] = data
+                    checkpoint.mark_completed(symbol, data)
+                    stats.increment(success=True)
+                    log.success(f"Scraped {symbol}")
+                else:
+                    stats.increment(success=False)
+                    log.error(f"Failed to scrape {symbol}")
             except Exception as e:
-                log.error(f"{symbol}: Error - {e}")
-                results[symbol] = {"symbol": symbol, "_error": str(e)}
+                stats.increment(success=False)
+                log.error(f"Error scraping {symbol}: {e}")
 
-            if i < len(symbols):
-                time.sleep(random.uniform(Config.SYMBOL_SLEEP_MIN, Config.SYMBOL_SLEEP_MAX))
+            # Save checkpoint periodically
+            if stats.completed % Config.BATCH_CHECKPOINT_INTERVAL == 0:
+                checkpoint.save()
+                log.info(stats.get_progress())
 
-        if save and results:
-            combined_path = Config.PROCESSED_DIR / "_all_symbols.json"
-            combined_path.write_text(
-                json.dumps(results, indent=2, ensure_ascii=False, default=str),
-                encoding="utf-8"
-            )
-            log.success(f"Saved combined to {combined_path}")
+    # Final checkpoint save
+    checkpoint.save()
 
-        return results
+    # Return results
+    return {
+        "total": stats.total,
+        "completed": stats.completed,
+        "success": stats.success,
+        "failed": stats.failed,
+        "skipped": stats.skipped,
+        "results": results,
+    }
 
-    def print_summary(self, data: Dict[str, Any]):
-        """Print a detailed summary of extracted data."""
-        symbol = data.get("symbol", "?")
+def parse_percentage(value: str) -> Optional[float]:
+    """Parse percentage string to float."""
+    if not value:
+        return None
 
-        print(f"\n{'='*70}")
-        print(f"  📊 Summary for {symbol}")
-        print('='*70)
+    # Remove % sign and parse
+    cleaned = value.replace('%', '').strip()
 
-        # Key metrics
-        print("\n  💰 KEY METRICS:")
-        key_fields = [
-            ("Company", "company_name"),
-            ("Sector", "sector"),
-            ("Industry", "industry"),
-            ("Market Cap (Cr)", "market_cap"),
-            ("Current Price", "current_price"),
-            ("P/E Ratio", "pe_ratio"),
-            ("Book Value", "book_value"),
-            ("ROCE %", "roce_pct"),
-            ("ROE %", "roe_pct"),
-            ("Debt/Equity", "debt_to_equity"),
-            ("EPS (TTM)", "eps_ttm"),
-            ("Dividend Yield %", "dividend_yield"),
-            ("Face Value", "face_value"),
-            ("52W High", "week_52_high"),
-            ("52W Low", "week_52_low"),
-        ]
+    # Handle special cases
+    if cleaned in ('-', '', 'NA', 'N/A'):
+        return None
 
-        for label, key in key_fields:
-            value = data.get(key)
-            if value is None:
-                display = "-"
-            elif isinstance(value, float):
-                display = f"{value:,.2f}"
-            else:
-                display = str(value)
-            print(f"    {label:20}: {display}")
+    # Convert to float
+    try:
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
 
-        # Shareholding
-        print("\n  👥 SHAREHOLDING (Latest):")
-        sh_fields = [
-            ("Promoters", "sh_promoters_pct"),
-            ("FII", "sh_fii_pct"),
-            ("DII", "sh_dii_pct"),
-            ("Public", "sh_public_pct"),
-            ("Government", "sh_govt_pct"),
-            ("Promoter Pledge", "promoter_pledge_pct"),
-        ]
+def scrape_symbol(symbol: str, session_manager: SessionManager) -> Optional[Dict[str, Any]]:
+    """Scrape data for a single symbol.
 
-        for label, key in sh_fields:
-            value = data.get(key)
-            if value is not None:
-                print(f"    {label:20}: {value:.2f}%")
+    Args:
+        symbol: Symbol to scrape
+        session_manager: Session manager for HTTP requests
 
-        # Growth
-        print("\n  📈 GROWTH (CAGR):")
-        growth_fields = [
-            ("Sales 10Y", "sales_cagr_10y"),
-            ("Sales 5Y", "sales_cagr_5y"),
-            ("Sales 3Y", "sales_cagr_3y"),
-            ("Profit 10Y", "profit_cagr_10y"),
-            ("Profit 5Y", "profit_cagr_5y"),
-            ("Profit 3Y", "profit_cagr_3y"),
-            ("Price 10Y", "price_cagr_10y"),
-            ("Price 5Y", "price_cagr_5y"),
-            ("Price 3Y", "price_cagr_3y"),
-        ]
+    Returns:
+        Extracted data or None if failed
+    """
+    url = f"{Config.COMPANY_URL}{symbol}/"
 
-        has_growth = False
-        for label, key in growth_fields:
-            value = data.get(key)
-            if value is not None:
-                print(f"    {label:20}: {value:.1f}%")
-                has_growth = True
+    response = session_manager.get(url)
+    if not response:
+        return None
 
-        if not has_growth:
-            print("    (No growth data extracted)")
-
-        # Peers
-        peers = data.get("peers", [])
-        if peers:
-            print(f"\n  🏢 PEERS ({len(peers)} companies):")
-            for i, peer in enumerate(peers[:5]):  # Show top 5
-                name = peer.get("name", "?")
-                pe = peer.get("peer_pe", "-")
-                mcap = peer.get("peer_market_cap", "-")
-                print(f"    {i+1}. {name[:25]:25} P/E: {pe:>8}  MCap: {mcap}")
-            if len(peers) > 5:
-                print(f"    ... and {len(peers) - 5} more")
-        else:
-            print("\n  🏢 PEERS: (No peers extracted)")
-
-        # Sections available
-        sections = []
-        for sec in ["quarters", "profit_loss", "balance_sheet", "cash_flow", "ratios", "growth", "shareholding", "peers"]:
-            if data.get(sec):
-                sections.append(sec)
-        print(f"\n  📁 Sections: {', '.join(sections)}")
-
-        print('='*70 + "\n")
-
-
+    try:
+        soup = BS(response.content, "lxml")
+        extractor = DataExtractor(soup, symbol)
+        return extractor.extract_all()
+    except Exception as e:
+        log.error(f"Error extracting data for {symbol}: {e}")
+        return None
 # ============================================================
-# CLI HELPERS
+# COMMAND LINE INTERFACE
 # ============================================================
 
-def load_symbols_from_csv(file_path: str, symbol_column: str = None) -> List[str]:
-    """Load symbols from a CSV file."""
-    symbols = []
-    path = Path(file_path)
-
-    if not path.exists():
-        log.error(f"File not found: {file_path}")
-        return symbols
-
-    with open(path, 'r') as f:
-        reader = csv.DictReader(f)
-
-        if not symbol_column:
-            headers = reader.fieldnames or []
-            for possible in ["symbol", "Symbol", "SYMBOL", "ticker", "Ticker", "scrip", "Scrip", "SCRIP"]:
-                if possible in headers:
-                    symbol_column = possible
-                    break
-            if not symbol_column and headers:
-                symbol_column = headers[0]
-
-        for row in reader:
-            sym = row.get(symbol_column, "").strip()
-            if sym and not sym.startswith("#"):
-                symbols.append(sym.upper())
-
-    log.info(f"Loaded {len(symbols)} symbols from {file_path}")
-    return symbols
-
-
-def load_symbols_from_file(file_path: str) -> List[str]:
-    """Load symbols from a text file."""
-    symbols = []
-    path = Path(file_path)
-
-    if not path.exists():
-        log.error(f"File not found: {file_path}")
-        return symbols
-
-    with open(path, 'r') as f:
-        for line in f:
-            sym = line.strip()
-            if sym and not sym.startswith("#"):
-                symbols.append(sym.upper())
-
-    log.info(f"Loaded {len(symbols)} symbols from {file_path}")
-    return symbols
-
-
-def debug_html_structure(html_path: str):
-    """Analyze HTML structure for debugging."""
-    html_file = Path(html_path)
-    if not html_file.exists():
-        print(f"File not found: {html_path}")
-        return
-
-    soup = BS(html_file.read_text(encoding="utf-8"), "lxml")
-
-    print("\n" + "="*70)
-    print("HTML STRUCTURE ANALYSIS")
-    print("="*70)
-
-    # Sections
-    print("\n📦 SECTIONS:")
-    for section in soup.find_all("section"):
-        print(f"  - section#{section.get('id', 'NO-ID')}")
-
-    # Top ratios
-    print("\n📊 TOP RATIOS:")
-    top_ratios = soup.find("ul", id="top-ratios")
-    if top_ratios:
-        for li in top_ratios.find_all("li")[:10]:
-            text = li.get_text(separator=" | ", strip=True)[:60]
-            print(f"  - {text}")
-
-    # Company info
-    print("\n🏢 COMPANY INFO:")
-    h1 = soup.find("h1")
-    if h1:
-        print(f"  Name: {h1.get_text(strip=True)}")
-
-    sector = soup.find("a", attrs={"title": "Sector"})
-    if sector:
-        print(f"  Sector: {sector.get_text(strip=True)}")
-
-    broad_sector = soup.find("a", attrs={"title": "Broad Sector"})
-    if broad_sector:
-        print(f"  Broad Sector: {broad_sector.get_text(strip=True)}")
-
-    # Growth data (ranges-table)
-    print("\n📈 GROWTH DATA (ranges-table):")
-    ranges_tables = soup.find_all("table", class_="ranges-table")
-    if ranges_tables:
-        print(f"  Found {len(ranges_tables)} ranges-table elements")
-        for i, table in enumerate(ranges_tables):
-            header = table.find("th")
-            category = header.get_text(strip=True) if header else "Unknown"
-            print(f"\n  📊 {category}:")
-            for row in table.find_all("tr"):
-                cells = row.find_all("td")
-                if len(cells) >= 2:
-                    period = cells[0].get_text(strip=True)
-                    value = cells[1].get_text(strip=True)
-                    print(f"    - {period} {value}")
-    else:
-        print("  No ranges-table elements found")
-
-    # Peers section
-    print("\n🏢 PEERS SECTION:")
-    peers = soup.find("section", id="peers")
-    if peers:
-        tables = peers.find_all("table", class_="data-table")
-        print(f"  Found {len(tables)} data-table elements")
-
-        for table in tables:
-            thead = table.find("thead")
-            if thead:
-                headers = [th.get_text(strip=True) for th in thead.find_all(["th", "td"])]
-                print(f"  Headers: {headers[:7]}")
-
-            tbody = table.find("tbody")
-            rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
-            print(f"  Found {len(rows)} peer rows")
-
-            for row in rows[:3]:
-                cells = row.find_all("td")
-                if cells:
-                    name_cell = cells[0]
-                    link = name_cell.find("a")
-                    name = link.get_text(strip=True) if link else name_cell.get_text(strip=True)
-                    print(f"    - {name[:30]}")
-    else:
-        print("  Peers section not found")
-
-    # Shareholding section (for pledge)
-    print("\n👥 SHAREHOLDING SECTION:")
-    shareholding = soup.find("section", id="shareholding")
-    if shareholding:
-        text = shareholding.get_text(separator=" ", strip=True).lower()
-        if "pledge" in text:
-            print("  ✅ Contains pledge information")
-            # Find pledge mention
-            import re
-            pledge_match = re.search(r'(\d+(?:\.\d+)?)\s*%[^%]*pledge', text)
-            if pledge_match:
-                print(f"  Pledge: {pledge_match.group(1)}%")
-        else:
-            print("  ❌ No pledge information found")
-
-    print("\n" + "="*70)
-
-
-# ============================================================
-# MAIN CLI
-# ============================================================
-
-def main():
-    """Command line interface."""
+def parse_args():
     parser = argparse.ArgumentParser(
-        description="Screener.in Fundamentals Scraper v7.0 (Complete Extraction)",
+        description="Screener.in Fundamentals Scraper",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Single symbol
-    python fundamentals_scraper.py --symbol TCS
-
-    # Multiple symbols (sequential for <5)
-    python fundamentals_scraper.py RELIANCE TCS INFY
-
-    # Parallel scraping
-    python fundamentals_scraper.py --parallel RELIANCE TCS INFY HDFCBANK
-
-    # Batch from CSV
-    python fundamentals_scraper.py --batch universe.csv --workers 4
-
-    # Analyze HTML structure
-    python fundamentals_scraper.py --analyze data/fundamentals/raw/TCS.html
+  python -m queen.fetchers.fundamentals_scraper --symbol TCS
+  python -m queen.fetchers.fundamentals_scraper RELIANCE TCS INFY
+  python -m queen.fetchers.fundamentals_scraper --batch universe.csv --workers 4
+  python -m queen.fetchers.fundamentals_scraper --analyze data/fundamentals/raw/TCS.html
         """
     )
 
-    parser.add_argument("symbols", nargs="*", help="Stock symbols")
-    parser.add_argument("-s", "--symbol", type=str, help="Single symbol")
-    parser.add_argument("-f", "--file", type=str, help="Text file with symbols")
-    parser.add_argument("--batch", type=str, metavar="CSV", help="CSV file for batch")
-    parser.add_argument("--symbol-column", type=str, help="Column name in CSV")
-    parser.add_argument("--parallel", nargs="*", metavar="SYMBOL", help="Parallel scrape")
-    parser.add_argument("-w", "--workers", type=int, default=Config.MAX_WORKERS, help="Workers")
-    parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
-    parser.add_argument("--no-save", action="store_true", help="Don't save results")
-    parser.add_argument("--output-dir", type=str, help="Output directory")
-    parser.add_argument("--debug", action="store_true", help="Debug mode")
-    parser.add_argument("--analyze", type=str, metavar="HTML", help="Analyze HTML")
-    parser.add_argument("--rate-limit", type=int, default=Config.RATE_LIMIT_RPM, help="Req/min")
+    # Create mutually exclusive group for optional arguments only
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--symbol", "-s", help="Single stock symbol to scrape")
+    group.add_argument("--batch", "-b", help="CSV file with symbols")
+    group.add_argument("--analyze", "-a", help="Analyze saved HTML file")
 
-    args = parser.parse_args()
+    # Add positional symbols argument outside of mutually exclusive group
+    parser.add_argument("symbols", nargs="*", help="Stock symbols to scrape")
 
-    # Analyze mode
-    if args.analyze:
-        debug_html_structure(args.analyze)
-        return 0
+    parser.add_argument("--workers", "-w", type=int, help="Number of worker threads")
+    parser.add_argument("--no-save", action="store_true", help="Don't save results to disk")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
-    # Configure
-    if args.output_dir:
-        Config.OUTPUT_DIR = Path(args.output_dir)
-        Config.RAW_DIR = Config.OUTPUT_DIR / "raw"
-        Config.PROCESSED_DIR = Config.OUTPUT_DIR / "processed"
+    return parser.parse_args()
 
+
+def main():
+    args = parse_args()
+
+    # Override config with command line args
     if args.debug:
         Config.DEBUG = True
+    if args.workers:
+        Config.MAX_WORKERS = args.workers
 
-    if args.rate_limit:
-        Config.RATE_LIMIT_RPM = args.rate_limit
+    scraper = ThreadedFundamentalsScraper()
 
-    # Collect symbols
-    symbols = []
+    # Check for analyze mode first (it doesn't need symbols)
+    if args.analyze:
+        html_path = Path(args.analyze)
+        if not html_path.exists():
+            log.error(f"HTML file not found: {args.analyze}")
+            sys.exit(1)
 
-    if args.symbol:
-        symbols.append(args.symbol)
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
 
-    if args.symbols:
-        symbols.extend(args.symbols)
+        soup = BS(html, "lxml")
+        symbol = html_path.stem
+        extractor = DataExtractor(soup, symbol)
+        result = extractor.extract_all()
+        print(json.dumps(result, indent=2, default=str))
+        return
 
-    if args.parallel:
-        symbols.extend(args.parallel)
-
-    if args.file:
-        symbols.extend(load_symbols_from_file(args.file))
-
+    # Check for batch mode
     if args.batch:
-        symbols = load_symbols_from_csv(args.batch, args.symbol_column)
+        if not Path(args.batch).exists():
+            log.error(f"Batch file not found: {args.batch}")
+            sys.exit(1)
 
-    # Default test
-    if not symbols:
-        symbols = ["RELIANCE", "TCS", "HDFCBANK"]
-        log.info(f"No symbols provided. Using: {symbols}")
+        symbols = []
+        with open(args.batch, "r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row and row[0].strip():
+                    symbols.append(row[0].strip())
 
-    # Initialize scraper
-    scraper = ThreadedFundamentalsScraper(max_workers=args.workers)
-    save = not args.no_save
+        if not symbols:
+            log.error("No symbols found in batch file")
+            sys.exit(1)
 
-    # Determine mode
-    use_parallel = (
-        args.parallel is not None or
-        args.batch is not None or
-        len(symbols) > 5
-    )
+        results = scraper.scrape_parallel(symbols, save=not args.no_save)
+        print(json.dumps(results, indent=2, default=str))
+        return
 
-    if use_parallel:
-        log.info(f"PARALLEL mode: {args.workers} workers")
-        results = scraper.scrape_parallel(symbols, save=save)
-    elif len(symbols) == 1:
-        data = scraper.scrape_symbol(symbols[0], save=save)
-        scraper.print_summary(data)
-        results = {symbols[0]: data}
-    else:
-        log.info("SEQUENTIAL mode")
-        results = scraper.scrape_sequential(symbols, save=save)
-        for sym, data in results.items():
-            scraper.print_summary(data)
+    # Check for single symbol mode
+    if args.symbol:
+        result = scraper.scrape_symbol(args.symbol, save=not args.no_save)
+        print(json.dumps(result, indent=2, default=str))
+        return
 
-    # Check success
-    success_count = sum(
-        1 for d in results.values()
-        if d.get("market_cap") or d.get("company_name")
-    )
+    # Handle positional symbols (default mode)
+    if args.symbols:
+        if len(args.symbols) <= 3:
+            results = scraper.scrape_sequential(args.symbols, save=not args.no_save)
+        else:
+            results = scraper.scrape_parallel(args.symbols, save=not args.no_save)
+        print(json.dumps(results, indent=2, default=str))
+        return
 
-    if success_count > 0:
-        log.success(f"Completed: {success_count}/{len(results)} successful")
-        return 0
-    else:
-        log.warning("Completed with issues")
-        return 1
+    # If no arguments provided, show help
+    print("Please provide symbols to scrape or use --help for options")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
+    if __name__ == "__main__":
+        import argparse
+
+        parser = argparse.ArgumentParser(description="Fundamentals Scraper")
+        parser.add_argument("symbols", nargs="+", help="Symbols to scrape")
+        parser.add_argument("--output-dir", type=Path, help="Output directory")
+
+        args = parser.parse_args()
+
+        results = scrape_many(args.symbols, args.output_dir)
+
+        print(f"\nScraping complete:")
+        print(f"  Total: {results['total']}")
+        print(f"  Completed: {results['completed']}")
+        print(f"  Success: {results['success']}")
+        print(f"  Failed: {results['failed']}")
+        print(f"  Skipped: {results['skipped']}")
+
+# ============================================================
+# EXPORTS
+# ============================================================
+
+__all__ = [
+    "Config",
+    "Logger",
+    "RateLimiter",
+    "ScrapeStats",
+    "SessionManager",
+    "DataExtractor",
+    "CheckpointManager",
+    "parse_number",
+    "parse_percentage",
+    "normalize_key",
+    "scrape_symbol",
+    "scrape_many",
+]

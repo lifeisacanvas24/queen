@@ -1,0 +1,13 @@
+{# Wyckoff Phase Bar Partial #}
+<div class="info-box phase">
+    <div class="phase-header">
+        <span class="phase-title">Wyckoff Phase</span>
+        <span class="phase-name {{ signal.wyckoff_phase }}">{{ signal.wyckoff_phase | title }}</span>
+    </div>
+    <div class="phase-bar">
+        <div class="phase-segment acc {% if signal.wyckoff_phase == 'accumulation' %}active{% endif %}" style="width: 25%"></div>
+        <div class="phase-segment mkp {% if signal.wyckoff_phase == 'markup' %}active{% endif %}" style="width: 25%"></div>
+        <div class="phase-segment dst {% if signal.wyckoff_phase == 'distribution' %}active{% endif %}" style="width: 25%"></div>
+        <div class="phase-segment mkd {% if signal.wyckoff_phase == 'markdown' %}active{% endif %}" style="width: 25%"></div>
+    </div>
+</div>

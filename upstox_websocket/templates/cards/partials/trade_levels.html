@@ -1,0 +1,15 @@
+{# Trade Levels Partial - 3 column grid #}
+<div class="trade-levels">
+    <div class="level-item">
+        <div class="level-label">Entry</div>
+        <div class="level-value entry">₹{{ signal.entry | format_price }}</div>
+    </div>
+    <div class="level-item">
+        <div class="level-label">Target</div>
+        <div class="level-value target">₹{{ signal.target | format_price }}</div>
+    </div>
+    <div class="level-item">
+        <div class="level-label">Stop</div>
+        <div class="level-value stop">₹{{ signal.stop_loss | format_price }}</div>
+    </div>
+</div>

@@ -1,0 +1,125 @@
+{# Positional Card Template - Weeks/Months trades #}
+{# Includes P&L Tracking + Hold/Reduce Actions #}
+
+{% extends 'cards/card_base.html' %}
+
+{% block card_content %}
+    {# P&L Box - Key for Holdings #}
+    {% if signal.holding %}
+    <div class="rr-box">
+        <div class="rr-item entry" style="flex: 2;">
+            <div class="rr-label">Your Entry</div>
+            <div class="rr-value">₹{{ signal.holding.entry_price | format_price }}</div>
+        </div>
+        <div class="rr-item pnl {% if signal.holding.pnl_pct < 0 %}negative{% endif %}">
+            <div class="rr-label">P&L</div>
+            <div class="rr-value">{{ '%+.1f' | format(signal.holding.pnl_pct) }}%</div>
+        </div>
+        <div class="rr-item pnl" style="background: rgba({{ '48, 209, 88' if signal.holding.profit >= 0 else '255, 69, 58' }}, 0.15);">
+            <div class="rr-label">Profit</div>
+            <div class="rr-value">₹{{ '%+,.0f' | format(signal.holding.profit) }}</div>
+        </div>
+    </div>
+    {% else %}
+    {# R:R Box for fresh entries #}
+    {% include 'cards/partials/rr_box.html' %}
+    {% endif %}
+    
+    {# Wyckoff Phase #}
+    {% if signal.wyckoff_phase %}
+    <div class="info-box phase">
+        <div class="phase-header">
+            <span class="phase-title">Wyckoff Phase</span>
+            <span class="phase-name {{ signal.wyckoff_phase }}">
+                {{ signal.wyckoff_phase | upper }}
+                {% if signal.wyckoff_phase == 'distribution' %}(⚠️){% endif %}
+            </span>
+        </div>
+        <div class="phase-bar">
+            <div class="phase-segment acc {% if signal.wyckoff_phase == 'accumulation' %}active{% endif %}" style="width: 25%"></div>
+            <div class="phase-segment mkp {% if signal.wyckoff_phase == 'markup' %}active{% endif %}" style="width: 25%"></div>
+            <div class="phase-segment dst {% if signal.wyckoff_phase == 'distribution' %}active{% endif %}" style="width: 25%"></div>
+            <div class="phase-segment mkd {% if signal.wyckoff_phase == 'markdown' %}active{% endif %}" style="width: 25%"></div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Context Box - Hold Rationale or Warning Signs #}
+    {% if signal.context %}
+    <div class="info-box context">
+        <div class="box-title">
+            {% if signal.action == 'REDUCE' %}
+            <i class="fas fa-exclamation-triangle"></i>Warning Signs
+            {% else %}
+            <i class="fas fa-info-circle"></i>Hold Rationale
+            {% endif %}
+        </div>
+        <div class="context-items">
+            {% for ctx in signal.context %}
+            <span class="ctx-item {{ ctx.sentiment }}">
+                {% if ctx.icon %}<i class="fas {{ ctx.icon }}"></i>{% endif %}
+                {{ ctx.text }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {# Trade Details - Action Specific #}
+    <div class="trade-details">
+        {% if signal.action == 'HOLD' %}
+        <div class="detail-row">
+            <span class="detail-label">Current Trail SL</span>
+            <span class="detail-value stop">₹{{ signal.trail_sl | format_price }} (Lock Profit)</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Target</span>
+            <span class="detail-value target">₹{{ signal.target }} ({{ signal.target_pct }})</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Action</span>
+            <span class="detail-value special">HOLD & TRAIL</span>
+        </div>
+        {% elif signal.action == 'REDUCE' %}
+        <div class="detail-row">
+            <span class="detail-label">Action</span>
+            <span class="detail-value warning">BOOK {{ signal.book_pct | default('50%') }} PROFIT</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Tight SL for Rest</span>
+            <span class="detail-value stop">₹{{ signal.tight_sl | format_price }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Reason</span>
+            <span class="detail-value special">{{ signal.reduce_reason | default('Distribution Phase') }}</span>
+        </div>
+        {% else %}
+        {# Fresh Entry #}
+        <div class="detail-row">
+            <span class="detail-label">Entry Zone</span>
+            <span class="detail-value entry">₹{{ signal.entry_zone }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Target</span>
+            <span class="detail-value target">₹{{ signal.target }} ({{ signal.target_pct }})</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Stop Loss</span>
+            <span class="detail-value stop">₹{{ signal.stop_loss }} ({{ signal.stop_pct }})</span>
+        </div>
+        {% endif %}
+    </div>
+    
+    {# Confidence / Trend Strength #}
+    {% if signal.confidence %}
+    <div class="confidence-section">
+        <div class="confidence-header">
+            <span class="confidence-label">{{ 'Trend Strength' if signal.action == 'HOLD' else 'Risk Level' if signal.action == 'REDUCE' else 'Setup Quality' }}</span>
+            <span class="confidence-value">{{ signal.confidence }}{% if signal.action == 'REDUCE' %} - HIGH{% else %}%{% endif %}</span>
+        </div>
+        <div class="confidence-bar">
+            <div class="confidence-fill {{ 'low' if signal.action == 'REDUCE' else 'high' if signal.confidence >= 75 else 'medium' }}" style="width: {{ signal.confidence }}%"></div>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}

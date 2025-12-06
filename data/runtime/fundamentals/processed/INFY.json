@@ -4,13 +4,13 @@
   "sector": "Information Technology",
   "industry": "Computers - Software & Consulting",
   "broad_sector": "Information Technology",
-  "market_cap": 656451.0,
-  "current_price": 1580.0,
+  "market_cap": 670806.0,
+  "current_price": 1615.0,
   "week_52_high": 2007.0,
   "week_52_low": 1307.0,
-  "pe_ratio": 24.5,
+  "pe_ratio": 25.0,
   "book_value": 223.0,
-  "dividend_yield": 2.69,
+  "dividend_yield": 2.64,
   "roce_pct": 40.6,
   "roe_pct": 30.3,
   "face_value": 5.0,
@@ -21,7 +21,7 @@
     "Company has been maintaining a healthy dividend payout of 66.8%"
   ],
   "cons": [
-    "Stock is trading at 7.10 times its book value",
+    "Stock is trading at 7.29 times its book value",
     "The company has delivered a poor sales growth of 11.6% over past five years.",
     "Promoter holding is low: 14.3%"
   ],
@@ -616,8 +616,8 @@
     "profit_cagr_ttm": -3.0,
     "price_cagr_10y": 12.0,
     "price_cagr_5y": 7.0,
-    "price_cagr_3y": -2.0,
-    "price_cagr_1y": -18.0,
+    "price_cagr_3y": 0.0,
+    "price_cagr_1y": -17.0,
     "roe_10y": 28.0,
     "roe_5y": 32.0,
     "roe_3y": 33.0,
@@ -723,8 +723,8 @@
   "profit_cagr_ttm": -3.0,
   "price_cagr_10y": 12.0,
   "price_cagr_5y": 7.0,
-  "price_cagr_3y": -2.0,
-  "price_cagr_1y": -18.0,
+  "price_cagr_3y": 0.0,
+  "price_cagr_1y": -17.0,
   "roe_10y": 28.0,
   "roe_5y": 32.0,
   "roe_3y": 33.0,
@@ -738,5 +738,5 @@
   "q_eps_latest": 18.68,
   "pl_sales_ttm": 141233.0,
   "pl_net_profit_ttm": 26859.0,
-  "_extracted_at": "2025-12-03T15:01:03.246807"
+  "_extracted_at": "2025-12-05T15:01:54.790027"
 }

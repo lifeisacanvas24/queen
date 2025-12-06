@@ -80,32 +80,16 @@ def _preview_extracted(symbol: str, processed_dir: Path) -> None:
             print("  ❗ EMPTY TABLE")
             return
         k0 = next(iter(tbl.keys()))
-        periods = list(tbl[k0].keys())
-        values = list(tbl[k0].values())
-        print(f"  sample periods: {periods[:5]}")
-        print(f"  sample values ({k0}): {values[:5]}")
+        v0 = tbl[k0]
 
-    for t in ["quarters", "profit_loss", "balance_sheet", "cash_flow", "ratios"]:
-        show_table(t)
-
-    # ---- Growth
-    growth = data.get("growth", {})
-    print("\n• Growth:")
-    for k, v in list(growth.items())[:12]:
-        print(f"  {k:30s} = {v}")
-
-    # ---- Shareholding
-    sh = data.get("shareholding", {})
-    print("\n• Shareholding:")
-    for mode in ["quarterly", "yearly"]:
-        part = sh.get(mode, {})
-        print(f"  {mode}: keys={list(part.keys())[:10]}")
-        if part:
-            k0 = next(iter(part.keys()))
-            print(f"    sample periods: {list(part[k0].keys())[:5]}")
+        # Check if v0 is a dictionary (period-value pairs) or a simple value
+        if isinstance(v0, dict):
+            periods = list(v0.keys())
+            values = list(v0.values())
+            print(f"  sample periods: {periods[:5]}")
+            print(f"  sample values ({k0}): {values[:5]}")
         else:
-            print("    ❗ EMPTY")
-
+            print(f"  {k0}: {v0} (single value)")
 
 # ------------------------------------------------------------
 # Null metrics warning
@@ -172,6 +156,20 @@ def main():
     # ------------------------------------------------------------
     # 2) Load DF (adapter → Polars)
     # ------------------------------------------------------------
+    # With:
+    log.info(f"[SMOKE-FUND] Loading from: {processed_dir}")
+    if not processed_dir.exists():
+        log.error(f"[SMOKE-FUND] Processed directory does not exist: {processed_dir}")
+        return
+
+    # Check if there are any JSON files
+    json_files = list(processed_dir.glob("*.json"))
+    log.info(f"[SMOKE-FUND] Found {len(json_files)} JSON files in processed directory")
+
+    if not json_files:
+        log.error("[SMOKE-FUND] No JSON files found in processed directory")
+        return
+
     df = load_all(processed_dir)
     print("\n=== RAW FUNDAMENTALS DF (HEAD) ===")
     print(df.head())
@@ -179,7 +177,7 @@ def main():
     # ------------------------------------------------------------
     # 3) Registry baselines
     # ------------------------------------------------------------
-    REGISTRY.load(df, FUNDAMENTALS_METRIC_COLUMNS)
+    REGISTRY.build(df, FUNDAMENTALS_METRIC_COLUMNS)
     print(f"Sector groups: {len(REGISTRY.sector_map)}")
 
     _warn_if_null_metrics(df)

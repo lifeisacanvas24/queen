@@ -1,0 +1,11 @@
+{# Sub Filters Component - Filter pills within each tab #}
+{# Usage: {% include 'components/sub_filters.html' with context %} #}
+{# Expects: filters = [{'value': 'all', 'label': 'All', 'count': 5, 'active': True}, ...] #}
+
+<div class="sub-filters">
+    {% for filter in filters %}
+    <button class="filter-pill {% if filter.active %}active{% endif %}" data-filter="{{ filter.value }}">
+        {{ filter.label }}<span class="count">{{ filter.count }}</span>
+    </button>
+    {% endfor %}
+</div>

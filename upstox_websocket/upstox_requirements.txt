@@ -1,0 +1,19 @@
+# Queen Cockpit - Requirements
+# Install with: pip install -r requirements.txt
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Templates
+jinja2>=3.1.2
+
+# WebSocket
+websockets>=12.0
+aiohttp>=3.9.0
+
+# Data Processing
+polars>=0.20.0
+numpy>=1.26.0
+
+# Database (SQLite is built-in)

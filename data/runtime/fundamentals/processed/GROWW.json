@@ -2,14 +2,13 @@
   "symbol": "GROWW",
   "company_name": "Billionbrains Garage Ventures Ltd",
   "sector": "Financial Services",
-  "industry": "Financial Services",
+  "industry": "Stockbroking & Allied",
   "broad_sector": "Financial Services",
-  "bse_code": "544603",
+  "market_cap": 91647.0,
+  "current_price": 148.0,
   "week_52_high": 194.0,
   "week_52_low": 112.0,
-  "market_cap": 97172.0,
-  "current_price": 157.0,
-  "pe_ratio": 64.1,
+  "pe_ratio": 60.4,
   "dividend_yield": 0.0,
   "roce_pct": 65.3,
   "roe_pct": 50.0,
@@ -257,13 +256,18 @@
   },
   "ratios": {
     "ratio_debtor_days": 36.0,
-    "ratio_inventory_days": "",
-    "ratio_days_payable": "",
     "ratio_cash_conversion_cycle": 36.0,
     "ratio_working_capital_days": 44.0,
     "ratio_roce_pct": 65.0
   },
-  "growth": {},
+  "growth": {
+    "sales_cagr_3y": 150.0,
+    "sales_cagr_ttm": 50.0,
+    "profit_cagr_3y": 102.0,
+    "profit_cagr_ttm": 261.0,
+    "roe_3y": 28.0,
+    "roe_last_year": 50.0
+  },
   "shareholding": {
     "quarterly": {
       "promoters": {
@@ -284,7 +288,8 @@
       "fii": 57.14,
       "dii": 4.07,
       "public": 10.98
-    }
+    },
+    "pledge": {}
   },
   "peers": [],
   "debt_to_equity": 0.0,
@@ -293,11 +298,18 @@
   "sh_dii_pct": 4.07,
   "sh_public_pct": 10.98,
   "sh_govt_pct": null,
+  "sales_cagr_3y": 150.0,
+  "sales_cagr_ttm": 50.0,
+  "profit_cagr_3y": 102.0,
+  "profit_cagr_ttm": 261.0,
+  "roe_3y": 28.0,
+  "roe_last_year": 50.0,
   "ratio_debtor_days": 36.0,
-  "ratio_inventory_days": "",
-  "ratio_days_payable": "",
   "ratio_cash_conversion_cycle": 36.0,
   "ratio_working_capital_days": 44.0,
   "ratio_roce_pct": 65.0,
-  "_extracted_at": "2025-12-02T13:32:04.257462"
+  "q_sales_latest": 688.0,
+  "q_net_profit_latest": 354.0,
+  "q_eps_latest": 0.59,
+  "_extracted_at": "2025-12-05T12:52:26.315408"
 }

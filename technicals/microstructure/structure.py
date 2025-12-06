@@ -1,45 +1,92 @@
-#!/usr/bin/env python3
-# ======================================================================
-# queen/helpers/structure.py — v1.0
-# ----------------------------------------------------------------------
-# Price–structure engine (Polars-only, DF-in → StructureState-out)
-#
-# Responsibilities:
-#   • Ensure intraday DF is time-sorted (AUTO).
-#   • Look at a configurable lookback window (default: 20 bars).
-#   • Detect:
-#       - Trend direction (UP / DOWN / FLAT)
-#       - Structural label:
-#           IMPULSE_UP / IMPULSE_DOWN
-#           PULLBACK_UP / PULLBACK_DOWN
-#           COMPRESSION / EXPANSION / RANGE
-#       - Simple swing highs / lows (for context only)
-#       - Compression ratio (0 → no compression, 1 → very tight)
-#
-# Output:
-#   • StructureState dataclass (from helpers/state_objects.py)
-#
-# This is intentionally simple and robust:
-#   - No indicators, just OHLC + basic ranges.
-#   - Easy to replace / refine with more advanced logic later.
-# ======================================================================
+# queen/technicals/microstructure/structure.py
+"""Price Structure Engine (Polars-only)
+====================================
+Detects market structure: trend direction, structural labels, swing points,
+and compression ratio.
+
+**UPDATED**: Now uses shared `helpers/swing_detection.py` for swing detection
+to maintain DRY principles across the codebase.
+
+Responsibilities:
+  • Ensure intraday DF is time-sorted (AUTO)
+  • Look at a configurable lookback window (default: 20 bars)
+  • Detect:
+      - Trend direction (UP / DOWN / FLAT)
+      - Structural label:
+          IMPULSE_UP / IMPULSE_DOWN
+          PULLBACK_UP / PULLBACK_DOWN
+          COMPRESSION / EXPANSION / RANGE
+      - Simple swing highs / lows (for context only)
+      - Compression ratio (0 → no compression, 1 → very tight)
+
+Output:
+  • StructureState dataclass (from helpers/state_objects.py)
+
+Usage:
+    from queen.technicals.microstructure.structure import detect_structure
+
+    state = detect_structure(df, lookback_bars=20)
+    print(state.direction)  # "UP" / "DOWN" / "FLAT"
+    print(state.label)      # "IMPULSE_UP" / "PULLBACK_DOWN" / etc.
+"""
 
 from __future__ import annotations
 
 from typing import List, Tuple
 
 import polars as pl
-from queen.helpers.state_objects import (
-    StructureLabel,
-    StructureState,
-    TrendDirection,
-)
+
+# ---------------------------------------------------------------------------
+# Try to import shared helpers
+# ---------------------------------------------------------------------------
+try:
+    from queen.helpers.state_objects import (
+        StructureLabel,
+        StructureState,
+        TrendDirection,
+    )
+except ImportError:
+    # Fallback type aliases if state_objects not available
+    TrendDirection = str  # "UP" | "DOWN" | "FLAT"
+    StructureLabel = str  # "IMPULSE_UP" | "PULLBACK_UP" | etc.
+
+    from dataclasses import dataclass
+
+    @dataclass
+    class StructureState:
+        direction: str
+        label: str
+        swing_highs: List[float]
+        swing_lows: List[float]
+        compression_ratio: float
+
+# Try to use shared swing detection helper (DRY)
+try:
+    from queen.helpers.swing_detection import find_swing_prices
+    _USE_SHARED_SWING = True
+except ImportError:
+    _USE_SHARED_SWING = False
+
+# Try to use shared ATR helper (DRY)
+try:
+    from queen.helpers.ta_math import atr_wilder
+    _USE_EXISTING_ATR = True
+except ImportError:
+    _USE_EXISTING_ATR = False
+
+# Try to use centralized settings (DRY)
+try:
+    from queen.settings.breakout_settings import SWING_SETTINGS
+except ImportError:
+    SWING_SETTINGS = {
+        "fractal_window": 2,
+        "max_swing_age": 50,
+    }
+
 
 # ----------------------------------------------------------------------
 # Internal helpers
 # ----------------------------------------------------------------------
-
-
 def _ensure_sorted(
     df: pl.DataFrame,
     ts_col: str = "timestamp",
@@ -49,9 +96,7 @@ def _ensure_sorted(
     AUTO mode: every helper that inspects bars calls this internally.
     """
     if ts_col not in df.columns:
-        # No timestamp column → just return as-is
         return df
-    # Safe even if already sorted
     return df.sort(ts_col)
 
 
@@ -91,7 +136,7 @@ def _compute_trend_direction(
 
     rel = (last - base) / base
 
-    # Tiny thresholds (can be tuned / moved to settings later)
+    # Tiny thresholds (can be tuned via settings later)
     if rel >= 0.003:   # +0.3% up
         return "UP"
     if rel <= -0.003:  # -0.3% down
@@ -156,8 +201,7 @@ def _recent_extremes(
     high_col: str,
     low_col: str,
 ) -> Tuple[float, float]:
-    """Convenience: full-window high & low as floats.
-    """
+    """Convenience: full-window high & low as floats."""
     if window.is_empty():
         return 0.0, 0.0
 
@@ -166,21 +210,17 @@ def _recent_extremes(
     return hi, lo
 
 
-def _find_swings(
+def _find_swings_local(
     window: pl.DataFrame,
     high_col: str,
     low_col: str,
     max_points: int = 3,
 ) -> Tuple[List[float], List[float]]:
-    """Naive fractal-based swing detection:
+    """Local swing detection - used only if shared helper not available.
 
-      • Swing high at i if:
-          high[i] > high[i-1] and high[i] > high[i+1]
-      • Swing low at i if:
-          low[i] < low[i-1] and low[i] < low[i+1]
-
-    We only return the last `max_points` of each, as a hint for
-    structure / debugging, NOT for precise trading decisions.
+    Naive fractal-based swing detection:
+      • Swing high at i if: high[i] > high[i-1] and high[i] > high[i+1]
+      • Swing low at i if: low[i] < low[i-1] and low[i] < low[i+1]
     """
     n = window.height
     if n < 3:
@@ -198,13 +238,37 @@ def _find_swings(
         if lo[i] < lo[i - 1] and lo[i] < lo[i + 1]:
             swing_lows.append(float(lo[i]))
 
-    # keep only last `max_points`
+    # Keep only last `max_points`
     if swing_highs:
         swing_highs = swing_highs[-max_points:]
     if swing_lows:
         swing_lows = swing_lows[-max_points:]
 
     return swing_highs, swing_lows
+
+
+def _find_swings(
+    window: pl.DataFrame,
+    high_col: str,
+    low_col: str,
+    max_points: int = 3,
+) -> Tuple[List[float], List[float]]:
+    """Find swing highs and lows.
+
+    Uses shared helper if available, otherwise falls back to local.
+    """
+    if _USE_SHARED_SWING:
+        try:
+            return find_swing_prices(
+                window,
+                high_col=high_col,
+                low_col=low_col,
+                max_points=max_points,
+            )
+        except Exception:
+            pass
+
+    return _find_swings_local(window, high_col, low_col, max_points)
 
 
 def _structure_label(
@@ -250,32 +314,26 @@ def _structure_label(
     hi, lo = _recent_extremes(window, high_col, low_col)
     rng = hi - lo
     if rng <= 0:
-        # Price flat but direction != FLAT → just call it RANGE
         return "RANGE"
 
     pos = (last - lo) / rng  # 0 at bottom, 1 at top
 
     if direction == "UP":
-        # near top third of range → impulse
         if pos >= 0.66:
             return "IMPULSE_UP"
         return "PULLBACK_UP"
 
     if direction == "DOWN":
-        # near bottom third → impulse down
         if pos <= 0.33:
             return "IMPULSE_DOWN"
         return "PULLBACK_DOWN"
 
-    # fallback (should not hit)
     return "RANGE"
 
 
 # ----------------------------------------------------------------------
 # Public API
 # ----------------------------------------------------------------------
-
-
 def detect_structure(
     df: pl.DataFrame,
     *,
@@ -285,9 +343,7 @@ def detect_structure(
     timestamp_col: str = "timestamp",
     lookback_bars: int = 20,
 ) -> StructureState:
-    """Main entrypoint:
-
-    POLARS DF (intraday or daily)  →  StructureState
+    """Main entrypoint: POLARS DF (intraday or daily) → StructureState
 
     This function is:
       • Side-effect free (no mutation of df).
@@ -315,15 +371,8 @@ def detect_structure(
         Dataclass with direction + structure label + swing points
         + compression_ratio.
 
-    Notes
-    -----
-    • This is a v1.0 engine; the exact thresholds / rules can be made
-      configurable via settings/timeframes.py or settings/structure.py
-      later without changing the interface.
-
     """
     if not isinstance(df, pl.DataFrame) or df.is_empty():
-        # Completely neutral, no information
         return StructureState(
             direction="FLAT",
             label="RANGE",
@@ -344,7 +393,7 @@ def detect_structure(
     # 4) Compression
     comp = _compression_ratio(window, high_col, low_col)
 
-    # 5) Swings (context only)
+    # 5) Swings (using shared helper if available)
     sh, sl = _find_swings(window, high_col, low_col)
 
     # 6) Structure label
@@ -359,11 +408,24 @@ def detect_structure(
     )
 
 
+# ----------------------------------------------------------------------
+# Registry Export
+# ----------------------------------------------------------------------
+EXPORTS = {
+    "structure": detect_structure,
+}
+
+NAME = "structure"
+
+
 # ======================================================================
 # Example usage (for tests / scan_signals experiments)
 # ======================================================================
-
 if __name__ == "__main__":
+    print("=" * 60)
+    print("STRUCTURE DETECTION TEST")
+    print("=" * 60)
+
     # Simple smoke test with synthetic data
     data = {
         "timestamp": [
@@ -375,13 +437,19 @@ if __name__ == "__main__":
             "2025-11-28 10:30",
         ],
         "high": [100, 102, 104, 105, 106, 107],
-        "low": [ 98,  99, 100, 101, 102, 103],
+        "low": [98, 99, 100, 101, 102, 103],
         "close": [99, 101, 103, 104, 105, 106],
     }
     test_df = pl.DataFrame(data)
     st = detect_structure(test_df, lookback_bars=6)
-    print(st)
-    # Expected:
-    #   direction ≈ "UP"
-    #   label ≈ "IMPULSE_UP" or "PULLBACK_UP"
-    #   compression_ratio somewhere in [0, 1]
+
+    print("\n📊 STRUCTURE STATE:")
+    print(f"   Direction: {st.direction}")
+    print(f"   Label: {st.label}")
+    print(f"   Swing Highs: {st.swing_highs}")
+    print(f"   Swing Lows: {st.swing_lows}")
+    print(f"   Compression: {st.compression_ratio:.2f}")
+    print(f"\n   Using shared swing helper: {_USE_SHARED_SWING}")
+
+    print("\n" + "=" * 60)
+    print("✅ Structure test complete!")

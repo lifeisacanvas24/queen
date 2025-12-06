@@ -1,0 +1,21 @@
+{# Stats Bar Component - Summary counts #}
+<div class="stats-bar">
+    <div class="stats-content">
+        <div class="stat-chip buy">
+            <i class="fas fa-arrow-trend-up"></i>
+            <strong>{{ stats.buy_count | default(0) }}</strong> Buy
+        </div>
+        <div class="stat-chip sell">
+            <i class="fas fa-arrow-trend-down"></i>
+            <strong>{{ stats.sell_count | default(0) }}</strong> Sell
+        </div>
+        <div class="stat-chip hold">
+            <i class="fas fa-pause"></i>
+            <strong>{{ stats.hold_count | default(0) }}</strong> Hold
+        </div>
+        <div class="stat-chip alert">
+            <i class="fas fa-bolt"></i>
+            <strong>{{ stats.urgent_count | default(0) }}</strong> Urgent
+        </div>
+    </div>
+</div>

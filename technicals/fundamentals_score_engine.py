@@ -172,6 +172,7 @@ def _get_flat_numeric_columns(df: pl.DataFrame) -> List[str]:
 # Z-SCORE CALCULATION
 # ============================================================
 
+
 def add_zscores(df: pl.DataFrame) -> pl.DataFrame:
     """Add z-score columns for each metric (both sector and global).
 
@@ -224,18 +225,23 @@ def add_zscores(df: pl.DataFrame) -> pl.DataFrame:
             g_mean = stats.get("mean")
             g_std = stats.get("std")
 
-        exprs.append(
-            pl.col(c).map_elements(
-                lambda x, m=g_mean, s=g_std: _safe_z(x, m, s),
-                return_dtype=pl.Float64,
-            ).alias(f"{c}_z_global")
-        )
+        # Handle null std
+        if g_std in (None, 0):
+            global_z_expr = pl.lit(None).cast(pl.Float64)
+        else:
+            global_z_expr = pl.when(pl.col(c).is_not_null()).then(
+                (pl.col(c) - g_mean) / g_std
+            ).otherwise(None)
+
+        exprs.append(global_z_expr.alias(f"{c}_z_global"))
 
         # Sector z-score (requires sector column and registry)
         if sector_col and REGISTRY is not None:
-            # Build when-then chain for each sector
-            sector_z_expr = pl.lit(None).cast(pl.Float64).alias(f"{c}_z_sector")
+            # Use a simpler approach - calculate z-score per sector
+            sector_z_expr = pl.lit(None).cast(pl.Float64)
 
+            # Get all sectors with valid stats for this metric
+            valid_sectors = []
             for sector in REGISTRY.get_sectors():
                 sector_stats = REGISTRY.sector_stats(sector)
                 if not sector_stats:
@@ -245,10 +251,14 @@ def add_zscores(df: pl.DataFrame) -> pl.DataFrame:
                 s_std = sector_stats.get(f"{c}__std")
 
                 if s_mean is not None and s_std not in (None, 0):
-                    z_val = (pl.col(c) - s_mean) / s_std
-                    sector_z_expr = pl.when(pl.col(sector_col) == sector).then(z_val).otherwise(sector_z_expr)
+                    valid_sectors.append((sector, s_mean, s_std))
 
-            exprs.append(sector_z_expr)
+            # Build when-then chain for valid sectors
+            for sector, s_mean, s_std in valid_sectors:
+                z_val = (pl.col(c) - s_mean) / s_std
+                sector_z_expr = pl.when(pl.col(sector_col) == sector).then(z_val).otherwise(sector_z_expr)
+
+            exprs.append(sector_z_expr.alias(f"{c}_z_sector"))
 
     if exprs:
         df = df.with_columns(exprs)
@@ -259,20 +269,12 @@ def add_zscores(df: pl.DataFrame) -> pl.DataFrame:
 # ============================================================
 # INTRINSIC SCORE
 # ============================================================
-
 def add_intrinsic_score(df: pl.DataFrame) -> pl.DataFrame:
     """Add Intrinsic Score based on weighted z-scores.
 
     Adds columns:
         - Intrinsic_Score: 0-100 score based on fundamental quality
         - Intrinsic_Bucket: A/B/C/D quality grade
-
-    Args:
-        df: Input DataFrame (should have z-score columns)
-
-    Returns:
-        DataFrame with Intrinsic_Score and Intrinsic_Bucket columns
-
     """
     if df is None or df.is_empty():
         return df
@@ -284,84 +286,129 @@ def add_intrinsic_score(df: pl.DataFrame) -> pl.DataFrame:
         z_cols = [c for c in df.columns if c.endswith("_z_sector") or c.endswith("_z_global")]
 
     # Log available z-score columns
-    log.info(f"[FUND-SCORE] Available z-score columns: {len(z_cols)}")
+    log.info(f"[FUND-INFO] Available z-score columns: {len(z_cols)}")
 
     # Log importance map
-    log.info(f"[FUND-SCORE] Importance map has {len(FUNDAMENTALS_IMPORTANCE_MAP)} metrics")
+    log.info(f"[FUND-INFO] Importance map has {len(FUNDAMENTALS_IMPORTANCE_MAP)} metrics")
 
     weight_map = FUNDAMENTALS_IMPORTANCE_MAP or {}
 
-    # Debug: Check which metrics from importance map have z-scores
-    matched_metrics = []
-    for metric in weight_map.keys():
-        sector_z_col = f"{metric}_z_sector"
-        global_z_col = f"{metric}_z_global"
-        if sector_z_col in df.columns or global_z_col in df.columns:
-            matched_metrics.append(metric)
-
-    log.info(f"[FUND-SCORE] Matched {len(matched_metrics)} metrics with z-scores: {matched_metrics[:10]}{'...' if len(matched_metrics) > 10 else ''}")
-
-    # Create weighted sum expression for each metric
+    # Initialise expressions for weighted sum and total weight
     weighted_sum_expr = pl.lit(0.0)
     total_weight_expr = pl.lit(0.0)
 
+    matched_metrics: list[str] = []
+
+    # Build weighted z-score expression
     for metric, weight in weight_map.items():
-        # Prefer sector z-score, fallback to global
         sector_z_col = f"{metric}_z_sector"
         global_z_col = f"{metric}_z_global"
 
+        # Prefer sector z-score if available, else fall back to global
         if sector_z_col in df.columns:
             z_expr = pl.col(sector_z_col)
         elif global_z_col in df.columns:
             z_expr = pl.col(global_z_col)
         else:
-            # log.debug(f"[FUND-SCORE] No z-score column for metric: {metric}")
+            # No z-score available for this metric
             continue
 
-        weighted_sum_expr = weighted_sum_expr + (z_expr * weight)
-        total_weight_expr = total_weight_expr + pl.when(z_expr.is_not_null()).then(weight).otherwise(0)
+        matched_metrics.append(metric)
+
+        # Only include non-null z-scores; replace null with 0
+        z_expr = pl.when(z_expr.is_not_null()).then(z_expr).otherwise(0.0)
+
+        w = float(weight)
+        weighted_sum_expr = weighted_sum_expr + (z_expr * w)
+        # Use absolute weight to keep denominator positive and stable
+        total_weight_expr = total_weight_expr + abs(w)
+
+    if matched_metrics:
+        log.info(f"[FUND-SCORE] Intrinsic Score using metrics: {matched_metrics}")
+    else:
+        log.warning("[FUND-SCORE] No metrics from FUNDAMENTALS_IMPORTANCE_MAP matched any z-score columns")
 
     # Calculate intrinsic score: sigmoid(weighted_sum / total_weight) * 100
-    intrinsic_score_expr = pl.when(total_weight_expr > 0).then(
-        (1.0 / (1.0 + pl.lit(math.e) ** (-weighted_sum_expr / total_weight_expr))) * 100.0
-    ).otherwise(None).alias("Intrinsic_Score")
+    ratio_expr = weighted_sum_expr / pl.when(total_weight_expr > 0).then(total_weight_expr).otherwise(1.0)
+    sigmoid_expr = 1.0 / (1.0 + (-ratio_expr).exp())
 
+    intrinsic_score_expr = (
+        pl.when(total_weight_expr > 0)
+          .then(sigmoid_expr * 100.0)
+          .otherwise(pl.lit(50.0))
+          .alias("Intrinsic_Score")
+    )
+
+    # 1️⃣ First add Intrinsic_Score
     df = df.with_columns(intrinsic_score_expr)
 
-    # Add bucket
-    bucket_expr = pl.lit("D").cast(pl.Utf8)  # Default to "D"
-    # Apply buckets in reverse order (highest threshold first)
-    for threshold, bucket_label in sorted(INTRINSIC_BUCKETS, key=lambda x: x[0], reverse=True):
-        bucket_expr = pl.when(pl.col("Intrinsic_Score") >= threshold).then(pl.lit(bucket_label)).otherwise(bucket_expr)
+    # 2️⃣ Then derive Intrinsic_Bucket using INTRINSIC_BUCKETS from settings
+    # Expected shape: [(threshold, "A"), (threshold, "B"), ...]
+    buckets = INTRINSIC_BUCKETS or [(85, "A"), (70, "B"), (50, "C"), (0, "D")]
 
-    df = df.with_columns(bucket_expr.alias("Intrinsic_Bucket"))
+    if not buckets:
+        # Absolute fallback – shouldn't really happen
+        bucket_expr = pl.lit("D").alias("Intrinsic_Bucket")
+    else:
+        # Emulate Python "first match wins":
+        # start from default (last entry), wrap upwards so earlier entries override
+        _, default_bucket = buckets[-1]
+        bucket_expr: pl.Expr = pl.lit(default_bucket)
+
+        for threshold, bucket in reversed(buckets):
+            bucket_expr = (
+                pl.when(pl.col("Intrinsic_Score") >= threshold)
+                  .then(pl.lit(bucket))
+                  .otherwise(bucket_expr)
+            )
+
+        bucket_expr = bucket_expr.alias("Intrinsic_Bucket")
+
+    df = df.with_columns(bucket_expr)
 
     # Log some stats
     if "Intrinsic_Score" in df.columns:
-        # Count non-null values
         non_null_count = df.filter(pl.col("Intrinsic_Score").is_not_null()).height
         log.info(f"[FUND-SCORE] Intrinsic Score: {non_null_count}/{df.height} non-null values")
 
         if non_null_count > 0:
-            stats = df.filter(pl.col("Intrinsic_Score").is_not_null()).select([
-                pl.col("Intrinsic_Score").mean().alias("mean"),
-                pl.col("Intrinsic_Score").std().alias("std"),
-                pl.col("Intrinsic_Score").min().alias("min"),
-                pl.col("Intrinsic_Score").max().alias("max"),
-            ]).row(0, named=True)
+            stats = (
+                df.filter(pl.col("Intrinsic_Score").is_not_null())
+                  .select(
+                      pl.col("Intrinsic_Score").mean().alias("mean"),
+                      pl.col("Intrinsic_Score").std().alias("std"),
+                      pl.col("Intrinsic_Score").min().alias("min"),
+                      pl.col("Intrinsic_Score").max().alias("max"),
+                  )
+                  .row(0, named=True)
+            )
 
-            # Safely format stats, handling None values
             mean_str = f"{stats['mean']:.2f}" if stats['mean'] is not None else "N/A"
             std_str = f"{stats['std']:.2f}" if stats['std'] is not None else "N/A"
             min_str = f"{stats['min']:.2f}" if stats['min'] is not None else "N/A"
             max_str = f"{stats['max']:.2f}" if stats['max'] is not None else "N/A"
 
-            log.info(f"[FUND-SCORE] Intrinsic Score stats: mean={mean_str}, std={std_str}, range={min_str}-{max_str}")
+            log.info(
+                f"[FUND-SCORE] Intrinsic Score stats: "
+                f"mean={mean_str}, std={std_str}, range={min_str}-{max_str}"
+            )
+
+            # Bucket distribution
+            bucket_counts = (
+                df.group_by("Intrinsic_Bucket")
+                  .agg(pl.len().alias("count"))
+            )
+
+            if bucket_counts.height > 0:
+                log.info("[FUND-SCORE] Bucket distribution:")
+                counts_map = {row[0]: row[1] for row in bucket_counts.iter_rows()}
+                for bucket in ["A", "B", "C", "D"]:
+                    count = counts_map.get(bucket, 0)
+                    log.info(f"  {bucket}: {count} symbols")
         else:
             log.warning("[FUND-SCORE] All Intrinsic Scores are null!")
 
     return df
-
 
 # ============================================================
 # POWERSCORE v2 (SIMPLIFIED - NO TIMESERIES DEPENDENCIES)
@@ -396,8 +443,8 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
 
     if roce_col and roe_col:
         # Normalize to 0-1 (assuming 0-50% range is typical)
-        roce_norm = pl.when(pl.col(roce_col) < 0).then(0).when(pl.col(roce_col) > 50).then(1).otherwise(pl.col(roce_col) / 50.0)
-        roe_norm = pl.when(pl.col(roe_col) < 0).then(0).when(pl.col(roe_col) > 50).then(1).otherwise(pl.col(roe_col) / 50.0)
+        roce_norm = pl.when(pl.col(roce_col).is_null()).then(0.5).when(pl.col(roce_col) < 0).then(0).when(pl.col(roce_col) > 50).then(1).otherwise(pl.col(roce_col) / 50.0)
+        roe_norm = pl.when(pl.col(roe_col).is_null()).then(0.5).when(pl.col(roe_col) < 0).then(0).when(pl.col(roe_col) > 50).then(1).otherwise(pl.col(roe_col) / 50.0)
         profitability_score = (roce_norm * 0.6 + roe_norm * 0.4)
     else:
         profitability_score = pl.lit(0.5)
@@ -408,8 +455,8 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
 
     if sales_cagr_col and profit_cagr_col:
         # Normalize to 0-1 (assuming -20% to +30% range)
-        sales_norm = pl.when(pl.col(sales_cagr_col) < -20).then(0).when(pl.col(sales_cagr_col) > 30).then(1).otherwise((pl.col(sales_cagr_col) + 20) / 50.0)
-        profit_norm = pl.when(pl.col(profit_cagr_col) < -20).then(0).when(pl.col(profit_cagr_col) > 30).then(1).otherwise((pl.col(profit_cagr_col) + 20) / 50.0)
+        sales_norm = pl.when(pl.col(sales_cagr_col).is_null()).then(0.5).when(pl.col(sales_cagr_col) < -20).then(0).when(pl.col(sales_cagr_col) > 30).then(1).otherwise((pl.col(sales_cagr_col) + 20) / 50.0)
+        profit_norm = pl.when(pl.col(profit_cagr_col).is_null()).then(0.5).when(pl.col(profit_cagr_col) < -20).then(0).when(pl.col(profit_cagr_col) > 30).then(1).otherwise((pl.col(profit_cagr_col) + 20) / 50.0)
         growth_score = (sales_norm * 0.4 + profit_norm * 0.6)
     else:
         growth_score = pl.lit(0.5)
@@ -420,8 +467,8 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
 
     efficiency_score = pl.lit(0.5)
     if wc_days_col and debtor_days_col:
-        wc_score = pl.when(pl.col(wc_days_col) <= 0).then(0.5).otherwise(pl.min_horizontal(1.0, 90 / pl.col(wc_days_col)))
-        debtor_score = pl.when(pl.col(debtor_days_col) <= 0).then(0.5).otherwise(pl.min_horizontal(1.0, 60 / pl.col(debtor_days_col)))
+        wc_score = pl.when(pl.col(wc_days_col).is_null()).then(0.5).when(pl.col(wc_days_col) <= 0).then(0.5).otherwise(pl.min_horizontal(1.0, 90 / pl.col(wc_days_col)))
+        debtor_score = pl.when(pl.col(debtor_days_col).is_null()).then(0.5).when(pl.col(debtor_days_col) <= 0).then(0.5).otherwise(pl.min_horizontal(1.0, 60 / pl.col(debtor_days_col)))
         efficiency_score = (wc_score * 0.5 + debtor_score * 0.5)
 
     # Valuation dimension: P/E ratio
@@ -431,7 +478,7 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
     if pe_col:
         # Lower P/E is better (for value), normalize inversely
         # Assuming 5-50 range
-        valuation_score = pl.when(pl.col(pe_col) <= 5).then(1.0).when(pl.col(pe_col) >= 50).then(0.0).otherwise(1.0 - (pl.col(pe_col) - 5) / 45.0)
+        valuation_score = pl.when(pl.col(pe_col).is_null()).then(0.5).when(pl.col(pe_col) <= 5).then(1.0).when(pl.col(pe_col) >= 50).then(0.0).otherwise(1.0 - (pl.col(pe_col) - 5) / 45.0)
 
     # Leverage dimension: Debt/Equity and Interest coverage
     de_col = _pick_col(df, ["debt_to_equity"])
@@ -440,9 +487,9 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
     leverage_score = pl.lit(0.5)
     if de_col and ic_col:
         # Lower D/E is better
-        de_score = pl.when(pl.col(de_col) <= 0).then(1.0).when(pl.col(de_col) >= 2).then(0.0).otherwise(1.0 - (pl.col(de_col) / 2.0))
+        de_score = pl.when(pl.col(de_col).is_null()).then(0.5).when(pl.col(de_col) <= 0).then(1.0).when(pl.col(de_col) >= 2).then(0.0).otherwise(1.0 - (pl.col(de_col) / 2.0))
         # Higher interest coverage is better
-        ic_score = pl.when(pl.col(ic_col) <= 1).then(0.0).when(pl.col(ic_col) >= 10).then(1.0).otherwise(pl.col(ic_col) / 10.0)
+        ic_score = pl.when(pl.col(ic_col).is_null()).then(0.5).when(pl.col(ic_col) <= 1).then(0.0).when(pl.col(ic_col) >= 10).then(1.0).otherwise(pl.col(ic_col) / 10.0)
         leverage_score = (de_score * 0.6 + ic_score * 0.4)
 
     # Momentum dimension: Simplified - use price CAGR
@@ -451,7 +498,7 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
     momentum_score = pl.lit(0.5)
     if price_cagr_col:
         # Normalize price CAGR (-50% to +50% range)
-        momentum_score = pl.when(pl.col(price_cagr_col) < -50).then(0.0).when(pl.col(price_cagr_col) > 50).then(1.0).otherwise((pl.col(price_cagr_col) + 50) / 100.0)
+        momentum_score = pl.when(pl.col(price_cagr_col).is_null()).then(0.5).when(pl.col(price_cagr_col) < -50).then(0.0).when(pl.col(price_cagr_col) > 50).then(1.0).otherwise((pl.col(price_cagr_col) + 50) / 100.0)
 
     # Stability dimension: Simplified - use dividend yield as proxy
     div_yield_col = _pick_col(df, ["dividend_yield"])
@@ -459,7 +506,7 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
     stability_score = pl.lit(0.5)
     if div_yield_col:
         # Higher dividend yield = more stable (to some extent)
-        stability_score = pl.when(pl.col(div_yield_col) <= 0).then(0.3).when(pl.col(div_yield_col) >= 5).then(1.0).otherwise(pl.col(div_yield_col) / 5.0)
+        stability_score = pl.when(pl.col(div_yield_col).is_null()).then(0.5).when(pl.col(div_yield_col) <= 0).then(0.3).when(pl.col(div_yield_col) >= 5).then(1.0).otherwise(pl.col(div_yield_col) / 5.0)
 
     # Ownership dimension: Promoter holding, FII, Pledge
     promoter_col = _pick_col(df, ["sh_promoters_pct", "promoters_holding_latest"])
@@ -469,16 +516,16 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
     ownership_score = pl.lit(0.5)
     if promoter_col and pledge_col and fii_col:
         # Higher promoter holding is generally positive (but not too high)
-        promoter_score = pl.when(pl.col(promoter_col) >= 75).then(0.9) \
+        promoter_score = pl.when(pl.col(promoter_col).is_null()).then(0.5).when(pl.col(promoter_col) >= 75).then(0.9) \
             .when(pl.col(promoter_col) >= 50).then(1.0) \
             .when(pl.col(promoter_col) >= 30).then(0.7) \
             .otherwise(0.5)
 
         # Lower pledge is better
-        pledge_score = pl.max_horizontal(0, 1.0 - (pl.col(pledge_col) / 100.0))
+        pledge_score = pl.when(pl.col(pledge_col).is_null()).then(0.5).otherwise(pl.max_horizontal(0, 1.0 - (pl.col(pledge_col) / 100.0)))
 
         # Some FII holding is positive
-        fii_score = pl.when(pl.col(fii_col) <= 0).then(0.3).otherwise(pl.min_horizontal(1.0, pl.col(fii_col) / 30.0))
+        fii_score = pl.when(pl.col(fii_col).is_null()).then(0.5).when(pl.col(fii_col) <= 0).then(0.3).otherwise(pl.min_horizontal(1.0, pl.col(fii_col) / 30.0))
 
         ownership_score = (promoter_score * 0.4 + pledge_score * 0.4 + fii_score * 0.2)
 
@@ -534,7 +581,6 @@ def add_powerscore(df: pl.DataFrame) -> pl.DataFrame:
 
     return df
 
-
 # ============================================================
 # PASS/FAIL LOGIC
 # ============================================================
@@ -575,66 +621,67 @@ def add_pass_fail(df: pl.DataFrame) -> pl.DataFrame:
     def _format_reason(value_expr, prefix):
         # Format with 1 decimal place for percentages, 2 for others
         if "ROCE" in prefix or "ROE" in prefix or "NPA" in prefix or "Pledge" in prefix or "Sales" in prefix or "Profits" in prefix:
-            formatted = value_expr.cast(pl.Utf8).str.replace(r"(\.\d*?)0+$", r"\1").str.replace(r"\.$", "")
-            return pl.concat_str([pl.lit(f"{prefix} ("), formatted, pl.lit("%)")])
+            # For percentage values, round to 1 decimal place and add %
+            formatted = (value_expr.round(1).cast(pl.Utf8) + "%")
+            return pl.concat_str([pl.lit(f"{prefix} ("), formatted, pl.lit(")")])
         if "D/E" in prefix:
-            formatted = value_expr.cast(pl.Utf8).str.replace(r"(\.\d*?)0+$", r"\1").str.replace(r"\.$", "")
+            formatted = value_expr.round(2).cast(pl.Utf8)
             return pl.concat_str([pl.lit(f"{prefix} ("), formatted, pl.lit(")")])
         return pl.lit(prefix)
 
-    # Apply filters
-    if roce_col:
-        pass_expr = pass_expr & (pl.col(roce_col) >= MIN_ROCE_PCT)
-        reasons_expr = pl.when(pl.col(roce_col) < MIN_ROCE_PCT).then(
+    # Apply filters - only if column exists and is not null
+    if roce_col and roce_col in df.columns:
+        pass_expr = pass_expr & (pl.col(roce_col).is_null() | (pl.col(roce_col) >= MIN_ROCE_PCT))
+        reasons_expr = pl.when(pl.col(roce_col).is_not_null() & (pl.col(roce_col) < MIN_ROCE_PCT)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(roce_col), "Low ROCE")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if roe_col:
-        pass_expr = pass_expr & (pl.col(roe_col) >= MIN_ROE_PCT)
-        reasons_expr = pl.when(pl.col(roe_col) < MIN_ROE_PCT).then(
+    if roe_col and roe_col in df.columns:
+        pass_expr = pass_expr & (pl.col(roe_col).is_null() | (pl.col(roe_col) >= MIN_ROE_PCT))
+        reasons_expr = pl.when(pl.col(roe_col).is_not_null() & (pl.col(roe_col) < MIN_ROE_PCT)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(roe_col), "Low ROE")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if de_col:
-        pass_expr = pass_expr & (pl.col(de_col) <= MAX_DEBT_EQUITY)
-        reasons_expr = pl.when(pl.col(de_col) > MAX_DEBT_EQUITY).then(
+    if de_col and de_col in df.columns:
+        pass_expr = pass_expr & (pl.col(de_col).is_null() | (pl.col(de_col) <= MAX_DEBT_EQUITY))
+        reasons_expr = pl.when(pl.col(de_col).is_not_null() & (pl.col(de_col) > MAX_DEBT_EQUITY)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(de_col), "High D/E")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if eps_col:
-        pass_expr = pass_expr & (pl.col(eps_col) > MIN_EPS_TTM)
-        reasons_expr = pl.when(pl.col(eps_col) <= MIN_EPS_TTM).then(
+    if eps_col and eps_col in df.columns:
+        pass_expr = pass_expr & (pl.col(eps_col).is_null() | (pl.col(eps_col) > MIN_EPS_TTM))
+        reasons_expr = pl.when(pl.col(eps_col).is_not_null() & (pl.col(eps_col) <= MIN_EPS_TTM)).then(
             pl.concat_str([reasons_expr, pl.lit("Negative EPS")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if gnpa_col:
-        pass_expr = pass_expr & (pl.col(gnpa_col) <= MAX_GROSS_NPA_PCT)
-        reasons_expr = pl.when(pl.col(gnpa_col) > MAX_GROSS_NPA_PCT).then(
+    if gnpa_col and gnpa_col in df.columns:
+        pass_expr = pass_expr & (pl.col(gnpa_col).is_null() | (pl.col(gnpa_col) <= MAX_GROSS_NPA_PCT))
+        reasons_expr = pl.when(pl.col(gnpa_col).is_not_null() & (pl.col(gnpa_col) > MAX_GROSS_NPA_PCT)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(gnpa_col), "High Gross NPA")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if nnpa_col:
-        pass_expr = pass_expr & (pl.col(nnpa_col) <= MAX_NET_NPA_PCT)
-        reasons_expr = pl.when(pl.col(nnpa_col) > MAX_NET_NPA_PCT).then(
+    if nnpa_col and nnpa_col in df.columns:
+        pass_expr = pass_expr & (pl.col(nnpa_col).is_null() | (pl.col(nnpa_col) <= MAX_NET_NPA_PCT))
+        reasons_expr = pl.when(pl.col(nnpa_col).is_not_null() & (pl.col(nnpa_col) > MAX_NET_NPA_PCT)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(nnpa_col), "High Net NPA")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if pledge_col:
-        pass_expr = pass_expr & (pl.col(pledge_col) <= MAX_PROMOTER_PLEDGE_PCT)
-        reasons_expr = pl.when(pl.col(pledge_col) > MAX_PROMOTER_PLEDGE_PCT).then(
+    if pledge_col and pledge_col in df.columns:
+        pass_expr = pass_expr & (pl.col(pledge_col).is_null() | (pl.col(pledge_col) <= MAX_PROMOTER_PLEDGE_PCT))
+        reasons_expr = pl.when(pl.col(pledge_col).is_not_null() & (pl.col(pledge_col) > MAX_PROMOTER_PLEDGE_PCT)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(pledge_col), "High Pledge")], separator=", ")
         ).otherwise(reasons_expr)
 
     # Growth checks (optional - only fail if significantly negative)
-    if sales_cagr_col:
-        pass_expr = pass_expr & (pl.col(sales_cagr_col) >= -10)
-        reasons_expr = pl.when(pl.col(sales_cagr_col) < -10).then(
+    if sales_cagr_col and sales_cagr_col in df.columns:
+        pass_expr = pass_expr & (pl.col(sales_cagr_col).is_null() | (pl.col(sales_cagr_col) >= -10))
+        reasons_expr = pl.when(pl.col(sales_cagr_col).is_not_null() & (pl.col(sales_cagr_col) < -10)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(sales_cagr_col), "Declining Sales")], separator=", ")
         ).otherwise(reasons_expr)
 
-    if profit_cagr_col:
-        pass_expr = pass_expr & (pl.col(profit_cagr_col) >= -20)
-        reasons_expr = pl.when(pl.col(profit_cagr_col) < -20).then(
+    if profit_cagr_col and profit_cagr_col in df.columns:
+        pass_expr = pass_expr & (pl.col(profit_cagr_col).is_null() | (pl.col(profit_cagr_col) >= -20))
+        reasons_expr = pl.when(pl.col(profit_cagr_col).is_not_null() & (pl.col(profit_cagr_col) < -20)).then(
             pl.concat_str([reasons_expr, _format_reason(pl.col(profit_cagr_col), "Declining Profits")], separator=", ")
         ).otherwise(reasons_expr)
 
@@ -652,7 +699,6 @@ def add_pass_fail(df: pl.DataFrame) -> pl.DataFrame:
     log.info(f"[FUND-SCORE] Pass/Fail: {passed}/{df.height} passed")
 
     return df
-
 
 # ============================================================
 # RANKINGS

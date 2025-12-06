@@ -1,4 +1,4 @@
-#queen/technicals/signals/breakout_validator.py
+# queen/technicals/signals/breakout_validator.py
 """
 Breakout Validator Module
 =========================
@@ -35,17 +35,47 @@ from dataclasses import dataclass, field
 from typing import Optional, Literal, List, Dict, Any
 import polars as pl
 
-# Import our new modules
-from queen.technicals.microstructure.fvg import detect_fvg, FVGResult
-from queen.technicals.indicators.volume_confirmation import (
-    compute_rvol,
-    summarize_volume_confirmation,
-    validate_breakout_volume,
-)
-from queen.technicals.patterns.false_breakout import (
-    summarize_false_breakout_risk,
-    FalseBreakoutRisk,
-)
+# ---------------------------------------------------------------------------
+# Try to use existing helpers - DRY COMPLIANCE
+# ---------------------------------------------------------------------------
+try:
+    from queen.helpers.swing_detection import find_swing_points, SwingPoint, SwingType
+    _USE_SHARED_SWING = True
+except ImportError:
+    _USE_SHARED_SWING = False
+
+try:
+    from queen.helpers.ta_math import atr_wilder
+    _USE_EXISTING_ATR = True
+except ImportError:
+    _USE_EXISTING_ATR = False
+
+# Import our new modules (with fallback for standalone testing)
+try:
+    from queen.technicals.microstructure.fvg import detect_fvg, FVGResult
+except ImportError:
+    detect_fvg = None
+    FVGResult = None
+
+try:
+    from queen.technicals.indicators.volume_confirmation import (
+        compute_rvol,
+        summarize_volume_confirmation,
+        validate_breakout_volume,
+    )
+except ImportError:
+    compute_rvol = None
+    summarize_volume_confirmation = None
+    validate_breakout_volume = None
+
+try:
+    from queen.technicals.patterns.false_breakout import (
+        summarize_false_breakout_risk,
+        FalseBreakoutRisk,
+    )
+except ImportError:
+    summarize_false_breakout_risk = None
+    FalseBreakoutRisk = None
 
 # Import settings
 try:
@@ -144,18 +174,35 @@ class BreakoutValidationResult:
 # ---------------------------------------------------------------------------
 def _calculate_atr(df: pl.DataFrame, period: int = 14) -> float:
     """Get latest ATR value"""
-    high = df["high"]
-    low = df["low"]
-    close = df["close"]
+    # Try to use existing helper
+    if _USE_EXISTING_ATR:
+        try:
+            high = df["high"].to_numpy()
+            low = df["low"].to_numpy()
+            close = df["close"].to_numpy()
+            atr_arr = atr_wilder(high, low, close, period)
+            for v in reversed(atr_arr):
+                if v is not None and not (isinstance(v, float) and v != v):
+                    return float(v)
+        except Exception:
+            pass
 
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
+    # Local Polars implementation
+    df_with_atr = df.with_columns([
+        (pl.col("high") - pl.col("low")).alias("_tr1"),
+        (pl.col("high") - pl.col("close").shift(1)).abs().alias("_tr2"),
+        (pl.col("low") - pl.col("close").shift(1)).abs().alias("_tr3"),
+    ])
 
-    tr = pl.max_horizontal(tr1, tr2, tr3)
-    atr = tr.rolling_mean(window_size=period)
+    df_with_atr = df_with_atr.with_columns(
+        pl.max_horizontal("_tr1", "_tr2", "_tr3").alias("_tr")
+    )
 
-    atr_list = atr.to_list()
+    df_with_atr = df_with_atr.with_columns(
+        pl.col("_tr").rolling_mean(window_size=period).alias("_atr")
+    )
+
+    atr_list = df_with_atr["_atr"].to_list()
     for v in reversed(atr_list):
         if v is not None:
             return v

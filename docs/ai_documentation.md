@@ -3,7 +3,7 @@
 **Project**: `queen/` (Quantitative Trading Platform)
 **Version**: v9.6+
 **Architecture**: Modular, Registry-Driven, Settings-First
-**Last Updated**: 2025-12-03
+**Last Updated**: 2025-12-04
 
 ---
 
@@ -48,12 +48,34 @@ Essential platform infrastructure
 
 ### Alerts & Rules Engine
 
-| Module | Key Functions | Purpose |
-|--------|---------------|---------|
-| `evaluator copy.py` | `_indicator_kwargs`, `_last_two`, `_cmp` |  |
-| `evaluator.py` | `_last_two`, `_cmp`, `_cross` |  |
-| `rules.py` | `from_dict`, `to_dict`, `load_rules` |  |
-| `state.py` | `_key`, `load_cooldowns`, `save_cooldown` |  |
+#### `queen/alerts/evaluator.py`
+
+**Functions:**
+- `def _last_two(series: pl.Series)`
+- `def _cmp(op: str, a: float, b: float)`
+- `def _cross(op: str, s: pl.Series, level: float)`
+- `def eval_price(df: pl.DataFrame, rule: Rule)`
+- `def eval_indicator(df: pl.DataFrame, rule: Rule)`
+- `def eval_rule(rule: Rule, df: pl.DataFrame)`
+
+#### `queen/alerts/rules.py`
+
+**Classes:**
+- `class Rule`
+  - `def from_dict(d: Dict[str, Any])`
+  - `def to_dict(self)`
+
+**Functions:**
+- `def from_dict(d: Dict[str, Any])`
+- `def to_dict(self)`
+- `def load_rules(path: Optional[Union[str, Path]]=None)`
+
+#### `queen/alerts/state.py`
+
+**Functions:**
+- `def _key(sym: str, rule: str)`
+- `def load_cooldowns()`
+- `def save_cooldown(sym: str, rule: str, last_fire_ts: float)`
 
 ### CLI Tools
 
@@ -75,6 +97,7 @@ Essential platform infrastructure
 | `run_strategy.py` | `_dummy_ohlcv`, `_wire_minimals`, `main` |  |
 | `scan_signals.py` | `_drop_empty_struct_columns`, `_default_out_path`, `_build_rows` |  |
 | `show_snapshot.py` | `_load_snapshot`, `main` |  |
+| `signal_summary.py` | `_load_df`, `_print_decision_summary`, `_print_playbook_summary` |  |
 | `sim_stats.py` | `_to_float`, `_load_scan_df`, `_compute_symbol_stats` |  |
 | `symbol_scan.py` | `_print_table`, `main` |  |
 | `universe_scanner.py` | `load_and_prefilter_symbols`, `calculate_volatility`, `calculate_liquidity_score` | Production-grade NSE/BSE universe scanner with fundamental a... |
@@ -87,7 +110,6 @@ Essential platform infrastructure
 | `__init__.py` | `_list_daemons`, `_run_child`, `run_cli` | Queen Daemon Manager (forward-compatible)  Usage:   python -... |
 | `__main__.py` |  | Entry point for Queen Daemon Manager (`python -m queen.daemo... |
 | `alert_daemon.py` | `check`, `_parse_args`, `__init__` |  |
-| `alert_v2 copy.py` | `_backfill_days`, `_timeframe_key`, `_min_bars_for` |  |
 | `alert_v2.py` | `_backfill_days`, `_min_bars_for`, `_days_for_interval` |  |
 | `live_engine.py` | `_fmt`, `_compact_table`, `_expanded_table` |  |
 | `live_engine_cli.py` | `_cpr_from_last_completed_session`, `_fmt`, `_compact_table` |  |
@@ -118,7 +140,8 @@ Essential platform infrastructure
 **Functions:**
 - `def _to_float(val: Any)`
 - `def _init_sim_state(sim_state: Optional[Dict[str, Any]])`
-- `def _compute_unit_size(row: Dict[str, Any], *, notional_per_unit: float=NOTIONAL_PER_UNIT_DEFAULT, min_units: float=MIN_UNITS, max_units: float=MAX_UNITS)`
+- `def _compute_unit_size(row: Dict[str, Any], *, notional_per_unit: float=NOTIONAL_PER_UNIT_DEFAULT, min_units: float=1.0, max_units: float=50.0)`
+- `def _resolve_risk_profile(row: Dict[str, Any])`
 - `def _step_auto_long_sim(row: Dict[str, Any], sim_state: Optional[Dict[str, Any]], *, eod_force: bool=False)`
 - `def build_actionable_row(symbol: str, df: pl.DataFrame, *, interval: str, book: str, pos_mode: str='flat', auto_side: str='long', positions_map: Dict[str, Any] | None=None, cmp_anchor: float | None=None, pos: Optional[Dict[str, Any]]=None, sim_state: Dict[str, Any] | None=None, eod_force: bool=False)`
 
@@ -1005,6 +1028,23 @@ import-time side effects. Import submodules directly:
   from queen.settings import indicators as IND
   from queen.settings import timeframes as TF
 
+#### `queen/settings/breakout_settings.py`
+
+> Breakout Detection Settings
+===========================
+Centralized configuration for all breakout-related indicators.
+Edit these values to tune the system without touching code.
+
+Settings grouped by module:
+- FVG_SETTINGS: Fair Value Gap detection
+- VOLUME_SETTINGS: Volume confirmation (RVOL, spikes)
+- FALSE_BREAKOUT_SETTINGS: False breakout pattern detection
+- BREAKOUT_VALIDATION_SETTINGS: Overall breakout quality scoring
+
+**Functions:**
+- `def get_quality_label(score: int)`
+- `def validate_settings()`
+
 #### `queen/settings/cockpit_schema.py`
 
 #### `queen/settings/fno_universe.py`
@@ -1131,11 +1171,6 @@ import-time side effects. Import submodules directly:
 - `def get_env_paths()`
 
 #### `queen/settings/sim_settings.py`
-
-> Simulation configuration for Queen of Quant.
-
-Central place for tunable knobs used by the synthetic simulator.
-Edit these to tune behavior across the system.
 
 #### `queen/settings/tactical.py`
 
@@ -1289,6 +1324,43 @@ Notes:
 - `def _location(last_price: float, bc: float, p: float, tc: float)`
 - `def detect_cpr(df: pl.DataFrame, *, high_col: str | None=None, low_col: str | None=None, close_col: str | None=None, timestamp_col: str='timestamp')`
 
+#### `queen/technicals/microstructure/fvg.py`
+
+> Fair Value Gap (FVG) Detection Module
+=====================================
+Identifies institutional imbalances where price moved too fast,
+leaving gaps that often act as magnets for future price action.
+
+FVG Types:
+- Bullish FVG: Gap between candle[i-2].high and candle[i].low (price moved up fast)
+- Bearish FVG: Gap between candle[i-2].low and candle[i].high (price moved down fast)
+
+Usage:
+    from queen.technicals.microstructure.fvg import detect_fvg, summarize_fvg
+
+    result = detect_fvg(df, lookback=50)
+    summary = summarize_fvg(df, current_price=2850.0)
+
+Settings Integration:
+    All thresholds configurable via settings/breakout_settings.py
+
+**Classes:**
+- `class FVGZone`
+  - `def contains_price(self, price: float)`
+  - `def distance_from(self, price: float)`
+- `class FVGResult`
+
+**Functions:**
+- `def contains_price(self, price: float)`
+- `def distance_from(self, price: float)`
+- `def _ensure_sorted(df: pl.DataFrame, ts_col: str='timestamp')`
+- `def _calculate_atr(df: pl.DataFrame, period: int=14)`
+- `def _detect_single_fvg(i: int, high: List[float], low: List[float], atr_val: float, timestamps: Optional[List]=None, min_gap_ratio: float=0.3)`
+- `def _check_fvg_fill(zone: FVGZone, subsequent_highs: List[float], subsequent_lows: List[float], fill_tolerance: float=0.1)`
+- `def detect_fvg(df: pl.DataFrame, *, lookback: int=None, min_gap_atr_ratio: float=None, fill_tolerance_pct: float=None, high_col: str='high', low_col: str='low', close_col: str='close', timestamp_col: str='timestamp')`
+- `def summarize_fvg(df: pl.DataFrame, current_price: Optional[float]=None, **kwargs)`
+- `def attach_fvg_signals(df: pl.DataFrame, lookback: int=50)`
+
 #### `queen/technicals/microstructure/phases.py`
 
 **Functions:**
@@ -1436,6 +1508,51 @@ Notes:
 - `def _score_from_ratio_and_rank(ratio: float, pct_rank: float)`
 - `def compute_intraday_volume_strength(df: pl.DataFrame, *, min_bars: int=30, lookback_bars: int=60, avg_window: int=20)`
 
+#### `queen/technicals/volume_confirmation.py`
+
+> Volume Confirmation Module
+==========================
+Provides volume-based confirmation for breakouts and signals.
+Key indicators:
+- RVOL (Relative Volume): Current volume vs average
+- Volume Spike Detection: Identifies unusual volume surges
+- Volume Trend: Accumulation/Distribution assessment
+
+"A breakout without volume is a fake breakout" - Market wisdom
+
+Usage:
+    from queen.technicals.indicators.volume_confirmation import (
+        compute_rvol,
+        detect_volume_spike,
+        summarize_volume_confirmation,
+    )
+
+    # Add RVOL column to DataFrame
+    df = compute_rvol(df, period=20)
+
+    # Get volume spike detection
+    spikes = detect_volume_spike(df, threshold=2.0)
+
+    # Get summary for signal cards
+    summary = summarize_volume_confirmation(df)
+
+Settings Integration:
+    All thresholds configurable via settings/volume_policy.py
+
+**Classes:**
+- `class VolumeSpike`
+- `class VolumeConfirmationResult`
+
+**Functions:**
+- `def compute_rvol(df: pl.DataFrame, period: int=None, volume_col: str='volume')`
+- `def detect_volume_spike(df: pl.DataFrame, threshold: float=None, lookback: int=None, volume_col: str='volume', close_col: str='close', timestamp_col: str='timestamp')`
+- `def compute_volume_trend(df: pl.DataFrame, period: int=None, volume_col: str='volume')`
+- `def compute_accumulation_distribution(df: pl.DataFrame, period: int=10)`
+- `def check_breakout_volume_ready(df: pl.DataFrame, min_rvol: float=None)`
+- `def summarize_volume_confirmation(df: pl.DataFrame, **kwargs)`
+- `def attach_volume_confirmation(df: pl.DataFrame, period: int=None)`
+- `def validate_breakout_volume(df: pl.DataFrame, breakout_bar_index: int=-1)`
+
 #### `queen/technicals/volume_strength.py`
 
 **Functions:**
@@ -1466,6 +1583,7 @@ Notes:
 | `state.py` | `_ensure_series`, `_pattern_bias`, `volume_delta` |  |
 | `volatility_fusion.py` | `compute_volatility_fusion`, `summarize_volatility` |  |
 | `volume_chaikin.py` | `_ema_np`, `chaikin`, `summarize_chaikin` |  |
+| `volume_confirmation.py` | `compute_rvol`, `detect_volume_spike`, `compute_volume_trend` | Volume Confirmation Module ========================== Provid... |
 | `volume_mfi.py` | `mfi`, `compute_mfi`, `summarize_mfi` |  |
 
 ### Pattern Detection
@@ -1475,6 +1593,7 @@ Notes:
 | `__init__.py` |  |  |
 | `composite.py` | `detect_composite_patterns` |  |
 | `core.py` | `_false_series`, `_max2`, `_min2` |  |
+| `false_breakout.py` | `is_bearish_trap`, `is_bullish_trap`, `_find_swing_points` | False Breakout Pattern Detection Module ====================... |
 | `runner.py` | `run_patterns` |  |
 
 ### Signal Fusion
@@ -1482,6 +1601,7 @@ Notes:
 | Module | Key Functions | Purpose |
 |--------|---------------|---------|
 | `__init__.py` |  | Signals (tactical/pattern/meta) package.  Notes: - The regis... |
+| `breakout_validator.py` | `get_quality_label`, `_calculate_atr`, `_check_atr_breakout` | Breakout Validator Module ========================= Combines... |
 | `__init__.py` |  |  |
 | `cmv.py` | `_norm_pm1`, `compute_cmv` |  |
 | `liquidity_breadth.py` | `compute_liquidity_breadth_fusion`, `_norm01` |  |
@@ -1633,6 +1753,28 @@ Now includes:
 - `def _assert_bias(token: str)`
 - `def test_cmv_sps_path()`
 - `def test_adv_dec_path()`
+
+#### `queen/tests/smoke_breakout_modules.py`
+
+> Smoke Tests for New Breakout Detection Modules
+==============================================
+Run: python -m queen.tests.smoke_breakout_modules
+
+Tests:
+1. FVG Detection
+2. Volume Confirmation
+3. False Breakout Patterns
+4. Breakout Validator (integration)
+
+**Functions:**
+- `def _assert(condition: bool, msg: str='')`
+- `def _make_test_df(n: int=100, with_gaps: bool=False, with_spikes: bool=False)`
+- `def test_fvg_detection()`
+- `def test_volume_confirmation()`
+- `def test_false_breakout()`
+- `def test_breakout_validator()`
+- `def test_settings()`
+- `def run_all()`
 
 #### `queen/tests/smoke_chaikin.py`
 
@@ -2028,6 +2170,12 @@ Now includes:
 **Functions:**
 - `def test()`
 
+#### `queen/tests/smoke_test_sim.py`
+
+> Quick local smoke test for the simulator functions with artificial rows.
+
+Usage: python tools/smoke_test_sim.py
+
 #### `queen/tests/smoke_utils_patterns.py`
 
 **Functions:**
@@ -2118,8 +2266,8 @@ When asking an AI to modify or extend this system:
 ---
 
 ## File Count Summary
-- **Total Python Files**: 85
-- **Core Modules**: 201
+- **Total Python Files**: 87
+- **Core Modules**: 206
 - **Test Files**: 1
 - **Settings/Configs**: 1
 - **Helpers/Utilities**: 1

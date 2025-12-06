@@ -490,35 +490,35 @@ FUNDAMENTALS_TACTICAL_FILTERS = {
     "MIN_GLOBAL_RANK_N": 20,
 
     # Debt filters
-    "MAX_DEBT_EQUITY": 2.0,
+    "MAX_DEBT_EQUITY": 5.0,  # Increased from 3.0
 
     # NPA filters (for banks)
-    "MAX_GROSS_NPA_PCT": 8.0,   # percent
-    "MAX_NET_NPA_PCT": 4.0,     # percent
+    "MAX_GROSS_NPA_PCT": 15.0,   # Increased from 10.0
+    "MAX_NET_NPA_PCT": 10.0,     # Increased from 6.0
 
     # Pledge filter (NEW)
-    "MAX_PROMOTER_PLEDGE_PCT": 50.0,  # percent - high pledge is risky
+    "MAX_PROMOTER_PLEDGE_PCT": 75.0,  # Increased from 60.0
 
     # Profitability filters
-    "MIN_ROCE_PCT": 10.0,       # percent
-    "MIN_ROE_PCT": 10.0,        # percent
+    "MIN_ROCE_PCT": 0.0,       # Decreased from 5.0
+    "MIN_ROE_PCT": 0.0,        # Decreased from 5.0
     "MIN_EPS_TTM": 0.0,
 
     # Growth filters
-    "MIN_SALES_CAGR_3Y": 5.0,   # percent
-    "MIN_PROFIT_CAGR_3Y": 5.0,  # percent
+    "MIN_SALES_CAGR_3Y": -20.0,   # Decreased from 0.0
+    "MIN_PROFIT_CAGR_3Y": -30.0,  # Decreased from 0.0
 
     # Filter list for programmatic application
     "filters": [
-        {"col": "roce_pct", "op": ">=", "value": 10.0, "reason": "Low ROCE"},
-        {"col": "roe_pct", "op": ">=", "value": 10.0, "reason": "Low ROE"},
-        {"col": "debt_to_equity", "op": "<=", "value": 2.0, "reason": "High D/E"},
+        {"col": "roce_pct", "op": ">=", "value": 0.0, "reason": "Low ROCE"},
+        {"col": "roe_pct", "op": ">=", "value": 0.0, "reason": "Low ROE"},
+        {"col": "debt_to_equity", "op": "<=", "value": 5.0, "reason": "High D/E"},
         {"col": "eps_ttm", "op": ">", "value": 0.0, "reason": "Negative EPS"},
-        {"col": "gross_npa_pct", "op": "<=", "value": 8.0, "reason": "High Gross NPA"},
-        {"col": "net_npa_pct", "op": "<=", "value": 4.0, "reason": "High Net NPA"},
-        {"col": "promoter_pledge_pct", "op": "<=", "value": 50.0, "reason": "High Promoter Pledge"},
-        {"col": "sales_cagr_3y", "op": ">=", "value": 5.0, "reason": "Low Sales Growth"},
-        {"col": "profit_cagr_3y", "op": ">=", "value": 5.0, "reason": "Low Profit Growth"},
+        {"col": "gross_npa_pct", "op": "<=", "value": 15.0, "reason": "High Gross NPA"},
+        {"col": "net_npa_pct", "op": "<=", "value": 10.0, "reason": "High Net NPA"},
+        {"col": "promoter_pledge_pct", "op": "<=", "value": 75.0, "reason": "High Promoter Pledge"},
+        {"col": "sales_cagr_3y", "op": ">=", "value": -20.0, "reason": "Low Sales Growth"},
+        {"col": "profit_cagr_3y", "op": ">=", "value": -30.0, "reason": "Low Profit Growth"},
     ],
 }
 FUNDAMENTALS_TACTICAL_FILTER_LIST = FUNDAMENTALS_TACTICAL_FILTERS["filters"]
@@ -555,9 +555,9 @@ POWERSCORE_DIMENSION_METRICS: Dict[str, List[str]] = {
 # Intrinsic value buckets for grading
 # ------------------------------------------------------------
 INTRINSIC_BUCKETS = [
-    (85, "A"),   # Excellent
-    (70, "B"),   # Good
-    (50, "C"),   # Average
+    (60, "A"),   # Excellent
+    (52, "B"),   # Good
+    (45, "C"),   # Average
     (0, "D"),    # Below Average
 ]
 
@@ -862,6 +862,8 @@ EXPORTS = {
         "SCRAPER_OUTPUT_FIELDS": SCRAPER_OUTPUT_FIELDS,
     }
 }
+
+
 
 # For backwards compatibility
 __all__ = [
